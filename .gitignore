@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Audio and render outputs (binaries stay out of git)
+out/
+tmp/
+AGENTS.local.md
+*.wav
+*.flac
+*.ogg
+*.mp3
+*.mp4
+*.npz
+!samples/README.md
+
+# Blender
+*.blend
+*.blend1
+
+# OS
+.DS_Store
+._*
