@@ -1,7 +1,9 @@
 # Usage
 
-How to give a Blender animation its sound, for people and for coding agents. This describes the
-target workflow; [roadmap.md](roadmap.md) says which phase delivers which part.
+How to give a Blender animation its sound, for people and for coding agents. Features marked
+*(later)* are specified but not implemented yet; [roadmap.md](roadmap.md) says which phase delivers
+them. For adding sound to an existing animation step by step, see the
+[agent guide](agent-guide.md).
 
 ## Setup (once)
 
@@ -43,7 +45,18 @@ In a scene project (`<project>/`):
 - Level: normalize samples to a similar peak (e.g. −1 dBFS) and set the balance with `gain_db`
   in the tags, so the mix is controlled in one place.
 
-## 2. Tag objects in the generator script
+## 2. Tag objects
+
+Tags are added by a script that runs inside Blender. Two ways to use it:
+
+- **Existing animation**: a separate tagging script next to the project, applied at bake time with
+  `soundstage bake <blend> --run <project>/audio/sounds.py`. The .blend stays untouched. Start
+  from [examples/sounds_template.py](../examples/sounds_template.py); find object names with
+  `soundstage scan <blend>`.
+- **Scene built by generator scripts**: call the tag helper in the generator script itself, so the
+  tags are saved with the scene.
+
+Either way the calls are the same:
 
 ```python
 import sys
@@ -120,6 +133,8 @@ Iterate quickly on one part:
 
 ## 5. Check sync, then go to Resolve
 
+*(later)* a quick preview without Resolve:
+
 ```bash
 .venv/bin/soundstage preview <project>/audio/out/shot1_mix.wav \
     --frames <project>/renders/shot1/frame_ --fps 30 -o <project>/audio/out/shot1_preview.mp4
@@ -135,13 +150,14 @@ In DaVinci Resolve:
 4. Stems go on separate tracks for balancing in Fairlight; their sum equals the master, so use
    either the master or the stems, not both.
 5. 32-bit float files can exceed 0 dBFS without clipping; set final levels and limiting in
-   Fairlight (or render with `--normalize -23 --limit -1`).
+   Fairlight (*(later)*: render with `--normalize -23 --limit -1`).
 
 ## For agents
 
-Agents drive the same commands. Things that differ from a person's workflow:
+Agents drive the same commands; the step-by-step procedure is the [agent guide](agent-guide.md).
+Things that differ from a person's workflow:
 
-- **You cannot listen.** Verify with the report, the plot and measurements (see
+- **You cannot listen.** Verify with the report, measurements and (later) the plot (see
   [AGENTS.md](../AGENTS.md#you-cannot-listen-verify-with-numbers-and-pictures)). After each
   render, read `<mix>.report.json` and check: exit code 0; no unexpected warnings; every source
   that the shot is meant to feature has `audible_frames > 0`; `distance_m` and `rate` ranges are

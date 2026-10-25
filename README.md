@@ -17,10 +17,31 @@ the same scripts that build the scene, so everything stays reproducible.
 scene script ──▶ Blender (tags sounds) ──▶ bake (camera + object paths) ──▶ render ──▶ stereo WAV ──▶ Resolve
 ```
 
-**Status:** early design, nothing renders yet. See the [roadmap](docs/roadmap.md).
+**Status:** minimum viable version. Loudness by distance, left/right placement, loops and
+one-shots work end to end; Doppler, travel delay, filtering, occlusion and reverb are next (see the
+[roadmap](docs/roadmap.md)).
+
+## Try it
+
+Requires Linux, Python 3.12+ and Blender 5.x on `PATH`.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/python tools/make_test_samples.py                     # placeholder sounds
+blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend
+.venv/bin/soundstage bake out/flyby.blend --run examples/flyby_sounds.py --out out/flyby
+.venv/bin/soundstage render out/flyby/scene.json -o out/flyby/mix.wav --report
+```
+
+`out/flyby/mix.wav` is 8 seconds of a ship passing from left to right, a beacon beeping on the
+left and a crate hitting the ground on the right.
+
+To add sound to your own animation, follow the [agent guide](docs/agent-guide.md) (written for
+coding agents, readable for people).
 
 ## Documentation
 
+- [Agent guide](docs/agent-guide.md): add sound to an existing animation, step by step
 - [Usage](docs/usage.md): tagging sounds, baking, rendering, importing into Resolve
 - [Requirements](docs/requirements.md) and [roadmap](docs/roadmap.md)
 - [Architecture](docs/architecture.md) and the [specifications](docs/spec/): [tagging](docs/spec/tagging.md), [scene format](docs/spec/scene-format.md), [signal model](docs/spec/signal-model.md), [command line](docs/spec/cli.md)

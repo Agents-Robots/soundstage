@@ -51,6 +51,8 @@ decisions behind the structure are in [adr/](adr/README.md).
 |---|---|
 | `tag.py` | Public helper for generator scripts: add, clear, list sound tags; scene settings; validation of keys and types against the schema. `bpy` and stdlib only. |
 | `bake.py` | Script run with `blender -b … --python bake.py -- <args>`. Resolves the listener per frame, steps through frames and sub-frames (`scene.frame_set(f, subframe=s)`), reads evaluated world matrices from the depsgraph, applies tag offsets, ray-casts visibility (Phase 3), detects cuts, resolves sample paths and defaults, writes the scene file. Uses Blender's bundled numpy. |
+| `scan.py` | Script run like `bake.py`: samples the shot at evenly spaced frames and writes a JSON list of cameras, moving objects and static objects near the camera, so an agent can choose sound sources. |
+| `util.py` | Shared helpers for `bake.py` and `scan.py`: argument handling, running `--run` scripts, frame stepping, output prefix for the CLI. |
 | `schema.py` | The tag and settings schema (keys, types, defaults, ranges) as plain data, shared by `tag.py`, `bake.py` and the engine, so defaults exist in one place (NFR-8). Stdlib only. |
 
 ### `soundstage/engine/`
@@ -70,8 +72,8 @@ decisions behind the structure are in [adr/](adr/README.md).
 
 ### `soundstage/cli.py`
 
-Argument parsing for `bake`, `inspect`, `render`, `preview` ([spec/cli.md](spec/cli.md)); `bake`
-shells out to Blender, `preview` to ffmpeg.
+Argument parsing for `scan`, `bake`, `inspect`, `render` (and later `preview`) ([spec/cli.md](spec/cli.md)); `scan` and `bake`
+shell out to Blender, `preview` to ffmpeg.
 
 ## Data flow inside a render
 

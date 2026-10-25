@@ -1,8 +1,50 @@
-"""Scene file loading and time base (Phase 1).
+"""Scene file loading and time base."""
 
-- Round trip ``write_scene`` -> load gives equal manifest and arrays.
-- Unknown ``version`` is rejected.
-- ``--set`` overrides are applied and validated.
-- Frame -> sample mapping: frame 120 at 30 fps, frame_start 1 -> sample 190400; exact for 29.97 and
-  23.976 (fps_base 1.001); output length for 24, 25, 30, 29.97 fps.
-"""
+import json
+
+import numpy as np
+import pytest
+
+from soundstage.engine.scene import SceneError, load_scene, parse_overrides
+
+
+def test_round_trip(make_scene, sine):
+    scene = make_scene([{"sample": sine}], [[0, 10, 0]])
+    assert scene.sources[0].id == "source:0" and scene.sources[0].track == 0
+    assert scene.src_pos.shape == (61, 1, 3)
+    assert np.allclose(scene.src_pos[:, 0], [0, 10, 0])
+
+
+def test_unknown_version_is_rejected(make_scene, sine):
+    scene = make_scene([{"sample": sine}])
+    manifest = json.loads(scene.path.read_text())
+    manifest["version"] = 99
+    scene.path.write_text(json.dumps(manifest))
+    with pytest.raises(SceneError, match="unsupported version"):
+        load_scene(scene.path)
+
+
+def test_overrides_are_typed_and_validated(make_scene, sine):
+    scene = make_scene([{"sample": sine}])
+    assert load_scene(scene.path, parse_overrides(["master_gain_db=-6"])).settings["master_gain_db"] == -6.0
+    with pytest.raises(SceneError):
+        parse_overrides(["nonsense=1"])
+    with pytest.raises(SceneError):
+        load_scene(scene.path, parse_overrides(["panner=surround"]))
+
+
+def test_frame_120_at_30fps_is_sample_190400(make_scene, sine):
+    scene = make_scene([{"sample": sine}], frame_end=240)
+    assert scene.sample_of(120) == 190400
+
+
+@pytest.mark.parametrize("fps, fps_base, frames, seconds", [
+    (24, 1.0, 240, 10.0),
+    (25, 1.0, 250, 10.0),
+    (30, 1.0, 300, 10.0),
+    (30, 1.001, 300, 10.01),
+    (24, 1.001, 24000, 1001.0),
+])
+def test_output_length(make_scene, sine, fps, fps_base, frames, seconds):
+    scene = make_scene([{"sample": sine}], frame_end=frames, fps=fps, fps_base=fps_base)
+    assert scene.length_samples() == round(seconds * 48000)

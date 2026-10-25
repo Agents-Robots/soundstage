@@ -108,6 +108,7 @@ Rules:
 - `track` is the source's row in the source arrays (several sources on one object share the
   object's trajectory but have their own track because offsets differ).
 - Bed sources (`spatial: false`) have no track (`"track": null`).
+- `frame` of a one-shot is a number or a sorted list of numbers (repeated triggers).
 - `listener.objects` lists every camera that is active during the shot, in order of first use.
 
 ## `scene.npz`

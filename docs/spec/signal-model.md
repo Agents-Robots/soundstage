@@ -60,8 +60,10 @@ gain and fades.
 - **One-shot**: the sample starts at emission time `t_trig = t(frame)`; zero elsewhere. `fade_in`
   as a raised-cosine ramp if set.
 - **Loop**: tiled from the loop start (`t(frame)`, or `t_min` if `frame` is null) to the loop end
-  (`t(end_frame) + fade_out`, or the end of the simulated range). The seam uses an equal-power
-  crossfade of `loop_crossfade` seconds (the tail overlaps the head). Start offset `loop_phase`
+  (`t(end_frame) + fade_out`, or the end of the simulated range). The seam uses a crossfade of
+  `loop_crossfade` seconds (the tail overlaps the head) whose law adapts to the correlation `ρ` of
+  head and tail: gains `a, b` with `a² + b² + 2ρab = 1` (equal power for uncorrelated material,
+  equal gain for identical material), so the level stays constant across the seam. Start offset `loop_phase`
   seconds into the sample; `"random"` = uniform in [0, sample length), seeded from the source id.
   Fades are raised-cosine.
 - The dry timeline covers emission times from `t_min − max delay` to the end, so every read
@@ -271,7 +273,7 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 | Occlusion smoothing | 60 ms / 150 ms *(tune)* | engine constant |
 | Reverb send | −18 dB *(tune)* | scene `reverb_send_db`, source `reverb_send_db` |
 | Cut crossfade | 10 ms | engine constant |
-| Loop seam crossfade | 50 ms | source `loop_crossfade` |
+| Loop seam crossfade | 50 ms, correlation-adaptive | source `loop_crossfade` |
 
 ## References
 

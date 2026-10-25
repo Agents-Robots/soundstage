@@ -63,6 +63,8 @@ Decisions taken with the user (2026-10-25):
 | FR-26 | Bake respects the scene unit scale (`unit_settings.scale_length`), so distances are in metres. | 1 |
 | FR-27 | Bake writes a versioned, documented scene file ([scene-format](spec/scene-format.md)) that can also be produced or edited without Blender. | 1 |
 | FR-28 | Bake reports tagging errors (missing sample file, unknown parameter, bad value) with object name and stops, unless told to skip. | 1 |
+| FR-29 | A scan lists the shot's cameras, moving objects (distance range to the camera, closest frame, side, speed, keyframes) and static objects near the camera, so an agent can choose sound sources for an existing animation. | 1 |
+| FR-30 | Tags can be applied at bake time by a script, without modifying the .blend. | 1 |
 
 ### Render: from the scene file to audio
 

@@ -16,12 +16,12 @@ linked duplicates can carry different sounds). Keys not listed below are an erro
 | `sample` | str | required | Path to the sample. `//` prefix = relative to the .blend; a bare relative path resolves against the scene's `samples_root`. |
 | `id` | str | `"<object name>:<index>"` | Stable source id: used in reports, solo/mute, and as random seed. Set it explicitly when object names are not stable. |
 | `mode` | `"loop"` \| `"once"` | `"loop"` | Loop the sample, or play it once. |
-| `frame` | float \| null | null | Once: trigger frame (required). Loop: start frame; null = running since before the shot. Fractional frames allowed. |
+| `frame` | float \| [float] \| null | null | Once: trigger frame, or a list of trigger frames (required). Loop: start frame; null = running since before the shot. Fractional frames allowed. |
 | `end_frame` | float \| null | null | Loop only: stop at this frame (after `fade_out`); null = runs to the end. |
 | `fade_in` | float s | 0.0 (once), 0.05 (loop with `frame`) | Fade-in duration. |
 | `fade_out` | float s | 0.05 | Fade-out duration at `end_frame` (loop). |
 | `loop_phase` | float s \| `"random"` | `"random"` | Loop start offset into the sample at `frame` (or at the shot start); `"random"` is seeded from `id`. |
-| `loop_crossfade` | float s | 0.05 | Equal-power crossfade at the loop seam; 0 for samples that are already seamless. |
+| `loop_crossfade` | float s | 0.05 | Crossfade at the loop seam (correlation-adaptive, constant level); 0 for samples that are already seamless. |
 | `gain_db` | float | 0.0 | Source gain at the reference distance. |
 | `pitch` | float | 1.0 | Playback-rate ratio applied before spatial processing (2.0 = one octave up, shorter). |
 | `group` | str | `"sfx"` | Stem name. |
@@ -45,8 +45,8 @@ linked duplicates can carry different sounds). Keys not listed below are an erro
 | `gain_jitter_db`, `pitch_jitter` | float | 0.0 | Random variation per trigger, seeded. *(Phase 4)* |
 | `gain_prop`, `pitch_prop` | str \| null | null | Name of an animated custom property on the object that modulates gain (dB, added) or pitch (ratio, multiplied). *(Phase 4)* |
 
-Repeated one-shots (e.g. footsteps, a beacon every 2 s) are several entries with different
-`frame`s; the helper `add_sound(..., frame=[100, 160, 220])` expands a list into entries.
+Repeated one-shots (e.g. footsteps, a beacon every 2 s) are one entry with a list of frames:
+`add_sound(obj, "beep.wav", mode="once", frame=[100, 160, 220])`. Overlapping triggers add up.
 
 ## Scene settings: `scene["sfx_settings"]`
 
@@ -80,8 +80,8 @@ Ranges and the full signal meaning: [signal-model.md](signal-model.md).
 ## Helper API (`soundstage/blender/tag.py`)
 
 ```python
-add_sound(obj, sample, *, mode="loop", frame=None, **params) -> list[dict]
-    # Validate params against the table above, append entries to obj["sfx"], return them.
+add_sound(obj, sample, *, mode="loop", frame=None, **params) -> dict
+    # Validate params against the table above, append the entry to obj["sfx"], return it.
 clear_sounds(obj) -> None
 set_scene_settings(scene=None, **settings) -> dict
     # Merge into scene["sfx_settings"] (default: bpy.context.scene).
@@ -112,6 +112,5 @@ tag.add_sound(scene_root, "station_ambience.wav", spatial=False, gain_db=-20, gr
 - Sample file missing or unreadable → error (bake checks existence; the engine decodes).
 - `--skip-invalid` turns errors into warnings and drops the entry.
 
-Open point to verify in Phase 1: lists of dicts are stored as ID property arrays of groups in
-Blender 5.x. If that turns out fragile, the fallback is a JSON string in `obj["sfx"]`; the bake
-accepts both.
+Storage: lists of dicts are stored as ID property group arrays; checked in Blender 5.2 including
+save and reload, `None` values and booleans. A JSON string in `obj["sfx"]` is accepted as well.

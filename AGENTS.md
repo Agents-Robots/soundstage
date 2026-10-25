@@ -48,26 +48,28 @@ ticket, not in a document.
 - Machine-specific details (paths, hosts, surrounding tools) belong in `AGENTS.local.md`, never in
   tracked files.
 
-## Commands (target interface, see [docs/spec/cli.md](docs/spec/cli.md))
+## Commands (see [docs/spec/cli.md](docs/spec/cli.md))
 
 ```bash
-.venv/bin/pytest                                   # unit tests (fast, no Blender)
-.venv/bin/pytest -m blender                        # end-to-end tests that call blender -b
+.venv/bin/pytest                                   # all tests; Blender tests skip without blender on PATH
+.venv/bin/pytest -m "not blender"                  # unit tests only (fast)
 .venv/bin/python tools/make_test_samples.py        # generate samples/*.wav
-.venv/bin/soundstage bake <blend> --out <dir>      # headless Blender → scene.json + scene.npz
-.venv/bin/soundstage inspect <dir>/scene.json      # table of sources, distances, intervals
-.venv/bin/soundstage render <dir>/scene.json -o <mix.wav> --report --plot
-.venv/bin/soundstage preview <mix.wav> --frames <prefix> --fps <fps> -o <preview.mp4>
+.venv/bin/soundstage scan <blend> --out scan.json  # cameras and sound-source candidates
+.venv/bin/soundstage bake <blend> --run sounds.py --out <dir>   # headless Blender → scene.json + scene.npz
+.venv/bin/soundstage inspect <dir>/scene.json      # table of sources and distances
+.venv/bin/soundstage render <dir>/scene.json -o <mix.wav> --report
 ```
+
+Asked to add sound to an animation? Follow [docs/agent-guide.md](docs/agent-guide.md).
 
 ## You cannot listen: verify with numbers and pictures
 
 An agent has no speakers. Every claim about how a render sounds must rest on something measurable:
 
 - the render report (`<mix>.report.json`): peaks, true peak, LUFS, per-source distance range,
-  playback-rate (Doppler) range, audible intervals, warnings;
-- the debug plot (`<mix>.plot.png`): per-source distance, gain, pan, delay, pitch over time, on a
-  frame axis; read it as an image;
+  audible frames, warnings (later also playback-rate ranges);
+- the debug plot (`<mix>.plot.png`, Phase 3): per-source distance, gain, pan, delay, pitch over
+  time, on a frame axis; read it as an image;
 - known-answer tests: put a synthetic source where the answer is known (distance, side, speed)
   and assert the measured level, channel balance, onset time or frequency;
 - spectrograms of the output (`scipy.signal.spectrogram` → PNG) for filters and Doppler sweeps.
