@@ -48,7 +48,7 @@ because the shelf is still rising there.) Curves: [E06](../experiments/E06-ear-m
 | Question | Choice | Alternatives and why not |
 |---|---|---|
 | Model | Brown–Duda one-pole/one-zero shelf | Measured HRTFs (binaural): colour the sound on loudspeakers; planned as the `binaural` panner (Phase 4). Rayleigh's exact sphere solution: an infinite series, no benefit for a cue. |
-| Strength | `head_shadow = 0.5` *(tune)* | Full strength: on loudspeakers the listener's real head adds its own shadow; full strength would double it. |
+| Strength | `head_shadow = 0.5` (kept after listening, #15) | Full strength: on loudspeakers the listener's real head adds its own shadow; full strength would double it. |
 | Ear axis | ±90° (lateral sine) | Brown and Duda put the ear canals at ±100° azimuth (slightly behind). With ±100°, a source in front is darker than one behind; the lateral sine is symmetric front/back, and the rear is marked by the separate [rear cue](rear-cue.md) instead. |
 | Discretization | Bilinear, prewarped at the pole | Impulse invariance: aliasing of the shelf; matched-z: less accurate high-frequency gain. |
 

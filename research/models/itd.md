@@ -21,7 +21,7 @@ smoothly; there is no second retarded-time solve per ear.
 | Question | Choice | Alternatives and why not |
 |---|---|---|
 | Formula | Woodworth `(a/c)(θ + sin θ)` | Per-ear retarded time (ears as points 17.5 cm apart): `(2a/c) sin θ`, 0.51 ms at 90°, ignores the path around the head. Woodworth's ray-traced path around a sphere holds above about 2 kHz; at low frequencies diffraction makes the ITD larger (Kuhn 1977: about `3 (a/c) sin θ`, 0.77 ms at 90°). ITD is used here as a cue on loudspeakers, not as a binaural reproduction, so the high-frequency formula is enough. |
-| Strength | `itd_scale = 0.5` *(tune)* | Full ITD: on loudspeakers both ears hear both channels, so inter-channel delay acts as time panning; Lee and Rumsey found time panning unreliable for continuous sources with a high fundamental, while level panning works for all sources. Delayed correlated channels also comb-filter in a mono downmix. Half strength adds width without dominating. `0` for mono-critical deliveries. |
+| Strength | `itd_scale = 0.5` (kept after listening, #15) | Full ITD: on loudspeakers both ears hear both channels, so inter-channel delay acts as time panning; Lee and Rumsey found time panning unreliable for continuous sources with a high fundamental, while level panning works for all sources. Delayed correlated channels also comb-filter in a mono downmix. Half strength adds width without dominating. `0` for mono-critical deliveries. |
 | Ear positions | ±90° (the lateral axis) | Brown and Duda place the ear canals at ±100°, slightly behind; see [head shadow](head-shadow.md). |
 
 ## Verification

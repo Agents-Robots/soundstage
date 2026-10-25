@@ -31,7 +31,7 @@ grows with `ρ`. It is applied on the emission side (mono), the gain with the ot
 | Question | Choice | Alternatives and why not |
 |---|---|---|
 | Filter | Dry/low-pass mix by `ρ` | A low-pass whose cutoff moves from 20 kHz at the side to 6 kHz behind (the original spec): a one-pole at 20 kHz still takes about 1–2 dB off 15 kHz for **every** source in front, and adds phase delay (found when a click's peak moved by a sample). The mix is exactly transparent at `ρ = 0` and bypassed when a source is never behind. |
-| Strength | 6 kHz, −2 dB *(tune)* | Stronger cues make sources behind sound muffled rather than "behind". |
+| Strength | 6 kHz, −2 dB (kept after listening, #15) | Stronger cues make sources behind sound muffled rather than "behind". |
 | Input | `ρ` from the camera-space z of the retarded direction | Azimuth beyond ±90°: discontinuous where the source crosses the lateral axis. |
 
 ## Verification

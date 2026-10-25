@@ -42,11 +42,12 @@ the side is fully in one channel. The `sine` law reaches far-channel levels of �
 | Question | Choice | Alternatives and why not |
 |---|---|---|
 | Input | Lateral sine of the retarded direction | Azimuth only: wraps at the back and does not distinguish front from back anyway (stereo cannot); the lateral sine is smooth everywhere. |
-| Law | Both `sine` and `power` selectable; default `sine` until a listening decision | Tangent law with a loudspeaker angle: defined only inside the base; extending it to ±90° needs a choice of mapping that is again a listening question. |
+| Law | Both `sine` and `power` selectable; default `sine` (standard; confirmed by listening) | Tangent law with a loudspeaker angle: defined only inside the base; extending it to ±90° needs a choice of mapping that is again a listening question. |
 | Constant power | Yes | Constant amplitude (−6 dB centre): a source crossing the centre dips in loudness. |
 
-**Open:** which law, by ear, on a real shot (#15). The flyby renders `flyby_default.wav` (sine)
-and `flyby_power.wav` are the comparison.
+**Decided (#15):** both laws sounded right by ear, on headphones and loudspeakers, on the flyby and a
+115-source real shot. `sine` stays the default as the widely used constant-power sin/cos law
+(consoles, DAWs, OpenAL Soft); `power` remains available as `pan_law = "power"`.
 
 ## Verification
 

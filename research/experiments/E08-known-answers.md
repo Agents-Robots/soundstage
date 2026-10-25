@@ -32,7 +32,7 @@ Output of `e08_known_answers.py`:
 ## Conclusion
 
 All Phase 2 physical criteria are met to the displayed precision. The remaining criteria are the
-performance target ([E10](E10-performance.md)) and the listening judgement (#15).
+performance target ([E10](E10-performance.md)) and the listening judgement (#15), both met.
 
 ## Reproduce
 

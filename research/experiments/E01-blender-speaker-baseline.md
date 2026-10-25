@@ -71,7 +71,7 @@ Same tags, full flyby mix (Phase 0 run): Blender −23.3 LUFS, soundstage −23.
 - Blender produces **no Doppler** in rendered audio (factor 1 and 10), no propagation delay, steps
   its parameters per audio buffer, and gives only 16-bit audio headless.
 - Its pan law is softer at the sides; soundstage now offers it as `pan_law = "power"`
-  ([panning](../models/panning.md)); the choice is a listening decision.
+  ([panning](../models/panning.md)); by ear both work, `sine` stays the default (#15).
 - Lists of dicts as custom properties survive save and reload in Blender 5.2 (the roadmap's other
   Phase 0 question; checked in Phase 1).
 

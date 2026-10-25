@@ -206,11 +206,11 @@ power:            g_L = sqrt((1 − λ) / 2),   g_R = sqrt((1 + λ) / 2)      (B
 ```
 
 Both keep `g_L² + g_R² = 1` (centre −3.01 dB each). `power` is softer at the sides (−18 dB for
-the far channel at 76°, against −32 dB for `sine`); the default is decided by listening (#15).
+the far channel at 76°, against −32 dB for `sine`).
 
 **`hybrid`** (default): the amplitude pan above, plus ITD scaled by `itd_scale` (default 0.5,
-*(tune)*: full ITD across speakers causes comb filtering in mono downmixes), plus a head-shadow
-filter per ear scaled by `head_shadow` (default 0.5, *(tune)*).
+tuned: full ITD across speakers causes comb filtering in mono downmixes), plus a head-shadow
+filter per ear scaled by `head_shadow` (default 0.5, tuned).
 
 Head shadow (Brown & Duda 1998 spherical-head model), per ear, with `θ_e` the angle between that
 ear's axis (+X for right, −X for left) and the source direction (`cos θ_R = λ`, `cos θ_L = −λ`):
@@ -305,6 +305,14 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 - Warnings: rate clamped, source never audible, master sample peak > 0 dBFS (only matters for
   PCM_24), missing or resampled samples, cuts handled.
 
+## Tuning (Phase 2, #15)
+
+The Phase 2 starting values were judged by ear on the flyby and a 115-source real shot, on
+headphones and loudspeakers, against the `power` pan law and a render without Doppler or ear model.
+Both pan laws sounded right; `sine` stays the default because it is the standard constant-power
+sin/cos law of mixing consoles, DAWs and OpenAL Soft. ITD 0.5, head shadow 0.5 and the rear cue
+(6 kHz, −2 dB) were kept. Values marked *(tune)* below belong to Phase 3 and are still to be judged.
+
 ## Defaults
 
 | Constant | Default | Where set |
@@ -317,13 +325,13 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 | Playback-rate clamp | [0.25, 4.0] | engine constant |
 | Teleport speed | 3 × speed of sound | scene `teleport_speed` |
 | Interpolator | `optimal2x` (standard), `sinc` (high) | scene `quality` |
-| Pan law | `sine` *(tune)* | scene `pan_law` |
+| Pan law | `sine` (tuned) | scene `pan_law` |
 | Air temperature / humidity | 20 °C / 50 % | scene `air_temperature_c`, `air_humidity_pct` |
 | Head radius `a` | 0.0875 m | scene `head_radius` |
-| ITD scale (hybrid) | 0.5 *(tune)* | scene `itd_scale` |
-| Head shadow (hybrid) | 0.5 *(tune)* | scene `head_shadow` |
+| ITD scale (hybrid) | 0.5 (tuned) | scene `itd_scale` |
+| Head shadow (hybrid) | 0.5 (tuned) | scene `head_shadow` |
 | Air absorption scale | 1 (ISO 9613-1) | scene/source `air_absorption` |
-| Rear cutoff / gain | 6000 Hz / −2 dB *(tune)* | scene `rear_cutoff_hz`, `rear_gain_db` |
+| Rear cutoff / gain | 6000 Hz / −2 dB (tuned) | scene `rear_cutoff_hz`, `rear_gain_db` |
 | Occlusion gain / cutoff | −12 dB / 1500 Hz *(tune)* | scene `occlusion_gain_db`, `occlusion_cutoff_hz` |
 | Occlusion smoothing | 60 ms / 150 ms *(tune)* | engine constant |
 | Reverb send | −18 dB *(tune)* | scene `reverb_send_db`, source `reverb_send_db` |
