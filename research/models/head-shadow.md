@@ -52,9 +52,9 @@ because the shelf is still rising there.) Curves: [E06](../experiments/E06-ear-m
 | Ear axis | ±90° (lateral sine) | Brown and Duda put the ear canals at ±100° azimuth (slightly behind). With ±100°, a source in front is darker than one behind; the lateral sine is symmetric front/back, and the rear is marked by the separate [rear cue](rear-cue.md) instead. |
 | Discretization | Bilinear, prewarped at the pole | Impulse invariance: aliasing of the shelf; matched-z: less accurate high-frequency gain. |
 
-The formula for `α(θ)` is checked against secondary sources; Brown and Duda's equations could not be
-rendered here (no PDF renderer installed), while the surrounding text (the filter as their
-equation 3, ear positions at ±100°) was read from the paper.
+The filter, `ω₀ = c / a` and `α(θ)` with `α_min = 0.1`, `θ_min = 150°` are Brown and Duda's equations
+3–5, checked against the rendered paper (`brown1998`, page 477); ear positions at ±100° are from
+the same paper.
 
 ## Verification
 

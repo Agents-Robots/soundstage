@@ -48,6 +48,5 @@ Without an open copy (cited by reference only):
 | Z. Maekawa, "Noise reduction by screens", Applied Acoustics 1(3):157–173, 1968 | Barrier attenuation from the Fresnel number, an alternative for occlusion ([occlusion](../models/occlusion.md)) |
 | OpenAL Soft, `include/AL/efx-presets.h` (LGPL) | The 113 EFX reverb presets, converted by `tools/efx_presets.py` into `soundstage/engine/data/efx_presets.json` ([reverb](../models/reverb.md)) |
 
-Reading the PDFs' equations needs a PDF renderer (`pdftoppm` from poppler-utils), which is not
-installed on the development machine; formulas taken from papers whose equations could not be
-rendered are marked as checked against secondary sources in the model documents.
+Equations in the PDFs are often images: render the page with `pdftoppm -f N -l N -r 110 -png
+<pdf> <prefix>` (poppler-utils) and read the PNG; `pdftotext -layout` finds the page.
