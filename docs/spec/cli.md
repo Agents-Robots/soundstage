@@ -27,6 +27,7 @@ soundstage scan <file.blend>
     [--max-static N]         static objects in the JSON (default 30)
     [--limit N]              rows per printed table (default 25)
     [--run SCRIPT.py ...]
+    [--scene NAME]           default: the file's active scene
     [--blender PATH]
 ```
 
@@ -51,11 +52,14 @@ soundstage bake <file.blend> --out <dir>
     [--run SCRIPT.py ...]    tagging or generator scripts to run first
     [--skip-invalid]         drop invalid tags with a warning instead of failing
     [--blender PATH]
-    [--scene NAME]           (later) default: the file's active scene
+    [--scene NAME]           default: the file's active scene
 ```
 
 Writes `<dir>/scene.json`, `<dir>/scene.npz`. Prints a one-line summary per source. Invalid tags
 fail the bake with object, entry index and reason.
+
+`--scene` (bake and scan) makes the named scene the context scene before the `--run` scripts run,
+so scripts that use `bpy.context.scene` see it too; the manifest records it as `scene`.
 
 ## `soundstage inspect`
 
@@ -86,16 +90,35 @@ soundstage render <scene.json>
     [--plot]                 (later) write <mix>.plot.png
 ```
 
-## `soundstage preview` *(later)*
+## `soundstage preview`
 
 ```
-soundstage preview <mix.wav> -o <preview.mp4>
-    (--frames PREFIX --fps F | --video FILE)
-    [--width W] [--start-frame N]
+soundstage preview <mix.wav>
+    (--frames DIR|PREFIX | --video FILE)
+    [-o <preview.mp4>]       default: <mix>_preview.mp4 next to the WAV
+    [--fps F]                default: from <mix>.report.json
+    [--start-frame N]        frame of the mix's first sample; default: from <mix>.report.json
+    [--video-start-frame N]  frame of the video's first frame; default: --start-frame
+    [--width W]              output width, 0 keeps the size (default 1280)
+    [--ffmpeg PATH]          default: $SOUNDSTAGE_FFMPEG, else ffmpeg on PATH
 ```
 
-Muxes the audio with a numbered frame sequence (`PREFIX0001.png …`, gaps allowed) or with an existing video, as H.264 + AAC. For checking sync
-only; deliverables are the WAVs.
+Muxes the mix with the shot's picture into an H.264 + AAC MP4, for checking sync without Resolve;
+the deliverables are the WAVs.
+
+- `--frames DIR` takes the largest set of numbered images in the directory that share a prefix and
+  extension (`000001.png`, `frame_0001.exr`); `--frames DIR/frame_` takes only `frame_<n>.<ext>`.
+  The number in the file name is the Blender frame. Gaps (a partly rendered shot) hold the previous
+  image, so the timing stays right. Images are linked into a gap-free sequence in a temporary
+  directory and read at the exact rational frame rate (29.97 → 30000/1001).
+- `--video FILE` must have the mix's frame rate; with `--width 0` its video stream is copied.
+- Picture and sound are aligned by frame number: the MP4 starts at the first picture frame, the
+  mix is trimmed (or delayed with silence) by a whole number of samples so that the sound of frame
+  N plays with picture frame N, and padded with silence if the picture runs longer. The MP4 is as
+  long as the picture (AAC rounds the audio up to a whole 1024-sample frame).
+- Without a report next to the mix, `--start-frame` and `--fps` are required.
+- EXR frames are shown as ffmpeg decodes them (linear, not view-transformed); render PNG or JPG
+  previews for a faithful picture.
 
 ## Report (`<mix>.report.json`)
 

@@ -43,6 +43,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--substeps", type=int, help="sub-frames per frame (default: scene setting)")
     p.add_argument("--pad", type=float, help="padding in seconds before and after (default: scene setting)")
     p.add_argument("--run", action="append", default=[], help="script to run before baking")
+    p.add_argument("--scene", help="scene name (default: the active scene)")
     p.add_argument("--skip-invalid", action="store_true", help="drop invalid tags instead of failing")
     return p.parse_args(argv)
 
@@ -82,6 +83,7 @@ def collect_sources(scene, settings: dict, skip_invalid: bool) -> tuple[list[dic
 
 
 def bake(args: argparse.Namespace) -> None:
+    util.activate_scene(args.scene)
     util.run_scripts(args.run)
     scene = bpy.context.scene
 
@@ -165,6 +167,7 @@ def bake(args: argparse.Namespace) -> None:
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "generator": {"tool": "soundstage.blender.bake", "blender_version": util.blender_version()},
         "blend_file": bpy.data.filepath,
+        "scene": scene.name,
         "time": {
             "fps": scene.render.fps,
             "fps_base": round(scene.render.fps_base, 6),  # stored as float32 in Blender

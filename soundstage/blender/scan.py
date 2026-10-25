@@ -37,6 +37,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--samples", type=int, default=60, help="number of sampled frames")
     p.add_argument("--max-static", type=int, default=30, help="static objects to list")
     p.add_argument("--run", action="append", default=[])
+    p.add_argument("--scene", help="scene name (default: the active scene)")
     return p.parse_args(argv)
 
 
@@ -66,6 +67,7 @@ def side(q: np.ndarray) -> str:
 
 
 def scan(args: argparse.Namespace) -> None:
+    util.activate_scene(args.scene)
     util.run_scripts(args.run)
     scene = bpy.context.scene
     frame_start, frame_end = util.parse_frames(args.frames, scene)

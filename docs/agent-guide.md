@@ -8,11 +8,12 @@ What you produce:
 
 - `<project>/audio/sounds.py`: a tagging script (which object makes which sound, when);
 - `<project>/audio/bake/<shot>/scene.json` + `scene.npz`: the baked scene;
-- `<project>/audio/out/<shot>.wav` + `<shot>.report.json`: the stereo mix and its report.
+- `<project>/audio/out/<shot>.wav` + `<shot>.report.json`: the stereo mix and its report;
+- `<project>/audio/out/<shot>_preview.mp4`: the mix on the rendered frames, if there are any.
 
-What the engine does today (MVP): loudness by distance, left/right panning by the side of the
+What the engine does today (Phase 1): loudness by distance, left/right panning by the side of the
 camera, loops and one-shots, ambience beds, a 48 kHz float WAV that starts exactly at the first
-frame. Not yet: Doppler, propagation delay, filters, occlusion, reverb ([roadmap](roadmap.md)).
+frame, and an MP4 preview on the rendered frames. Not yet: Doppler, propagation delay, filters, occlusion, reverb ([roadmap](roadmap.md)).
 
 ## 0. Setup (once per checkout)
 
@@ -117,9 +118,20 @@ For a stronger check, render single sources with `--solo` and measure with numpy
 onset of a one-shot must be at sample `round((frame − frame_start) · 48000 / fps)`; a source left
 of the camera must be louder in channel 0, right in channel 1.
 
-## 8. Hand over
+## 8. Preview and hand over
 
-Tell the user where the WAV is, what each source is, and what you measured. Ask them to listen:
+If the shot has rendered frames (any numbered PNG/JPG sequence, even a partial one), make a preview
+so the user can check sync without Resolve:
+
+```bash
+soundstage preview <project>/audio/out/<shot>.wav --frames <frames dir>
+```
+
+It reads the first frame and fps from `<shot>.report.json`, places each image by the frame number
+in its file name and holds the previous image over missing frames (it prints how many). Ask the
+user where the frames are if you cannot find them; never render frames yourself for this.
+
+Tell the user where the WAV (and the preview) is, what each source is, and what you measured. Ask them to listen:
 put the WAV on the Resolve timeline at the first frame of the shot (timeline frame rate = the
 scene's fps). Adjust `gain_db`, `ref_distance` or the samples from their feedback and re-run
 steps 5-7.

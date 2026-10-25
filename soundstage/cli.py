@@ -1,10 +1,11 @@
-"""Command-line entry point ``soundstage`` with the subcommands scan, bake, inspect, render.
+"""Command-line entry point ``soundstage`` with the subcommands scan, bake, inspect, render, preview.
 
 - ``scan``: runs ``blender/scan.py`` headless and prints the cameras, moving objects and static
   objects near the camera path (sound-source candidates); ``--out`` keeps the full JSON.
 - ``bake``: runs ``blender/bake.py`` headless and writes scene.json + scene.npz.
 - ``inspect``: summarizes a scene file (sources, distance ranges, cuts, warnings).
 - ``render``: renders a scene file to a WAV, optionally with a JSON report.
+- ``preview``: muxes a mix with the shot's frames or a video into an MP4 (ffmpeg), for a sync check.
 
 Arguments, exit codes and report format: docs/spec/cli.md.
 """
@@ -76,6 +77,7 @@ def cmd_scan(a: argparse.Namespace) -> int:
     out = Path(a.out) if a.out else Path(tempfile.mkdtemp()) / "scan.json"
     args = ["--out", str(out), "--samples", str(a.samples), "--max-static", str(a.max_static)]
     args += ["--frames", a.frames] if a.frames else []
+    args += ["--scene", a.scene_name] if a.scene_name else []
     for r in a.run:
         args += ["--run", str(Path(r).resolve())]
     if run_blender("scan.py", a.blend, args, a.blender) != 0:
@@ -108,6 +110,7 @@ def cmd_bake(a: argparse.Namespace) -> int:
     args += ["--substeps", str(a.substeps)] if a.substeps else []
     args += ["--pad", str(a.pad)] if a.pad is not None else []
     args += ["--skip-invalid"] if a.skip_invalid else []
+    args += ["--scene", a.scene_name] if a.scene_name else []
     for r in a.run:
         args += ["--run", str(Path(r).resolve())]
     return run_blender("bake.py", a.blend, args, a.blender)
@@ -190,6 +193,27 @@ def cmd_render(a: argparse.Namespace) -> int:
     return 1 if (a.strict and result.warnings) else 0
 
 
+def cmd_preview(a: argparse.Namespace) -> int:
+    from soundstage.preview import PreviewError, preview
+
+    wav = Path(a.mix)
+    out = Path(a.output) if a.output else wav.with_name(wav.stem + "_preview.mp4")
+    try:
+        res = preview(wav, out, frames=a.frames, video=a.video, fps=a.fps, start_frame=a.start_frame,
+                      video_start_frame=a.video_start_frame, width=a.width, ffmpeg=a.ffmpeg)
+    except PreviewError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    first, last = res.picture_frames
+    print(f"wrote {out}: frames {first}-{last} @ {float(res.fps):g} fps ({(last - first + 1) / res.fps:.2f} s)")
+    if res.held_frames:
+        print(f"{res.held_frames} missing frames hold the previous image")
+    if res.audio_offset_samples:
+        what = "skipped" if res.audio_offset_samples > 0 else "of silence inserted"
+        print(f"audio: {abs(res.audio_offset_samples)} samples {what} to line up with frame {first}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="soundstage", description="Spatial sound for Blender animations.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -202,6 +226,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--max-static", type=int, default=30, help="static objects to include in the JSON")
     s.add_argument("--limit", type=int, default=25, help="rows per table")
     s.add_argument("--run", action="append", default=[], help="script to run in Blender first")
+    s.add_argument("--scene", dest="scene_name", help="scene name (default: the file's active scene)")
     s.add_argument("--blender")
     s.set_defaults(func=cmd_scan)
 
@@ -213,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--pad", type=float, help="padding seconds before/after (default: scene setting, 3)")
     b.add_argument("--run", action="append", default=[], help="tagging script to run in Blender first")
     b.add_argument("--skip-invalid", action="store_true", help="drop invalid tags instead of failing")
+    b.add_argument("--scene", dest="scene_name", help="scene name (default: the file's active scene)")
     b.add_argument("--blender")
     b.set_defaults(func=cmd_bake)
 
@@ -232,6 +258,19 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--report", action="store_true", help="write <output>.report.json")
     r.add_argument("--strict", action="store_true", help="exit 1 if there are warnings")
     r.set_defaults(func=cmd_render)
+
+    v = sub.add_parser("preview", help="mux a mix with the shot's frames or a video into an MP4")
+    v.add_argument("mix", help="WAV from render (its .report.json supplies first frame and fps)")
+    v.add_argument("-o", "--output", help="output MP4 (default: <mix>_preview.mp4)")
+    pic = v.add_mutually_exclusive_group(required=True)
+    pic.add_argument("--frames", help="directory of numbered images, or a prefix such as renders/frame_")
+    pic.add_argument("--video", help="video file whose first frame is --video-start-frame")
+    v.add_argument("--fps", type=float, help="frame rate (default: from the report)")
+    v.add_argument("--start-frame", type=int, help="frame of the mix's first sample (default: from the report)")
+    v.add_argument("--video-start-frame", type=int, help="frame of the video's first frame (default: --start-frame)")
+    v.add_argument("--width", type=int, default=1280, help="output width in pixels; 0 keeps the size (default 1280)")
+    v.add_argument("--ffmpeg")
+    v.set_defaults(func=cmd_preview)
     return p
 
 

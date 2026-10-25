@@ -44,6 +44,9 @@ ticket, not in a document.
 - Blender 5.x on `PATH` (`blender -b`), headless is enough: bake needs no GPU, display or audio
   device. Always `blender -b <file> --factory-startup -y --python ...`.
 - `ffmpeg` / `ffprobe` on `PATH` for previews and for inspecting files.
+- Headless machines without a GPU often have no EGL: Workbench and EEVEE cannot render there
+  (`libEGL.so.1` missing). Tests that need frames render them with Cycles on the CPU at 64×36,
+  1 sample (about 30 ms per frame).
 - Scene files store absolute sample paths; bake and render on machines that see the same paths.
 - Machine-specific details (paths, hosts, surrounding tools) belong in `AGENTS.local.md`, never in
   tracked files.
@@ -58,6 +61,7 @@ ticket, not in a document.
 .venv/bin/soundstage bake <blend> --run sounds.py --out <dir>   # headless Blender → scene.json + scene.npz
 .venv/bin/soundstage inspect <dir>/scene.json      # table of sources and distances
 .venv/bin/soundstage render <dir>/scene.json -o <mix.wav> --report
+.venv/bin/soundstage preview <mix.wav> --frames <frames dir>   # MP4 for a sync check (ffmpeg)
 ```
 
 Asked to add sound to an animation? Follow [docs/agent-guide.md](docs/agent-guide.md).

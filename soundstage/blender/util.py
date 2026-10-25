@@ -29,6 +29,19 @@ def run_scripts(paths: list[str]) -> None:
         runpy.run_path(str(Path(p).resolve()), run_name="__main__")
 
 
+def activate_scene(name: str | None):
+    """Make the named scene the context scene (for --run scripts too); None keeps the active one."""
+    if name:
+        scene = bpy.data.scenes.get(name)
+        if scene is None:
+            raise SystemExit(f"scene {name!r} not found; scenes: {', '.join(s.name for s in bpy.data.scenes)}")
+        window = bpy.context.window or next(iter(bpy.context.window_manager.windows), None)
+        if window is None:
+            raise SystemExit("cannot switch scenes: the file has no window")
+        window.scene = scene
+    return bpy.context.scene
+
+
 def parse_frames(text: str | None, scene) -> tuple[int, int]:
     if not text:
         return scene.frame_start, scene.frame_end

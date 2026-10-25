@@ -72,8 +72,13 @@ decisions behind the structure are in [adr/](adr/README.md).
 
 ### `soundstage/cli.py`
 
-Argument parsing for `scan`, `bake`, `inspect`, `render` (and later `preview`) ([spec/cli.md](spec/cli.md)); `scan` and `bake`
-shell out to Blender, `preview` to ffmpeg.
+Argument parsing for `scan`, `bake`, `inspect`, `render`, `preview` ([spec/cli.md](spec/cli.md)); `scan` and `bake`
+shell out to Blender.
+
+### `soundstage/preview.py`
+
+Muxes a mix with the shot's frame sequence or a video into an MP4 through ffmpeg, aligned by frame
+number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in the venv.
 
 ## Data flow inside a render
 

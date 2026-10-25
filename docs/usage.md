@@ -133,12 +133,16 @@ Iterate quickly on one part:
 
 ## 5. Check sync, then go to Resolve
 
-*(later)* a quick preview without Resolve:
+A quick preview without Resolve (needs ffmpeg; first frame and fps come from the mix's
+`.report.json`, so render with `--report`):
 
 ```bash
-.venv/bin/soundstage preview <project>/audio/out/shot1_mix.wav \
-    --frames <project>/renders/shot1/frame_ --fps 30 -o <project>/audio/out/shot1_preview.mp4
+.venv/bin/soundstage preview <project>/audio/out/shot1_mix.wav --frames <project>/renders/shot1/
+# -> <project>/audio/out/shot1_mix_preview.mp4
 ```
+
+The frame numbers in the file names place each image; missing frames hold the previous one, so a
+partly rendered shot can be checked already. See [spec/cli.md](spec/cli.md#soundstage-preview).
 
 In DaVinci Resolve:
 

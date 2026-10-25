@@ -25,6 +25,7 @@ changing the meaning of a key does, together with this spec.
   "created": "2026-10-25T14:03:11Z",
   "generator": {"tool": "soundstage.blender.bake", "blender_version": "5.2.2"},
   "blend_file": "/projects/demo/shot.blend",
+  "scene": "Scene",
 
   "time": {
     "fps": 30,
@@ -99,6 +100,8 @@ changing the meaning of a key does, together with this spec.
 
 Rules:
 
+- `blend_file` and `scene` say where the bake came from (`bake --scene` picks a scene other than
+  the file's active one); the engine does not read them.
 - `time.fps / time.fps_base` is the frame rate (Blender's own representation; 29.97 is
   `fps=30, fps_base=1.001`).
 - Sample paths are **absolute** (resolved by the bake from `//`, `samples_root`); bake and render must

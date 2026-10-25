@@ -17,9 +17,9 @@ the same scripts that build the scene, so everything stays reproducible.
 scene script ──▶ Blender (tags sounds) ──▶ bake (camera + object paths) ──▶ render ──▶ stereo WAV ──▶ Resolve
 ```
 
-**Status:** minimum viable version. Loudness by distance, left/right placement, loops and
-one-shots work end to end; Doppler, travel delay, filtering, occlusion and reverb are next (see the
-[roadmap](docs/roadmap.md)).
+**Status:** Phase 1, the minimum requirements. Loudness by distance, left/right placement, loops
+and one-shots work end to end, with an MP4 preview on the rendered frames for checking sync.
+Doppler, travel delay, filtering, occlusion and reverb are next (see the [roadmap](docs/roadmap.md)).
 
 ## Try it
 
@@ -31,6 +31,7 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend
 .venv/bin/soundstage bake out/flyby.blend --run examples/flyby_sounds.py --out out/flyby
 .venv/bin/soundstage render out/flyby/scene.json -o out/flyby/mix.wav --report
+.venv/bin/soundstage preview out/flyby/mix.wav --frames <rendered frames dir>   # optional: MP4 with sound (ffmpeg)
 ```
 
 `out/flyby/mix.wav` is 8 seconds of a ship passing from left to right, a beacon beeping on the
