@@ -7,7 +7,7 @@ then; recheck before relying on details.
 
 | Option | Has | Missing / problem | Verdict |
 |---|---|---|---|
-| **Blender Speaker objects + `bpy.ops.sound.mixdown`** (audaspace inside Blender) | Distance models, attenuation, reference/max distance, cone, Doppler (speed of sound + factor), panning relative to the active camera, render to WAV/FLAC; mono sources only for 3D | Amplitude panning only; Doppler as a pitch effect without propagation delay; no air absorption, occlusion, reverb or stems; little control or insight; headless mixdown is poorly documented (bug reports exist) | **Baseline**: spiked in Phase 0 to have a reference to beat. Speaker objects are also read as an alternative tag source (FR-8). |
+| **Blender Speaker objects + `bpy.ops.sound.mixdown`** (audaspace inside Blender) | Distance models, attenuation, reference/max distance, cone, Doppler settings (speed of sound + factor), constant-power panning relative to the active camera; mono sources only for 3D | Measured in Phase 0 (below): no Doppler shift in rendered audio, 3D parameters stepped once per audio buffer, headless mixdown leaves speakers out (a video render works), 16-bit audio from renders; no delay, air absorption, occlusion, reverb or stems; little control or insight | **Baseline** (`tools/blender_mixdown.py`). Speaker objects may still be read as an alternative tag source (FR-8). |
 | **audaspace** standalone (C++ with Python bindings, Apache-2.0) | Blender's audio engine as a library; 3D device, sequencer | No pip package found; same DSP limits as in Blender | No |
 | **Steam Audio** (Valve, C SDK) | HRTF, occlusion, reflections, pathing for moving sources | No Python binding (Rust wrapper audionimbus exists); real-time game API; heavy | No (ideas for occlusion and reflections) |
 | **pyroomacoustics** | Room acoustics by image sources, arrays | Static sources only; moving sources need a segmented approximation | No (could generate room IRs for the reverb later) |
@@ -51,6 +51,66 @@ HRTF datasets for Phase 4: MIT KEMAR, SADIE II, the CIPIC set, all available as 
 - **Resolve import**: multichannel WAVs are split or mapped per channel; mono files with `.L`/`.R`
   suffixes group into one clip (18.6+). Stereo WAVs import as stereo clips. Ambisonic import
   conventions (AmbiX ACN/SN3D) are not clearly documented; test before relying on them (Phase 4).
+
+## Phase 0: Blender Speaker baseline (measured)
+
+Measured on 2026-10-25 with Blender 5.2.2. `tools/blender_mixdown.py` gives every soundstage
+source the same dry signal soundstage plays and lets Blender spatialize it: a Speaker per spatial
+source (parented to its object at `offset`, with `distance_reference`, `distance_max`,
+`attenuation` from the tag and the scene's distance model, speed of sound and Doppler factor), a
+sequencer sound strip per bed, the scene camera as listener. Compared on the flyby example against
+soundstage's render of the same tags; the measurement source was a 1 kHz sine on the ship
+(`ref_distance` 15 m, passing 25 m in front of the camera at 30 m/s), and a click on the crate at
+frame 180.
+
+Getting audio out of Blender headless:
+
+- `bpy.ops.sound.mixdown` runs as a job: under `blender -b` it returns `FINISHED` at once and the
+  process exits after the first 2048 samples. Waiting until the file has its full size fixes that.
+- Even then the mixdown contains only sequencer strips: Speakers stay silent, with or without
+  `-setaudio`, after stepping through the frames, and after `bpy.ops.sound.bake_animation`.
+- A video render with an audio codec does contain the speakers. With a black color strip in the
+  sequencer and `render.use_sequencer`, the 3D render is skipped (240 frames in 0.4 s). The audio
+  of a video render is 16-bit (FLAC or PCM; no float option). This is the tool's default method.
+- Blender 5 needs `image_settings.media_type = "VIDEO"` before `file_format = "FFMPEG"`.
+  `bpy.ops.object.speaker_add` creates the speaker's NLA sound strip; a speaker made through
+  `bpy.data` has none and plays nothing.
+- In the `aud` module, `Sound.loop(-1).limit(...)` never ends on a mono sound (it wrote 17 GB),
+  and `Sound.write` (through ffmpeg) pads the file or aborts the process with "filling the audio
+  frame failed", depending on the length. The tool composes signals in numpy from `Sound.data()`
+  and writes float WAVs with the standard library.
+
+Results:
+
+| | Blender speakers | soundstage (Phase 1) |
+|---|---|---|
+| Onset of the one-shot at frame 180 | sample 286 400, exact | sample 286 400, exact |
+| Level against the inverse-clamped law | within ±0.5 dB | within ±0.1 dB |
+| Pan law | constant power, `g_L² = (1 − sin θ)/2`, `g_R² = (1 + sin θ)/2` (θ: azimuth from the front; fit within 0.03 in linear gain) | constant power, `φ = (λ + 1)π/4` |
+| Channel balance with the source 76° to the side (124 m) | 18 dB | 32 dB |
+| Doppler (factor 1 and 10, 343 m/s) | none: 1000 Hz throughout (expected 1094 Hz approaching, 921 Hz receding) | none (Phase 2) |
+| Parameter updates | once per audio buffer (4608 samples with FLAC, 96 ms); level steps up to 0.47 dB within 1 ms during the pass | 1 ms control rate, interpolated; at most 0.019 dB per ms |
+| Flyby mix (same tags) | −23.3 LUFS, 1.2 s | −23.4 LUFS, 1.2 s render (plus 0.9 s bake) |
+| Output | 16-bit, via a video render | 32-bit float WAV |
+
+Conclusions:
+
+- Blender's speakers are a usable reference for distance and timing: both engines agree there.
+- What soundstage has to beat in Phase 2: Doppler and travel delay (Blender produces neither in
+  rendered audio), smooth parameter changes for fast passes, float output.
+- Panning differs. Blender's law splits power linearly with the lateral sine and keeps the far
+  channel at −18 dB at 76°; soundstage's pans almost hard (−32 dB). Whether the amplitude part of
+  the panner should move towards `g² = (1 ± λ)/2` is a listening question for the Phase 2 ear-model
+  tuning.
+- Lists of dicts as custom properties survive save and reload in Blender 5.2 (checked in Phase 1,
+  [spec/tagging.md](spec/tagging.md)), so tags need no JSON-string fallback.
+
+Reproduce:
+
+```bash
+blender -b out/flyby.blend --factory-startup -y --python-exit-code 1 \
+    --python tools/blender_mixdown.py -- --run examples/flyby_sounds.py --out out/flyby/blender.wav
+```
 
 ## Sources
 

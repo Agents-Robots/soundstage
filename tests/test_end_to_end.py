@@ -156,3 +156,22 @@ tag.add_sound(bpy.context.scene.objects["Horn"], {str(REPO / "samples" / "beep.w
     assert main(["scan", str(tmp_path / "two.blend"), "--scene", "Second", "--out", str(tmp_path / "scan.json")]) == 0
     assert json.loads((tmp_path / "scan.json").read_text())["cameras"][0]["name"] == "Cam2"
     assert main(["bake", str(tmp_path / "two.blend"), "--scene", "Nope", "--out", str(tmp_path / "x")]) == 1
+
+
+def test_blender_speaker_baseline(flyby, tmp_path):
+    tags = tmp_path / "crate.py"
+    tags.write_text(f"""
+import sys, bpy
+sys.path.insert(0, {str(REPO)!r})
+from soundstage.blender import tag
+tag.set_scene_settings(samples_root={str(REPO / "samples")!r} + "/")
+tag.add_sound(bpy.data.objects["Crate"], "click.wav", mode="once", frame=180, ref_distance=5)
+""")
+    out = tmp_path / "baseline.wav"
+    subprocess.run(["blender", "-b", str(flyby / "flyby.blend"), "--factory-startup", "-y", "--python-exit-code", "1",
+                    "--python", str(REPO / "tools" / "blender_mixdown.py"), "--", "--run", str(tags), "--out", str(out)],
+                   check=True, capture_output=True)
+    audio, rate = sf.read(out)
+    assert rate == RATE and len(audio) == 240 * 1600
+    assert onset(audio, threshold=0.1 * np.abs(audio).max()) == 179 * 1600  # same frame as soundstage
+    assert np.abs(audio[:, 1]).max() > np.abs(audio[:, 0]).max()  # crate on the right
