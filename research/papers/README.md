@@ -22,6 +22,12 @@ python3 research/papers/fetch.py        # stdlib only; skips files already prese
 | `fink2016` | M. Fink, M. Holters, U. Zölzer, "Signal-Matched Power-Complementary Cross-Fading and Dry-Wet Mixing", Proc. DAFx-16, Brno, 2016 | Correlation-adaptive loop crossfade ([loops and one-shots](../models/loops-and-one-shots.md)) | HSU Hamburg |
 | `itu1770` | ITU-R BS.1770-4, "Algorithms to measure audio programme loudness and true-peak audio level", 2015 | LUFS and true peak in the report | ITU (free) |
 | `dynamicsound2026` | DynamicSound, arXiv:2601.15433, 2026 | Confirms the delay-line method for moving sources ([survey](../survey.md)) | arXiv |
+| `kapralos2007` | B. Kapralos, M. Jenkin, E. Milios, "Diffraction Modeling for Interactive Virtual Acoustical Environments", Proc. GRAPP 2007, pp. 241–248, doi:10.5220/0002075802410248 (Huygens–Fresnel visibility, with a review of diffraction methods) | How Tsingos and Gascuel compute occlusion from the first Fresnel zone ([occlusion](../models/occlusion.md)) | SciTePress |
+| `valimaki2017velvet` | V. Välimäki, B. Holm-Rasmussen, B. Alary, H.-M. Lehtonen, "Late Reverberation Synthesis Using Filtered Velvet Noise", Applied Sciences 7(5):483, 2017 | Velvet-noise late tail for low-diffusion presets ([reverb](../models/reverb.md)) | Aalto (open access) |
+| `albrecht2013distance` | R. Albrecht, T. Lokki, "Adjusting the perceived distance of virtual speech sources by modifying binaural room impulse responses", ICAD 2013 | Direct-to-reverberant ratio as a distance cue ([reverb](../models/reverb.md)) | Aalto |
+| `ebu_r128` | EBU R 128, "Loudness normalisation and permitted maximum level of audio signals" | Loudness targets, −1 dBTP ([mixing and loudness](../models/mixing-and-loudness.md)) | EBU (free) |
+| `ebu_tech3341` | EBU Tech 3341, "Loudness Metering: 'EBU Mode' metering to supplement EBU R 128 loudness normalization" | Test signals for the loudness meter ([E14](../experiments/E14-loudness-and-limiter.md)) | EBU (free) |
+| `ebu_tech3342` | EBU Tech 3342, "Loudness Range: A measure to supplement EBU R 128 loudness normalization" | Loudness-range algorithm and test signals ([mixing and loudness](../models/mixing-and-loudness.md)) | EBU (free) |
 
 Without an open copy (cited by reference only):
 
@@ -33,6 +39,14 @@ Without an open copy (cited by reference only):
 | H. Lee, F. Rumsey, "Level and Time Panning of Phantom Images for Musical Sources", J. Audio Eng. Soc. 61(12), 2013 ([abstract](https://eprints.hud.ac.uk/19670)) | Why level panning stays primary on loudspeakers ([ITD](../models/itd.md)) |
 | R. S. Woodworth, *Experimental Psychology*, Holt, 1938 | ITD formula ([ITD](../models/itd.md)) |
 | G. F. Kuhn, "Model for the interaural time differences in the azimuthal plane", J. Acoust. Soc. Am. 62(1):157–167, 1977 | Low-frequency ITD, why Woodworth is a high-frequency formula ([ITD](../models/itd.md)) |
+| N. Tsingos, J.-D. Gascuel, "Soundtracks for Computer Animation: Sound Rendering in Dynamic Environments with Occlusions", Graphics Interface 1997 (`tsingos1997` in `fetch.py`; the proceedings server answers 403 to scripted downloads) | Fresnel-ellipsoid visibility for occlusion ([occlusion](../models/occlusion.md)) |
+| N. Tsingos, J.-D. Gascuel, "Fast Rendering of Sound Occlusion and Diffraction Effects for Virtual Acoustic Environments", AES 104th Convention, 1998 | The same method with graphics hardware ([occlusion](../models/occlusion.md)) |
+| D. Giannoulis, M. Massberg, J. D. Reiss, "Digital Dynamic Range Compressor Design — A Tutorial and Analysis", JAES 60(6):399–408, 2012 (`giannoulis2012` in `fetch.py`; the author's server failed the TLS handshake) | Real-time limiter designs, the alternative to the offline limiter ([mixing and loudness](../models/mixing-and-loudness.md)) |
+| J. A. Moorer, "About This Reverberation Business", Computer Music Journal 3(2):13–28, 1979 | Exponentially decaying noise as late reverberation ([reverb](../models/reverb.md)) |
+| V. Välimäki, J. Parker, L. Savioja, J. O. Smith, J. Abel, "Fifty Years of Artificial Reverberation", IEEE TASLP 20(5):1421–1448, 2012 | Survey of reverberation algorithms ([reverb](../models/reverb.md)) |
+| A. W. Bronkhorst, T. Houtgast, "Auditory distance perception in rooms", Nature 397:517–520, 1999 | Direct-to-reverberant ratio and distance ([reverb](../models/reverb.md)) |
+| Z. Maekawa, "Noise reduction by screens", Applied Acoustics 1(3):157–173, 1968 | Barrier attenuation from the Fresnel number, an alternative for occlusion ([occlusion](../models/occlusion.md)) |
+| OpenAL Soft, `include/AL/efx-presets.h` (LGPL) | The 113 EFX reverb presets, converted by `tools/efx_presets.py` into `soundstage/engine/data/efx_presets.json` ([reverb](../models/reverb.md)) |
 
 Reading the PDFs' equations needs a PDF renderer (`pdftoppm` from poppler-utils), which is not
 installed on the development machine; formulas taken from papers whose equations could not be

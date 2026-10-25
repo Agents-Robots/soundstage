@@ -52,8 +52,8 @@ reception side (per ear, f_s):
 ```
 
 Emission-side parameters are functions of the path; they are placed on emission time
-`t_e = t − τ_read` (made monotonic where a jump makes it go back). The reverb send (Phase 3) is
-taken from the centre read before panning.
+`t_e = t − τ_read` (made monotonic where a jump makes it go back). The reverb send is taken from
+the centre read before panning; occlusion is applied per ear after the read.
 
 All spatial parameters use the **retarded** source position `s(t − τ_c)`: the sound is heard from
 where it was emitted, with the loudness of the distance it actually travelled.
@@ -245,34 +245,71 @@ cutoff moves to 20 kHz at the side would still take 1–2 dB off 15 kHz for ever
 
 ## Occlusion
 
-Visibility `v ∈ [0, 1]` from the bake (fraction of unobstructed rays from the camera to points
-within `occlusion_radius` of the emitter) is smoothed with a one-pole follower (60 ms when
-becoming occluded, 150 ms when becoming visible, *(tune)*), then:
+The bake samples each source's visibility `v_b ∈ [0, 1]` in three bands (250 Hz, 1 kHz, 4 kHz) at
+`occlusion_rate` (10 Hz): the open share of five paths through the first Fresnel zone of the path
+heard at that time (retarded source, listener at the frame; [model](../../research/models/occlusion.md)).
+The engine interpolates `v_b` linearly to the control grid and smooths it per band with an
+asymmetric one-pole follower (time constant 60 ms while it falls, 150 ms while it rises). Per band:
 
 ```
-g_occ = 10 ^ ((1 − v) · occlusion_gain_db / 20)                     occlusion_gain_db = −12 (tune)
-f_occ = 20000 · (occlusion_cutoff_hz / 20000) ^ (1 − v)             occlusion_cutoff_hz = 1500 (tune)
+T(f)  = 10^(occlusion_gain_db / 20) / sqrt(1 + (f / occlusion_cutoff_hz)²)     transmission through occluders
+g_b   = v_b + (1 − v_b) · T(f_b)
+G     = g_250                                                                  broadband gain
+f_occ = argmin over f_c of Σ_{b = 1k, 4k} (20 log₁₀(g_b / G) + 10 log₁₀(1 + (f_b / f_c)²))²
 ```
 
-Occlusion gets its own low-pass stage (Phase 3); air absorption and the rear cue are separate
-stages. All low-passes are one-poles in TPT (zero-delay feedback) form: `g = tan(π f_c / f_e)`,
+`f_occ` is the one-pole cutoff whose attenuation best matches the upper bands in dB (least squares,
+by bisection on `1/f_c²`; ∞ where nothing is attenuated). Fully occluded, `G = T(250)` and
+`f_occ` = 1524 Hz reproduce `T(f)` exactly. `G` multiplies the source gain; `f_occ` drives a TPT
+one-pole per ear, after the read and before head shadow. Both apply to the direct sound; the reverb
+send gets them only with `occlusion_mode = "occlusion"`.
+
+All low-passes are one-poles in TPT (zero-delay feedback) form: `g = tan(π f_c / f_e)`,
 `G = g / (1 + g)`, per sample `v = G (x − s)`, `y = v + s`, `s = y + v`. `G` is computed at control
 rate and interpolated linearly per sample; it stays in (0, 1), so every intermediate filter is
 stable and modulation does not zipper.
 
 ## Reverb send
 
-Each spatial source feeds a mono send, taken after the delay read (centre ear) and before panning:
+Each spatial source feeds a mono send, read from its delay line with the centre delay (no ITD), so
+air absorption and the rear low-pass (emission side) are in it, but not pan, head shadow or the rear
+gain ([model](../../research/models/reverb.md)):
 
 ```
-send = 10^(reverb_send_db / 20) · g_dist(d; rolloff/2) · g_occ^0.5 · y_c
+send = 10^((gain_db + reverb_send_db_source + reverb_send_db_scene) / 20)
+       · g_dist(d; distance_model, ref_distance, max_distance, rolloff = room_rolloff) · g_cone · y_c
+       (· G_occ and the occlusion low-pass, in occlusion mode)
 ```
 
-The send uses half the rolloff, so the reverb falls more slowly with distance than the direct sound
-and the direct-to-reverb ratio acts as a distance cue. The sum of sends is convolved (FFT,
-partitioned per chunk) with a stereo impulse response: a user file, or a preset synthesized by
-seed (decorrelated exponentially decaying noise with RT60, pre-delay and HF damping), so presets
-need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoor` *(tune)*.
+`reverb_send_db_source` is 0 when null; `room_rolloff` is `reverb_room_rolloff`, or the preset's
+room rolloff factor (0 for nearly all presets: the reverberant level does not fall with distance,
+so the direct-to-reverberant ratio falls 6 dB per doubling). Beds send only with an explicit
+`reverb_send_db`, taken from their stereo mix.
+
+The sum of all sends is convolved once per chunk (FFT overlap-add, tail carried to the next chunk)
+with a stereo impulse response:
+
+- **EFX preset** (`reverb` = a name from `soundstage presets`): synthesized, seeded by the name.
+  Early reflections: `8 + 16 · density` sparse ±1 taps per channel between `reflections_delay` and
+  `reflections_delay + late_reverb_delay`, decaying by e⁻³ across that span. Late tail from
+  `reflections_delay + late_reverb_delay`: noise (Gaussian, or velvet noise with
+  `300 + 3700 · diffusion²` pulses/s when `diffusion` < 0.99), split into complementary 1/3-octave
+  bands from 20 Hz (raised-cosine crossfades on a log-frequency axis, summing to 1), each band times
+  `exp(−3 ln 10 · t / T60(f_c))`, with
+  `1/T60(f) = 1/T_m + (1/T_l − 1/T_m) / (1 + (f/f_l)⁴) + (1/T_h − 1/T_m) · (f/f_h)⁴ / (1 + (f/f_h)⁴)`,
+  `T_m = decay_time`, `T_l = T_m · decay_lf_ratio`, `T_h = T_m · decay_hf_ratio` (limited to
+  `60 / (−20 log₁₀(air_absorption_gain_hf) · 343)` when `decay_hf_limit`), `f_l = lf_reference`,
+  `f_h = hf_reference`; 5 ms fade-in. Section energies per channel: `(gain · reflections_gain)²` and
+  `(gain · late_reverb_gain)²`. Then first-order shelves: `gain_hf` above `hf_reference`, `gain_lf`
+  below `lf_reference`. Length `late start + 1.1 · max(T)`, at most 15 s.
+- **File** (`reverb` = a path): WAV, FLAC, OGG or AIFF, resampled to `fs`, mono duplicated to
+  stereo (first two channels of multichannel files), used as recorded (no normalization); room
+  rolloff 0 unless `reverb_room_rolloff` is set.
+
+The reverb return is added to the master and is its own stem `reverb`. **Pre-roll**: the sends of
+the impulse response's length before the first output sample (at most the baked padding) are
+rendered and fed to the bus, and only its output is discarded, so sound already playing at the
+start of the render (or of a `--frames` sub-range) has its reverberation from the first sample.
 
 ## Cuts
 
@@ -289,21 +326,33 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 ## Mixing and output
 
 - Each source contributes `(g · y_L, g · y_R)` to its group bus, with
-  `g = gain · g_dist · g_cone · g_rear · g_occ` and pan gains applied per channel.
-- Master = Σ groups + reverb return, times `master_gain_db`.
+  `g = gain · g_dist · g_cone · g_rear · G_occ` and pan gains applied per channel.
+- Master = Σ groups + reverb return, times `master_gain_db`. Stems are the group buses and the
+  reverb return, kept as float32; they sum to the master (to about 1e-7).
+- Off by default (final mixing happens in Resolve), in this order when requested
+  ([model](../../research/models/mixing-and-loudness.md)):
+  1. `--normalize LUFS`: one gain that brings the integrated loudness (BS.1770, pyloudnorm) to the
+     target.
+  2. `--limit DBTP`: offline true-peak limiter. Needed gain per sample `min(1, ceiling / tp)` from the
+     8× oversampled true peak; sliding minimum over ±5 ms (look-ahead), then a moving average over
+     5 ms, then release `level += (g − level)(1 − e^(−1/(0.08 s · fs)))` where the gain rises
+     (instant fall); up to four passes until the 8× true peak is at the ceiling.
+  The same gains are applied to the stems.
 - Output: WAV via libsndfile, `FLOAT` (32-bit float, default) or `PCM_24` with TPDF dither.
-  Stems are written the same way and sum to the master (reverb return as its own stem `reverb`).
-- No limiting or normalization by default. Options: true-peak limiter (ceiling −1 dBTP, lookahead
-  5 ms) and normalization to a LUFS target.
 
 ## Report metrics
 
-- Sample peak (dBFS), true peak (dBTP, 4× oversampling, ITU-R BS.1770-4), integrated loudness
-  (LUFS, BS.1770 via pyloudnorm), loudness range.
-- Per source: id, group, sample, active frame intervals, distance min/max (m), playback rate
-  min/max, peak contribution (dBFS), frames with gain above −60 dB, warnings.
-- Warnings: rate clamped, source never audible, master sample peak > 0 dBFS (only matters for
-  PCM_24), missing or resampled samples, cuts handled.
+- Master and each group (stem): sample peak (dBFS), true peak (dBTP, ITU-R BS.1770-4: 4×
+  oversampled through a Kaiser low-pass with 32 taps per phase, β 8), integrated loudness (LUFS,
+  pyloudnorm), loudness range (LU, EBU Tech 3342: 3 s windows every 0.1 s, K-weighted, gated at
+  −70 LUFS and 20 LU below the mean, 95th minus 10th percentile).
+- Per source: id, group, sample, active frame intervals, distance min/max (m), delay min/max (ms),
+  playback rate min/max, peak contribution (dBFS), frames with peak above −60 dBFS, and with
+  visibility: its range (mean over bands, per frame) and the frames below 0.5.
+- `reverb`: the environment's name; `processing`: normalization gain, limiter's maximum reduction
+  and active time.
+- Warnings: rate clamped, source never audible, missing or resampled samples, cuts handled, sound
+  emitted before the baked range.
 
 ## Tuning (Phase 2, #15)
 
@@ -311,7 +360,8 @@ The Phase 2 starting values were judged by ear on the flyby and a 115-source rea
 headphones and loudspeakers, against the `power` pan law and a render without Doppler or ear model.
 Both pan laws sounded right; `sine` stays the default because it is the standard constant-power
 sin/cos law of mixing consoles, DAWs and OpenAL Soft. ITD 0.5, head shadow 0.5 and the rear cue
-(6 kHz, −2 dB) were kept. Values marked *(tune)* below belong to Phase 3 and are still to be judged.
+(6 kHz, −2 dB) were kept. Values marked *(tune)* below belong to Phase 3 and are still to be judged
+by ear.
 
 ## Defaults
 
@@ -332,9 +382,14 @@ sin/cos law of mixing consoles, DAWs and OpenAL Soft. ITD 0.5, head shadow 0.5 a
 | Head shadow (hybrid) | 0.5 (tuned) | scene `head_shadow` |
 | Air absorption scale | 1 (ISO 9613-1) | scene/source `air_absorption` |
 | Rear cutoff / gain | 6000 Hz / −2 dB (tuned) | scene `rear_cutoff_hz`, `rear_gain_db` |
-| Occlusion gain / cutoff | −12 dB / 1500 Hz *(tune)* | scene `occlusion_gain_db`, `occlusion_cutoff_hz` |
-| Occlusion smoothing | 60 ms / 150 ms *(tune)* | engine constant |
-| Reverb send | −18 dB *(tune)* | scene `reverb_send_db`, source `reverb_send_db` |
+| Occlusion transmission | −12 dB, low-pass 1500 Hz *(tune)* | scene `occlusion_gain_db`, `occlusion_cutoff_hz` |
+| Occlusion smoothing | 60 ms falling / 150 ms rising *(tune)* | engine constants `OCCLUSION_ATTACK_S`, `OCCLUSION_RELEASE_S` |
+| Visibility | 10 Hz, bands 250 / 1000 / 4000 Hz, 4 points each + direct path | scene `occlusion_rate`; bake constants |
+| Occluders | bounding boxes ≥ 2 m diagonal | scene `occluder_min_size`; object `sfx_occluder` |
+| Source size for visibility | 0.25 m | source `occlusion_radius` |
+| Reverb | none; send 0 dB, room rolloff from the preset | scene `reverb`, `reverb_send_db`, `reverb_room_rolloff`; source `reverb_send_db` |
+| Limiter | look-ahead 5 ms, release 80 ms, 8× true peak | `mix.true_peak_limiter` |
+| Instances per tagged object | 32 closest | scene `instance_limit` |
 | Cut crossfade | 10 ms | engine constant |
 | Loop seam crossfade | 50 ms, correlation-adaptive | source `loop_crossfade` |
 
@@ -351,4 +406,10 @@ sin/cos law of mixing consoles, DAWs and OpenAL Soft. ITD 0.5, head shadow 0.5 a
 - O. Niemitalo, *Polynomial Interpolators for High-Quality Resampling of Oversampled Audio*, 2001.
 - V. Zavalishin, *Preserving the LTI system topology in s- to z-plane transforms*, 2008.
 - OpenAL 1.1 specification, distance models and cones.
-- ITU-R BS.1770-4, loudness and true-peak measurement; EBU R128.
+- ITU-R BS.1770-4, loudness and true-peak measurement; EBU R128; EBU Tech 3341 (loudness meter
+  test signals), EBU Tech 3342 (loudness range).
+- N. Tsingos, J.-D. Gascuel, "Soundtracks for Computer Animation: Sound Rendering in Dynamic
+  Environments with Occlusions", Graphics Interface 1997 (Fresnel-zone visibility).
+- EFX reverb presets (OpenAL Soft `efx-presets.h`); J. A. Moorer, "About This Reverberation
+  Business", 1979 (decaying noise); V. Välimäki et al., "Late Reverberation Synthesis Using
+  Filtered Velvet Noise", 2017.

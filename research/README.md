@@ -33,6 +33,10 @@ flowchart LR
 | [Time-varying filters](models/time-varying-filters.md) | Filter structures under modulation |
 | [Cuts and teleports](models/cuts-and-teleports.md) | Switching without glides |
 | [Loops and one-shots](models/loops-and-one-shots.md) | Dry signal, loop seams, voices |
+| [Occlusion](models/occlusion.md) | Fresnel-zone visibility, occluders, transmission filter, obstruction vs occlusion |
+| [Reverb](models/reverb.md) | EFX presets, synthetic impulse responses, the send and its distance law |
+| [Mixing and loudness](models/mixing-and-loudness.md) | Stems, loudness and true peak, normalization, limiter, report |
+| [Blender integration](models/blender-integration.md) | Speaker objects, instanced assets, occluder marking: manual and scripted workflows |
 
 ## Experiments
 
@@ -47,7 +51,11 @@ flowchart LR
 | [E07](experiments/E07-retarded-time.md) | Retarded-time solver | Fixed point: 1.8 % pitch error at Mach 0.5; Newton: exact to 1e-9 s up to Mach 0.95 |
 | [E08](experiments/E08-known-answers.md) | Phase 2 known answers | 343 m → 1.000000 s; 1111/909 and 1100/900 Hz; ITD 0.656 ms; clean cut |
 | [E09](experiments/E09-flyby-doppler.md) | Doppler in the flyby | Rates 0.920–1.094 as expected; found and fixed a spline overshoot at a motion kink |
-| [E10](experiments/E10-performance.md) | Render performance | 50 sources × 5 min in 46 s (target 300 s) |
+| [E10](experiments/E10-performance.md) | Render performance | 50 sources × 5 min in 42 s, 63 s with occlusion, reverb and stems (target 300 s) |
+| [E11](experiments/E11-blender-raycast.md) | Ray casting in Blender (Phase 3) | Box BVH 5 µs per ray against 0.3–6 ms for `scene.ray_cast` (44 ms on a 24 000-object city); triangle BVH out of memory |
+| [E12](experiments/E12-reverb.md) | Synthetic EFX reverb | Decay per octave band within 0.8 % (median) of the curve over all 113 presets; DRR −6.02 dB per doubling |
+| [E13](experiments/E13-occlusion.md) | Occlusion response | Hidden: −12.1 dB and the transmission low-pass within 0.15 dB; attack/release 136/330 ms; low band bends around an edge |
+| [E14](experiments/E14-loudness-and-limiter.md) | Loudness report and limiter | LUFS, LRA and true peak equal to ffmpeg's meter; limiter holds −1 dBTP (−0.99 ideal) |
 
 ## Conventions
 
@@ -58,7 +66,7 @@ flowchart LR
 - **Experiments are reproducible**: every number in an experiment page comes from a script in
   [experiments/scripts/](experiments/scripts/), run from the repository root in the venv
   (`.venv/bin/python research/experiments/scripts/eNN_*.py`); scripts print the tables and write
-  figures to [figures/](figures/). E01 and E09 need Blender on `PATH`.
+  figures to [figures/](figures/). E01, E09, E11 and E13 need Blender on `PATH`, E14 needs ffmpeg.
 - **Corrections stay visible**: when a measurement turns out wrong, the page says what was wrong and
   shows the corrected result, instead of silently replacing it.
 - **Papers**: [papers/](papers/README.md) lists every source with what it is used for;

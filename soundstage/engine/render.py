@@ -1,9 +1,11 @@
 """Render orchestration: scene in, stereo buffer and statistics out.
 
-Builds the shared context (control grid, scene geometry, interpolator, panner) and one renderer
-per source or voice (``engine/source.py``), then renders the output window in chunks (4 s). Within
-a chunk the renderers run in a thread pool (numba kernels release the GIL); contributions are
-summed in source order, so the output is bit-identical between runs (NFR-2, ADR 0009).
+Builds the shared context (control grid, scene geometry, interpolator, panner, reverb environment)
+and one renderer per source or voice (``engine/source.py``), then renders the output window in
+chunks (4 s). Within a chunk the renderers run in a thread pool (numba kernels release the GIL);
+contributions are summed in source order, so the output is bit-identical between runs (NFR-2, ADR
+0009). Sources feed their group's bus (stems) and a mono reverb send; the summed send is convolved
+once per chunk and the reverb return is its own stem. Stems sum to the master.
 
 Supports frame sub-ranges and solo/mute (FR-67). Data flow: docs/architecture.md#data-flow-inside-a-render.
 """
@@ -20,7 +22,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from soundstage.blender import schema
-from soundstage.engine import filters, kernels, panning, propagation, signals
+from soundstage.engine import filters, kernels, panning, propagation, reverb, signals
 from soundstage.engine.control import CONTROL_STEP, ControlGrid
 from soundstage.engine.geometry import SceneGeometry
 from soundstage.engine.scene import Scene, Source
@@ -40,6 +42,8 @@ class RenderResult:
     sources: list[dict]
     warnings: list[str] = field(default_factory=list)
     timing_s: dict = field(default_factory=dict)
+    stems: dict[str, np.ndarray] = field(default_factory=dict)  # group -> (n, 2), and "reverb"
+    reverb: str | None = None
 
 
 def matches(source: Source, pattern: str) -> bool:
@@ -67,7 +71,7 @@ def _active_frames(src: Source, sample_len: int, scene: Scene, fa: int, fb: int)
 
 
 def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] = (),
-           mute: list[str] = (), workers: int | None = None) -> RenderResult:
+           mute: list[str] = (), workers: int | None = None, stems: bool = False) -> RenderResult:
     t_start = time.perf_counter()
     rate = scene.sample_rate
     s = scene.settings
@@ -81,9 +85,15 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
 
     active = select(scene.sources, list(solo), list(mute))
     interp = propagation.interpolator_for(s["quality"])
-    grid = ControlGrid.covering(n0, n1, rate)
+    env = reverb.environment(s["reverb"], rate, s["reverb_room_rolloff"]) if s["reverb"] else None
+    # reverb pre-roll: render the sends for up to one impulse-response length before the first output
+    # sample (within the baked padding), so sound already playing at the start has its reverberation
+    pre = 0 if env is None else max(0, min(len(env.ir), n0 - scene.sample_of(float(scene.frames[0]))))
+    r0 = n0 - pre
+    grid = ControlGrid.covering(r0, n1, rate)
     ctx = RenderContext(scene=scene, grid=grid, geometry=SceneGeometry(scene, grid), interp=interp,
-                        panner=panning.PANNERS[s["panner"]](s), rate=rate)
+                        panner=panning.PANNERS[s["panner"]](s), rate=rate,
+                        room_rolloff=env.room_rolloff if env else None, output_start=n0)
     kernels.warmup()
     filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], ctx.emission_rate)  # fit once, cached
     n_workers = max(1, min(workers or os.cpu_count() or 1, len(active)))
@@ -104,26 +114,55 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     t_loaded = time.perf_counter()
 
     master = np.zeros((n1 - n0, 2))
+    groups = list(dict.fromkeys(src.group for src in active))
+    buses = {g: np.zeros((n1 - n0, 2), np.float32) for g in groups} if stems else {}
+    bus = reverb.ReverbBus(env) if env else None
+    if bus is not None and stems:
+        buses["reverb"] = np.zeros((n1 - n0, 2), np.float32)
     n_blocks = -(-(n1 - n0) // step)
     block_peak = [np.zeros(n_blocks) for _ in active]
     chunk = CHUNK_BLOCKS * step
 
-    def source_chunk(i: int, c0: int, c1: int) -> np.ndarray:
-        """All voices of source i over [c0, c1), and its 1 ms block peaks (in the worker thread)."""
-        contrib = voices[i][0].render(c0, c1)
+    def voice_chunk(i: int, c0: int, c1: int) -> tuple[np.ndarray, np.ndarray | None]:
+        """All voices of source i over [c0, c1), and its send."""
+        contrib, send = voices[i][0].render(c0, c1)
         for r in voices[i][1:]:
-            contrib = contrib + r.render(c0, c1)
+            c, sd = r.render(c0, c1)
+            contrib = contrib + c
+            send = sd if send is None else (send if sd is None else send + sd)
+        return contrib, send
+
+    def source_chunk(i: int, c0: int, c1: int) -> tuple[np.ndarray, np.ndarray | None]:
+        """All voices of source i over [c0, c1), its send, and its 1 ms block peaks (in the worker)."""
+        contrib, send = voice_chunk(i, c0, c1)
         b0 = (c0 - n0) // step
         starts = np.arange(0, c1 - c0, step)
         block_peak[i][b0: b0 + len(starts)] = np.maximum.reduceat(np.abs(contrib).max(axis=1), starts)
-        return contrib
+        return contrib, send
 
     with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for c0 in range(r0, n0, chunk):  # pre-roll: only the reverb bus keeps what it gets
+            c1 = min(c0 + chunk, n0)
+            sends = [sd for _, sd in pool.map(lambda i: voice_chunk(i, c0, c1), range(len(active)))]
+            bus.process(sum((sd for sd in sends if sd is not None), np.zeros(c1 - c0)))
         for c0 in range(n0, n1, chunk):
             c1 = min(c0 + chunk, n1)
-            for contrib in pool.map(lambda i: source_chunk(i, c0, c1), range(len(active))):
+            send_sum = np.zeros(c1 - c0)
+            for i, (contrib, send) in enumerate(pool.map(lambda i: source_chunk(i, c0, c1), range(len(active)))):
                 master[c0 - n0: c1 - n0] += contrib  # in source order: deterministic
-    master *= filters.db_to_gain(s["master_gain_db"])
+                if stems:
+                    buses[active[i].group][c0 - n0: c1 - n0] += contrib
+                if send is not None:
+                    send_sum += send
+            if bus is not None:
+                wet = bus.process(send_sum)
+                master[c0 - n0: c1 - n0] += wet
+                if stems:
+                    buses["reverb"][c0 - n0: c1 - n0] += wet
+    master_gain = float(filters.db_to_gain(s["master_gain_db"]))
+    master *= master_gain
+    for b in buses.values():
+        b *= master_gain
     t_dsp = time.perf_counter()
 
     # Block index of each frame boundary, for per-frame audibility.
@@ -164,6 +203,14 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
             early = max(x["before_bake"] for x in info) * step / rate
             if early:
                 before_bake.append((early, src.id))
+        if src.spatial:
+            st["_track"] = infos[i][0].get("track")  # for the debug plot; dropped from the report
+            if st["_track"] is not None and "visibility" in st["_track"]:
+                tr = st["_track"]
+                v = tr["visibility"][(tr["frame"] >= fa) & (tr["frame"] <= fb)]
+                if len(v):
+                    st["visibility"] = [round(float(v.min()), 2), round(float(v.max()), 2)]
+                    st["occluded_frames"] = int(np.sum(v < 0.5))
         stats.append(st)
         if audible == 0:
             warnings.append(f"{src.id}: never audible (peak below {AUDIBLE_DBFS:g} dBFS in every frame)")
@@ -179,4 +226,6 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
         sources=stats,
         warnings=warnings,
         timing_s={"load": round(t_loaded - t_start, 3), "dsp": round(t_dsp - t_loaded, 3), "workers": n_workers},
+        stems=buses,
+        reverb=env.name if env else None,
     )

@@ -18,3 +18,6 @@ Supersede it with a new one and set the old one's status to `Superseded by NNNN`
 | [0007](0007-stereo-ear-model.md) | Stereo target with a hybrid ear model; binaural optional | Accepted |
 | [0008](0008-cinematic-air-physics.md) | Cinematic air physics with overridable constants | Accepted |
 | [0009](0009-processing-chain.md) | Per-source processing chain with replaceable models | Accepted |
+| [0010](0010-occlusion-fresnel-visibility-box-occluders.md) | Occlusion from Fresnel-zone visibility against bounding boxes, baked in Blender | Accepted |
+| [0011](0011-reverb-efx-presets-synthetic-ir.md) | Reverb: EFX presets synthesized into impulse responses, one send bus | Accepted |
+| [0012](0012-speakers-and-instanced-tags-as-sources.md) | Speaker objects and tags inside instances are sources | Accepted |

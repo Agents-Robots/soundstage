@@ -8,15 +8,19 @@ What you produce:
 
 - `<project>/audio/sounds.py`: a tagging script (which object makes which sound, when);
 - `<project>/audio/bake/<shot>/scene.json` + `scene.npz`: the baked scene;
-- `<project>/audio/out/<shot>.wav` + `<shot>.report.json`: the stereo mix and its report;
+- `<project>/audio/out/<shot>.wav` + `<shot>.report.json` + `<shot>.plot.png`: the stereo mix, its
+  report and its debug plot; stems `<shot>_stem_<group>.wav` if the user mixes in Fairlight;
 - `<project>/audio/out/<shot>_preview.mp4`: the mix on the rendered frames, if there are any.
 
-What the engine does today (Phase 2): loudness by distance; sound travels at 343 m/s, so distant
-events are heard late; Doppler from the motion of sources and camera; left/right panning with a
-small interaural delay and head shadow; air absorption (distant sounds lose treble); a mild treble
-cut and level drop for sources behind the camera; directivity cones; clean camera cuts; loops,
-one-shots and ambience beds; a 48 kHz float WAV that starts exactly at the first frame; an MP4
-preview on the rendered frames. Not yet: occlusion, reverb, stems ([roadmap](roadmap.md)).
+What the engine does (Phase 3): loudness by distance; sound travels at 343 m/s, so distant events
+are heard late; Doppler from the motion of sources and camera; left/right panning with a small
+interaural delay and head shadow; air absorption (distant sounds lose treble); a mild treble cut and
+level drop for sources behind the camera; directivity cones; clean camera cuts; occlusion behind
+buildings and vehicles (quieter and duller, low frequencies bending around edges); a reverb
+environment by preset name; loops, one-shots and ambience beds; Speaker objects and tags inside
+instanced assets as sources; stems per group, loudness report, optional normalization and limiter;
+a 48 kHz float WAV that starts exactly at the first frame; an MP4 preview on the rendered frames.
+Not yet: binaural or ambisonic output, animated parameters ([roadmap](roadmap.md)).
 
 ## 0. Setup (once per checkout)
 
@@ -54,6 +58,10 @@ Read the printed tables and the JSON:
   `moves_with_camera: true` means it is attached to the camera (a cockpit, a held object, or
   just the camera rig); these come last and are left out of the printed table.
 - `static_near`: static objects closest to the camera path: machines, doors, beacons, waterfalls.
+- `speakers`: Speaker objects already in the scene. The bake reads them as sources (unless muted),
+  so do not tag the same sound again; tell the user which speakers you found. `tagged` and
+  `instanced_tags`: sounds that are already there (an asset tagged once, placed in many instances,
+  gives one source per instance, the 32 closest by default).
 - If the scene is built by generator scripts, also read them: names and comments tell you what
   objects are.
 
@@ -85,7 +93,24 @@ Rules of thumb:
 - Doppler too strong or too weak for the story: scene `doppler_factor` (0 = off, 1 = physical), or
   per source `doppler`.
 - Keep the number of sources small (up to ~50); prefer the few objects that the viewer looks at.
+  For traffic or crowds that come from instanced assets, tag the asset object once and let
+  `instance_limit` pick the nearest instances.
 - Frames are in the scene's frame numbers; fractional frames are allowed.
+
+Then decide the **environment**:
+
+- **Reverb**: pick one preset for the shot with `soundstage presets` (`city` or `city_streets` for
+  streets, `hangar`, `forest`, `mountains`, `spacestation_hall`, `sewerpipe` …) and set it in the
+  tagging script (`tag.set_scene_settings(reverb="city")`) or at render time (`--set reverb=city`).
+  If unsure, render two candidates and compare the reports (`groups.reverb.lufs_integrated`) and ask
+  the user.
+- **Occluders**: rendered meshes block sound by their bounding boxes (merged meshes by the boxes of
+  their parts) automatically; light-only materials (fog, haze, light beams, holograms) and the camera's own
+  vehicle are left out, glass blocks. Look for objects whose boxes are wrong and mark them in the
+  tagging script: open objects (trees, fences, nets, scaffolding, helper meshes that render)
+  `obj["sfx_occluder"] = False`; parts with openings `obj["sfx_occluder"] = "mesh"`.
+  Instanced assets: set it on the collection (`bpy.data.collections["Trees"]["sfx_occluder"] = False`).
+- A source in another room (behind a closed door): `occlusion_mode="occlusion"`.
 
 ## 4. Write the tagging script
 
@@ -102,18 +127,29 @@ soundstage bake <project>/shot.blend --run <project>/audio/sounds.py --out <proj
 soundstage inspect <project>/audio/bake/<shot>/scene.json
 ```
 
-The bake prints one line per source; `inspect` shows each source's distance range and the
-playback-rate range its motion implies (Doppler). Keep the defaults (`--substeps 4 --pad 3`) when
+The bake prints one line per source, the number of occluders (static and moving boxes) and the
+time the visibility took; `inspect` shows each source's distance range, the playback-rate range
+its motion implies (Doppler), its visibility range and, below the table, the objects that block
+each occluded source most. If a source that should be heard is blocked by something that does not
+block sound (a railing, trees, a helper mesh, a part whose box closes an opening), mark that object
+in the tagging script (`sfx_occluder = False` or `"mesh"`) and bake again. Keep the defaults (`--substeps 4 --pad 3`) when
 you can: sub-frames keep fast motion smooth, and the padding must cover the travel time of the
 farthest source (the bake warns otherwise, with the `--pad` it needs). The bake costs one scene
 evaluation per sub-frame; for very heavy scenes `--substeps 2` is fine for objects slower than
-about 50 m/s, but never drop the padding below what the warning asks for.
+about 50 m/s, but never drop the padding below what the warning asks for. Visibility adds ray casts
+per occluding source every 0.1 s; with many sources and moving occluders, lower it with
+`tag.set_scene_settings(occlusion_rate=5)` or switch it off per source (`occlusion=False`) for
+sources that are never hidden (beds are never occluded).
 
 ## 6. Render
 
 ```bash
-soundstage render <project>/audio/bake/<shot>/scene.json -o <project>/audio/out/<shot>.wav --report
+soundstage render <project>/audio/bake/<shot>/scene.json -o <project>/audio/out/<shot>.wav --report --plot
 ```
+
+Add `--stems` when the user mixes in Fairlight (one file per group plus the reverb return; they sum
+to the master). Do not normalize or limit unless the user asks for a finished file
+(`--normalize -23 --limit -1`).
 
 To check one source or group in isolation: `--solo 'Ship:*'`, `--solo group:engines`; to drop one:
 `--mute 'Beacon:0'`; a part of the shot: `--frames 100-180`.
@@ -130,7 +166,17 @@ Read `<shot>.report.json` and check:
 - `rate` (playback rate) of moving sources: above 1 while approaching, below 1 while receding,
   `c / (c ∓ v)` for speed `v` (30 m/s ≈ 1.10 / 0.92); a warning "playback rate clamped" means
   near-supersonic motion (lower `doppler` for that source) or a jump the engine did not recognize
-  as a teleport (check `scene["sfx_settings"]["teleport_speed"]`).
+  as a teleport (check `scene["sfx_settings"]["teleport_speed"]`);
+- `visibility` [min, max] and `occluded_frames` per source: a source in the open should stay at 1;
+  one that passes behind a building should drop where the picture hides it. A source muffled while
+  in view points to an occluder to mark `sfx_occluder = False` (find it by its position on the
+  line between camera and source in the scan's `static_near`);
+- `groups`: loudness per group; `groups.reverb` 10–20 LU below the master is a usual amount of
+  space; with `--stems`, the stems exist for every group.
+
+Open `<shot>.plot.png` as an image: per source, distance, level, pan (−1 left, +1 right), delay,
+playback rate and visibility over the frames. Pan should move to the side the object passes on, the
+rate should cross 1 at the closest approach, and visibility should drop where the source is hidden.
 
 For a stronger check, render single sources with `--solo` and measure with numpy/soundfile: the
 onset of a one-shot is at sample `round((frame − frame_start) · 48000 / fps)` plus its travel time

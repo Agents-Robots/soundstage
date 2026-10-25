@@ -168,10 +168,16 @@ def main(args: argparse.Namespace) -> None:
     util.run_scripts(args.run)
     scene = bpy.context.scene
     settings = schema.resolve_settings(tag.get_scene_settings(scene))
-    sources, warnings = collect_sources(scene, settings, skip_invalid=False)
+    frame_start, frame_end = util.parse_frames(args.frames, scene)
+    settings["read_speakers"] = False  # this tool makes its own speakers
+    sources, owners, warnings = collect_sources(scene, settings, False, Path(tempfile.mkdtemp()),
+                                                (frame_start, frame_end), scene.unit_settings.scale_length or 1.0)
+    keep = [s for s, em in zip(sources, owners) if em.instancer is None]
+    if len(keep) < len(sources):
+        warnings.append(f"{len(sources) - len(keep)} sources inside instances skipped (not supported by this tool)")
+    sources = keep
     for w in warnings:
         log(f"WARNING {w}")
-    frame_start, frame_end = util.parse_frames(args.frames, scene)
     scene.frame_start, scene.frame_end = frame_start, frame_end
     fps = util.fps(scene)
     rate = int(settings["sample_rate"])

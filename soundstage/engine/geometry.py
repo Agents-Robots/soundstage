@@ -207,8 +207,9 @@ class Path:
     segment: np.ndarray  # listener segment
     piece: np.ndarray  # source piece (by emission time)
     audible: np.ndarray  # False where the retarded time has no solution (after a teleport away)
+    visibility: np.ndarray | None = None  # (n, bands) open share per band from the bake (None: not baked)
     jumps: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))  # control indices starting a jump
-    before_bake: int = 0  # control points whose emission time precedes the baked range
+    before_bake: np.ndarray | None = None  # per control point: emission time precedes the baked range
 
 
 class SceneGeometry:
@@ -286,9 +287,18 @@ class SceneGeometry:
             segment=self.segment,
             piece=piece,
             audible=ok,
+            visibility=self.visibility(track),
             jumps=np.nonzero(changed)[0] + 1,
-            before_bake=int(np.sum(self.t - tau < self.times[0] - 1e-9)),
+            before_bake=self.t - tau < self.times[0] - 1e-9,
         )
+
+    def visibility(self, track: int) -> np.ndarray | None:
+        sc = self.scene
+        if sc.src_visibility is None or sc.vis_frames is None or len(sc.vis_frames) == 0:
+            return None
+        times = sc.seconds(sc.vis_frames)
+        v = sc.src_visibility[:, track]
+        return np.stack([np.interp(self.t, times, v[:, b]) for b in range(v.shape[1])], axis=1)
 
     def delay_at(self, track: int, t: float) -> float:
         """Retarded delay at one reception time (for reference delays outside the grid)."""

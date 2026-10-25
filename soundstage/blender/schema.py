@@ -35,6 +35,7 @@ DISTANCE_MODELS = ("inverse_clamped", "linear_clamped", "exponential_clamped", "
 PANNERS = ("amplitude", "hybrid")
 PAN_LAWS = ("sine", "power")
 QUALITIES = ("standard", "high")
+OCCLUSION_MODES = ("obstruction", "occlusion")
 
 SOURCE_KEYS: dict[str, Field] = {
     "sample": Field("str", REQUIRED),
@@ -63,8 +64,9 @@ SOURCE_KEYS: dict[str, Field] = {
     "air_absorption": Field("float", 1.0, min=0.0, phase=2),
     "sync_to_picture": Field("bool", False, phase=2),
     "occlusion": Field("bool", True, phase=3),
-    "occlusion_radius": Field("float", 0.5, min=0.0, phase=3),
-    "reverb_send_db": Field("float", None, nullable=True, phase=3),
+    "occlusion_radius": Field("float", 0.25, min=0.0, phase=3),  # source size: least Fresnel radius
+    "occlusion_mode": Field("choice", "obstruction", choices=OCCLUSION_MODES, phase=3),
+    "reverb_send_db": Field("float", None, nullable=True, phase=3),  # None: 0 dB spatial, no send for beds
     "variants": Field("str_list", (), phase=4),
     "gain_jitter_db": Field("float", 0.0, min=0.0, phase=4),
     "pitch_jitter": Field("float", 0.0, min=0.0, phase=4),
@@ -95,11 +97,16 @@ SCENE_SETTINGS: dict[str, Field] = {
     "quality": Field("choice", "standard", choices=QUALITIES, phase=2),
     "occlusion_gain_db": Field("float", -12.0, phase=3),
     "occlusion_cutoff_hz": Field("float", 1500.0, min=20.0, max=20000.0, phase=3),
-    "reverb": Field("str", None, nullable=True, phase=3),
-    "reverb_send_db": Field("float", -18.0, phase=3),
+    "reverb": Field("str", None, nullable=True, phase=3),  # EFX preset name or impulse-response file
+    "reverb_send_db": Field("float", 0.0, phase=3),
+    "reverb_room_rolloff": Field("float", None, min=0.0, nullable=True, phase=3),  # None: the preset's
+    "read_speakers": Field("bool", True, phase=3),
+    "occlusion_rate": Field("float", 10.0, min=0.0, phase=3),  # visibility samples per second; 0: none
+    "occluder_min_size": Field("float", 2.0, min=0.0, phase=3),  # m: smaller objects do not occlude
+    "instance_limit": Field("int", 32, min=0, phase=3),
 }
 
-IMPLEMENTED_PHASE = 2
+IMPLEMENTED_PHASE = 3
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
 
 

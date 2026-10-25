@@ -8,9 +8,11 @@ decisions behind the structure are in [adr/](adr/README.md).
 ```
 ┌──────────────────────────── Blender (bpy, headless) ────────────────────────────┐
 │ generator scripts ──▶ tag.add_sound(obj, …) ──▶ obj["sfx"], scene["sfx_settings"] │
+│ hand-made scenes  ──▶ Speaker objects (+ sfx_speaker), tags in instanced assets   │
 │                                                    │                              │
-│ bake.py: validate tags, step frames + sub-frames, record listener and sources,   │
-│          ray-cast visibility, detect cuts ──▶ scene.json + scene.npz             │
+│ bake.py: collect sources (emitters.py), step frames + sub-frames, record listener │
+│          and sources, visibility per band (occlusion.py), detect cuts             │
+│          ──▶ scene.json + scene.npz                                               │
 └──────────────────────────────────────────────────────┬──────────────────────────┘
                                                        │ files (versioned contract)
 ┌──────────────────────────── engine (venv: numpy, scipy, numba) ──────────────────┐
@@ -20,10 +22,10 @@ decisions behind the structure are in [adr/](adr/README.md).
 │ propagation.py retarded time, Doppler/sync/ITD delays, fractional-delay read       │
 │ filters.py    distance gain, cone, air absorption, rear cue, occlusion, head shadow│
 │ panning.py    amplitude / hybrid (binaural later)                                  │
-│ reverb.py     send bus, synthetic or file IR, partitioned convolution (Phase 3)   │
-│ mix.py        group buses, master, limiter/normalize, WAV writing                  │
-│ report.py     metrics, warnings, plot                                              │
-│ render.py     orchestrates per source and per chunk                                │
+│ reverb.py     EFX presets → synthetic IR, or IR file; send bus convolution         │
+│ render.py     orchestrates per source and per chunk; group buses, reverb bus       │
+│ mix.py        normalize, true-peak limiter, stems, WAV writing                     │
+│ report.py     metrics per master/group/source, warnings; plot.py debug plot        │
 └──────────────────────────────────────────────────────┬──────────────────────────┘
                                                        ▼
                          mix.wav, stems, report.json, plot.png ──▶ Resolve / agent checks
@@ -50,7 +52,9 @@ decisions behind the structure are in [adr/](adr/README.md).
 | Module | Responsibility |
 |---|---|
 | `tag.py` | Public helper for generator scripts: add, clear, list sound tags; scene settings; validation of keys and types against the schema. `bpy` and stdlib only. |
-| `bake.py` | Script run with `blender -b … --python bake.py -- <args>`. Resolves the listener per frame, steps through frames and sub-frames (`scene.frame_set(f, subframe=s)`), reads evaluated world matrices from the depsgraph, applies tag offsets, ray-casts visibility (Phase 3), detects cuts, resolves sample paths and defaults, writes the scene file. Uses Blender's bundled numpy. |
+| `bake.py` | Script run with `blender -b … --python bake.py -- <args>`. Collects and validates the sources, resolves the listener per frame, steps through frames and sub-frames (`scene.frame_set(f, subframe=s)`), reads evaluated world matrices from the depsgraph, applies tag offsets, samples visibility at `occlusion_rate`, detects cuts, resolves sample paths and defaults, writes the scene file. Uses Blender's bundled numpy. |
+| `emitters.py` | Where sources come from: tags on view-layer objects, Speaker objects (mapped to tag entries, packed sounds written out), tags inside collection and geometry-nodes instances (one source per instance, the closest `instance_limit`); each source's world matrix per sample. |
+| `occlusion.py` | Occluders (oriented bounding boxes of the connected parts of rendered meshes in a BVH, light-only materials and the listener's vehicle left out, moving ones per sample at their retarded positions, `sfx_occluder` overrides), Fresnel-zone points per band, visibility per source with the containment and reflector rules ([model](../research/models/occlusion.md)). |
 | `scan.py` | Script run like `bake.py`: samples the shot at evenly spaced frames and writes a JSON list of cameras, moving objects and static objects near the camera, so an agent can choose sound sources. |
 | `util.py` | Shared helpers for `bake.py` and `scan.py`: argument handling, running `--run` scripts, frame stepping, output prefix for the CLI. |
 | `schema.py` | The tag and settings schema (keys, types, defaults, ranges) as plain data, shared by `tag.py`, `bake.py` and the engine, so defaults exist in one place (NFR-8). Stdlib only. |
@@ -64,19 +68,21 @@ decisions behind the structure are in [adr/](adr/README.md).
 | `control.py` | The control grid (1 kHz) and interpolation of control-rate tracks to audio samples (linear for gains and filter parameters, Catmull-Rom for delays), never across a jump. |
 | `geometry.py` | Tracks: positions as cubic splines per piece (split at cuts and detected teleports), listener rotation as `RotationSpline` per segment; retarded-time solver (fixed point + Newton, audibility mask); the per-source `Path` on the control grid; camera-space vectors and derived angles. |
 | `propagation.py` | Read delays per ear (Doppler factor, picture sync, ITD, playback-rate clamp per run between jumps); interpolator registry (`optimal2x`, `sinc`, `hermite4`); the `DelayLine` of emission samples. |
-| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients; stages `OnePoleStage`, `RearStage` (emission side) and `ShelfStage` (per ear). |
+| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear). |
 | `panning.py` | Pan-law registry (`sine`, `power`) and panner registry (`amplitude`, `hybrid`): per-ear delays (ITD), per-ear stages and pan gains from the path; later `binaural`. |
 | `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascade, first-order section) with reference implementations; the optimal-2× pre-emphasis design. |
 | `source.py` | The processing chain of one source or voice (ADR [0009](adr/0009-processing-chain.md)): emission chain → delay line → per-ear read and stages → gains and pan; held branches crossfaded at jumps; beds. |
-| `reverb.py` | Send bus, IR presets synthesized by seed or loaded from file, partitioned FFT convolution. *(Phase 3)* |
-| `mix.py` | WAV writing (float or PCM24 with dither); later group buses and stems, limiter and loudness normalization. |
-| `report.py` | Loudness and peak metrics, per-source statistics, warnings; later the debug plot. |
-| `render.py` | Orchestrates a render: control grid, scene geometry, renderers per source, chunked rendering with sources in a thread pool, summed in source order (deterministic), statistics. |
+| `reverb.py` | EFX presets (`data/efx_presets.json`, from OpenAL Soft) synthesized into stereo impulse responses (seeded, cached), or IR files; `ReverbBus`: overlap-add convolution of the summed send per chunk; decay-time measurement for tests. |
+| `mix.py` | Loudness normalization, true peak (BS.1770 interpolator), offline true-peak limiter returning a gain curve, stem file names, WAV writing (float or PCM24 with dither). |
+| `report.py` | Peak, true peak, loudness and loudness range for the master and each group, per-source statistics (including visibility), warnings. |
+| `plot.py` | Debug plot: distance, level, pan, delay, playback rate and visibility per source over frames (matplotlib, optional). |
+| `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, renderers per source, chunked rendering with sources in a thread pool, summed in source order into group buses (deterministic), reverb bus per chunk, statistics. |
 
 ### `soundstage/cli.py`
 
-Argument parsing for `scan`, `bake`, `inspect`, `render`, `preview` ([spec/cli.md](spec/cli.md)); `scan` and `bake`
-shell out to Blender.
+Argument parsing for `scan`, `bake`, `inspect`, `render`, `presets`, `preview` ([spec/cli.md](spec/cli.md)); `scan` and `bake`
+shell out to Blender. `render` applies normalization and the limiter, writes the master, stems,
+report and plot.
 
 ### `soundstage/preview.py`
 
@@ -93,12 +99,16 @@ number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in
    (distance, delay and rate ranges).
 3. **Audio pass**, in chunks of 4 s of output: per source, the delay line is extended by the
    emission chain (dry timeline → pre-emphasis → air absorption → rear cue) as far as the reads need,
-   then read per ear at fractional positions, filtered per ear (head shadow), multiplied by gains
-   and pan gains; at jumps a held branch is crossfaded out. Sources run in parallel threads; their
-   chunks are summed in source order. All filter states carry across chunks.
-4. **Mix**: master gain, trim to the shot, write the WAV (later: groups, stems, reverb return,
-   limiter/normalization).
-5. **Report**: metrics, warnings.
+   then read per ear at fractional positions, filtered per ear (occlusion, head shadow), multiplied
+   by gains and pan gains; at jumps a held branch is crossfaded out. A centre read gives the mono
+   reverb send. Sources run in parallel threads; their chunks are summed in source order into the
+   group buses and the master, their sends into one signal that the reverb bus convolves (tail
+   carried to the next chunk). With a reverb, chunks of one impulse-response length before the
+   first output sample run first and feed only the reverb bus (pre-roll). All filter states carry
+   across chunks.
+4. **Mix**: master gain, trim to the shot; optional normalization and true-peak limiting with the
+   same gains on master and stems; write the WAVs.
+5. **Report**: metrics for master and groups, per-source statistics, warnings; optional plot.
 
 Chunking keeps memory bounded (a 5-minute stereo float64 bus is ~230 MB; 50 sources at once would
 not fit comfortably) and makes partial renders (`--frames`) cheap. The delay line keeps every
@@ -109,8 +119,13 @@ emission sample a later read may still need (a cut to a farther camera reads fur
 Per source and output sample: the emission chain at the 2× rate (63-tap pre-emphasis, four
 one-poles for air absorption, the rear shelf), one 6-point read per ear, one first-order section
 per ear, gains. Geometry at 1 kHz is negligible. Sources render in parallel (numba kernels release
-the GIL). Measured with `tools/benchmark.py`: 50 sources × 5 minutes in 46 s on a 16-core desktop
-CPU, a single thread 2.2× real time for 50 sources ([E10](../research/experiments/E10-performance.md)).
+the GIL). Measured with `tools/benchmark.py`: 50 sources × 5 minutes in 42 s on a 16-core desktop
+CPU, 63 s with occlusion on every source, a reverb and stems; a single thread 1.6× real time for 50
+sources ([E10](../research/experiments/E10-performance.md)).
+
+Bake cost: a sample costs one depsgraph evaluation for the frame plus, every `occlusion_rate`-th
+of a second, 25 ray casts per occluding source against the box BVH and a rebuild of the moving
+boxes ([E11](../research/experiments/E11-blender-raycast.md)).
 
 ## Testing strategy
 

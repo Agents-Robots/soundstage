@@ -38,9 +38,10 @@ linked duplicates can carry different sounds). Keys not listed below are an erro
 | `doppler` | float | 1.0 | Multiplies the scene's `doppler_factor` for this source. |
 | `air_absorption` | float | 1.0 | Multiplies the scene's `air_absorption`. |
 | `sync_to_picture` | bool | false | One-shots: remove the propagation delay at the trigger, so the onset lands on `frame`. Doppler during playback stays. |
-| `occlusion` | bool | true | Apply occlusion from the baked visibility. *(Phase 3)* |
-| `occlusion_radius` | float m | 0.5 | Spread of the visibility rays around the emitter (soft occlusion edges). *(Phase 3)* |
-| `reverb_send_db` | float \| null | null | Send level to the scene reverb; null = scene default. *(Phase 3)* |
+| `occlusion` | bool | true | Bake visibility for this source and apply occlusion ([model](../../research/models/occlusion.md)). |
+| `occlusion_radius` | float m | 0.25 | Size of the source: the smallest radius of the visibility points around the path (soft edges for large sources). |
+| `occlusion_mode` | `"obstruction"` \| `"occlusion"` | `"obstruction"` | `obstruction`: only the direct sound is occluded, the reverb send stays (a car behind a pillar, same space). `occlusion`: the send is occluded too (behind a closed door, another space). |
+| `reverb_send_db` | float \| null | null | Send level to the scene reverb, added to the scene's `reverb_send_db`; null = 0 dB for spatial sources, no send for beds. |
 | `variants` | [str] | [] | Alternative samples; one is picked per trigger, seeded. *(Phase 4)* |
 | `gain_jitter_db`, `pitch_jitter` | float | 0.0 | Random variation per trigger, seeded. *(Phase 4)* |
 | `gain_prop`, `pitch_prop` | str \| null | null | Name of an animated custom property on the object that modulates gain (dB, added) or pitch (ratio, multiplied). *(Phase 4)* |
@@ -74,12 +75,79 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `pad_seconds` | 3.0 | Bake padding before and after the shot (covers ~1 km of propagation; the bake warns if a source is farther away in travel time). |
 | `listener` | null | Object name to use instead of the active camera. |
 | `quality` | `"standard"` | Fractional-delay interpolation: `standard` (2× oversampled, 6-point polynomial) or `high` (anti-aliased windowed sinc, slower; for extreme Doppler). |
-| `occlusion_gain_db` | −12.0 | Gain of a fully occluded source. *(Phase 3)* |
-| `occlusion_cutoff_hz` | 1500 | Low-pass cutoff of a fully occluded source. *(Phase 3)* |
-| `reverb` | null | Preset name or impulse-response path. *(Phase 3)* |
-| `reverb_send_db` | −18.0 | Default reverb send. *(Phase 3)* |
+| `occlusion_gain_db` | −12.0 | Transmission through an occluder: gain of a fully occluded source at low frequencies. |
+| `occlusion_cutoff_hz` | 1500 | Transmission low-pass: a fully occluded source is a further −3 dB here. |
+| `occlusion_rate` | 10.0 | Visibility samples per second in the bake; 0 = no visibility (bake). |
+| `occluder_min_size` | 2.0 m | Objects whose bounding-box diagonal is smaller do not occlude (bake). |
+| `reverb` | null | Environment: an EFX preset name (`hangar`, `city`, `forest`, `spacestation_hall`, … 113 in all, `soundstage presets`) or an impulse-response file (WAV/FLAC, used as recorded). null = no reverb. |
+| `reverb_send_db` | 0.0 | Send level of all sources (added to each source's `reverb_send_db`). |
+| `reverb_room_rolloff` | null | Distance rolloff of the send; null = the preset's room rolloff (0 for nearly all presets: constant reverberant level). |
+| `read_speakers` | true | Read Blender Speaker objects as sources (bake). |
+| `instance_limit` | 32 | Per tagged object inside instances: keep at most this many instances, those that come closest to the camera; 0 = all (bake). |
 
 Ranges and the full signal meaning: [signal-model.md](signal-model.md).
+
+## Speaker objects
+
+With `read_speakers` (default), every unmuted Speaker object in the view layer is a source, so a
+scene can be set up by hand in Blender's UI without scripts. Each unmuted NLA sound strip is a
+trigger frame (Blender creates one when a sound is added to a speaker), so the speaker plays its
+sound once at each strip's start. The id is `"<object name>:speaker"`.
+
+| Speaker property | Tag key |
+|---|---|
+| sound (file; packed sounds are written to `<bake out>/sounds/`) | `sample` |
+| NLA sound strip starts | `frame` (`mode = "once"`) |
+| volume | `gain_db` = 20 log₁₀(volume) |
+| pitch | `pitch` |
+| distance reference / maximum (if set) | `ref_distance` / `max_distance` |
+| attenuation | `rolloff` |
+| scene → Audio → distance model | `distance_model` (inverse, linear, exponent, none; clamped or not alike) |
+| cone inner / outer angle, outer cone volume | `cone_inner_deg` / `cone_outer_deg`, `cone_outer_gain_db` |
+| mute | skipped |
+
+The speaker's −Z axis is its forward axis, as in Blender. Not used: `volume_min`, `volume_max` (a
+warning says so). Anything else (loop instead of once, group, reverb send, occlusion mode) goes in a
+custom property `sfx_speaker` on the speaker object: a dict of tag keys that overrides the mapping,
+e.g. `{"mode": "loop", "group": "engines"}`. A loop starts at the first strip.
+
+## Tags inside instances
+
+Tagged objects inside collection instances and geometry-nodes instances become one source per
+instance, with the instance's world transform. Ids: `"<instancer>/<object>:<index>"` for a
+collection instance (an empty with `instance_type = COLLECTION`), `"<instancer>/<object>#<n>:<index>"`
+for geometry-nodes and nested instances (`n` from the instance's persistent id). Per tagged object,
+at most `instance_limit` instances are kept: those that come closest to the camera over the shot
+(30 sampled frames); the bake warns when it drops some. A crowd of 500 instanced cars with an
+engine tag thus gives the 32 nearest engines.
+
+## Occluders
+
+Every rendered mesh object and mesh instance occludes by its oriented bounding box, or, when its
+largest connected part (mesh island) fills less than half of that box (a merged mesh: a district of
+buildings, brackets around a tower, a railing), by the boxes of its parts; boxes with a diagonal
+below `occluder_min_size` drop out. Except:
+
+- objects hidden from rendering (`hide_render`);
+- meshes whose materials only emit or pass light: volume-only materials (fog, haze) and surfaces
+  built only from Emission, Transparent, Holdout, Add and Mix shaders (light beams, glows,
+  holograms). Glass and every other surface occlude;
+- text objects (a box over lettering closes the gaps between the letters);
+- objects that travel with the listener (their position relative to the camera stays within their
+  own size at the shot's first, middle and last frame while they move further than that): the
+  camera's vehicle, a cockpit;
+- for one source, any box that contains the listener or that source (the emitter's own body, the
+  camera's cabin, a box of a merged mesh that is too coarse to tell), and any box that lies beyond
+  both (the ground under both, a wall behind both: it reflects instead).
+
+Objects that move between the shot's first, middle and last frame are tracked per sample. A custom
+property `sfx_occluder` on the object, or on the collection that is instanced, overrides:
+
+| `sfx_occluder` | Effect |
+|---|---|
+| missing | as above |
+| `False` or `"off"` | never occludes: foliage, fences, nets, grilles, scaffolding and other open structures, helper meshes that render |
+| `"mesh"` | uses the object's real triangles (arches, gates, L-shaped or hollow buildings: parts whose box closes an opening); static objects only |
 
 ## Helper API (`soundstage/blender/tag.py`)
 

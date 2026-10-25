@@ -216,6 +216,79 @@ class RearStage:
                                         self.state, np.empty(b - a))
 
 
+OCCLUSION_ATTACK_S = 0.060  # becoming occluded
+OCCLUSION_RELEASE_S = 0.150  # becoming visible
+
+
+def occlusion_filter(visibility: np.ndarray, bands_hz: list[float], transmission_db: float,
+                     transmission_cutoff_hz: float, dt: float) -> tuple[np.ndarray, np.ndarray]:
+    """Broadband gain (n,) and low-pass cutoff (n,) from smoothed per-band visibility (n, bands).
+
+    Each band's gain is the open share plus what passes through the occluders,
+    ``g = v + (1 - v) T(f)``, with ``T`` the transmission gain low-passed at
+    ``transmission_cutoff_hz``. The lowest band gives the broadband gain; the higher bands' ratios
+    to it give the cutoff of a one-pole low-pass, fitted to their attenuations in dB (least
+    squares, ``fit_onepole_cutoff``).
+    """
+    smooth = np.empty_like(visibility)
+    down, up = math.exp(-dt / OCCLUSION_ATTACK_S), math.exp(-dt / OCCLUSION_RELEASE_S)
+    for b in range(visibility.shape[1]):
+        kernels.follow(np.ascontiguousarray(visibility[:, b]), down, up, smooth[:, b])
+    f = np.asarray(bands_hz, dtype=np.float64)
+    transmission = db_to_gain(transmission_db) / np.sqrt(1.0 + (f / transmission_cutoff_hz) ** 2)
+    g = smooth + (1.0 - smooth) * transmission[None, :]
+    gain = g[:, 0]
+    ratios = np.clip(g[:, 1:] / np.maximum(gain, 1e-9)[:, None], 1e-6, 1.0)
+    cutoff = np.full(len(g), np.inf)
+    attenuated = (ratios < 0.9999).any(axis=1)
+    if attenuated.any():
+        cutoff[attenuated] = fit_onepole_cutoff(ratios[attenuated], f[1:])
+    return gain, cutoff
+
+
+def fit_onepole_cutoff(ratios: np.ndarray, freqs: np.ndarray, iterations: int = 40) -> np.ndarray:
+    """Cutoff (n,) of the one-pole low-pass whose gains at ``freqs`` best match ``ratios`` (n, B)
+    in dB (least squares); inf where nothing is attenuated.
+
+    With ``x = 1/fc^2`` the attenuation is ``10 log10(1 + f^2 x)``; the optimum lies between the
+    values of ``x`` that match single bands, where the derivative of the squared error changes
+    sign, and is found by bisection.
+    """
+    want_db = -20.0 * np.log10(np.clip(ratios, 1e-6, 1.0))
+    f2 = np.asarray(freqs, dtype=np.float64) ** 2
+    single = (10.0 ** (want_db / 10.0) - 1.0) / f2
+    lo, hi = single.min(axis=1), single.max(axis=1)
+    for _ in range(iterations):
+        x = 0.5 * (lo + hi)
+        q = 1.0 + f2 * x[:, None]
+        rising = ((10.0 * np.log10(q) - want_db) * f2 / q).sum(axis=1) > 0
+        hi = np.where(rising, x, hi)
+        lo = np.where(rising, lo, x)
+    x = 0.5 * (lo + hi)
+    with np.errstate(divide="ignore"):
+        return np.where(x > 0, 1.0 / np.sqrt(x), np.inf)
+
+
+class GridOnePoleStage:
+    """Reception-side TPT one-pole low-pass with a control-rate cutoff track (per ear)."""
+
+    def __init__(self, grid, cutoffs: np.ndarray, rate: int, jumps=None):
+        self.grid, self.rate, self.jumps = grid, rate, jumps
+        self.gains = tpt_gain(cutoffs, rate)
+        self.state = np.zeros(1)
+
+    def process(self, x: np.ndarray, a: int, b: int) -> np.ndarray:
+        g = self.grid.linear(self.gains, a, b, self.jumps)
+        return kernels.onepole_cascade(np.ascontiguousarray(x), g[:, None], self.state, np.empty(b - a))
+
+    def held(self, index: int) -> GridOnePoleStage:
+        copy = GridOnePoleStage.__new__(GridOnePoleStage)
+        copy.grid, copy.rate, copy.jumps = self.grid, self.rate, None
+        copy.gains = np.full_like(self.gains, self.gains[index])
+        copy.state = self.state.copy()
+        return copy
+
+
 class ShelfStage:
     """Reception-side first-order shelf (head shadow) with per-sample interpolated numerator."""
 

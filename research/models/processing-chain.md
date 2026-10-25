@@ -22,15 +22,21 @@ flowchart LR
     subgraph reception["reception side (per ear, output rate)"]
         RD["read delays per ear<br/>(Doppler, sync, ITD, clamp)"] --> FD["fractional-delay read"]
         DL --> FD
-        FD --> HS["head shadow"]
-        HS --> G["× gain · distance · cone · rear<br/>× pan law"]
+        FD --> OCC["occlusion low-pass"]
+        OCC --> HS["head shadow"]
+        HS --> G["× gain · distance · cone · rear · occlusion<br/>× pan law"]
+        DL --> SR["centre read (no ITD)"]
+        SR --> SG["× gain · send · distance (room rolloff) · cone<br/>(occlusion in occlusion mode)"]
     end
+    V["visibility per band<br/>(baked)"] --> OCC
+    V --> G
     P --> RD
     P --> AIR
     P --> REAR
     P --> HS
     P --> G
-    G --> OUT["stereo contribution"]
+    G --> OUT["stereo contribution<br/>→ group bus"]
+    SG --> SEND["mono send<br/>→ reverb bus (one convolution)"]
 ```
 
 | Stage | Model document | Where in the code |
@@ -49,19 +55,27 @@ flowchart LR
 | Pan law | [panning](panning.md) | `panning.PAN_LAWS` |
 | Filter structures | [time-varying filters](time-varying-filters.md) | `engine/kernels.py` |
 | Cuts and teleports | [cuts and teleports](cuts-and-teleports.md) | `source._Branch`, `control.ControlGrid` (jump-aware) |
+| Occlusion | [occlusion](occlusion.md) | bake: `blender/occlusion.py`; engine: `filters.occlusion_filter`, `filters.fit_onepole_cutoff`, `filters.GridOnePoleStage` |
+| Reverb send and bus | [reverb](reverb.md) | `source.SpatialRenderer` (send), `reverb.ReverbBus`, `reverb.synthesize` |
+| Stems, normalization, limiter, report | [mixing and loudness](mixing-and-loudness.md) | `render.render` (buses), `mix.finish`, `mix.true_peak_limiter`, `report.metrics` |
 
-Beds (`spatial: false`) skip everything except gain and fades.
+Beds (`spatial: false`) skip everything except gain and fades; they feed the reverb only with an
+explicit `reverb_send_db`.
 
 ## Why two signal domains
 
 The dry signal exists in **emission time** (when sound leaves the source); the listener hears
 **reception time**. The delay line converts between them. Effects that are the same for both ears
-(air absorption, rear cue, later occlusion) run once, mono, before the read, at the emission rate;
+and follow the source (air absorption, rear cue) run once, mono, before the read, at the emission rate;
 their parameters, computed on the reception-time control grid, are placed on emission time
 `t − τ_read`. Effects that differ per ear (ITD through the read delay, head shadow, pan gains) run
 after the read. Running the mono effects before the read halves their cost compared with per-ear
 filtering, with no audible difference: their parameters change over milliseconds, and the read
 only time-warps the signal (by at most the Doppler factor).
+
+Occlusion is the exception: it runs per ear after the read, on the reception-time grid, because the
+baked visibility already describes the path of the sound heard at each time (retarded source,
+listener and occluders as the sound passed them). Placing it on emission time would retard it twice.
 
 The emission side runs at **twice the output rate** because the standard interpolator reads a 2×
 oversampled signal ([fractional delay](fractional-delay.md)).
@@ -76,9 +90,11 @@ sequenceDiagram
     loop every 4 s chunk of output
         M->>W: render chunk [c0, c1) for every source
         W->>W: extend delay line (dry, emission stages), read per ear, ear stages, gains, block peaks
-        W-->>M: stereo chunk per source
-        M->>M: add chunks in source order
+        W-->>M: stereo chunk and mono send per source
+        M->>M: add chunks to group buses and master in source order, sum the sends
+        M->>M: convolve the summed send (reverb bus, tail carried over), add to master and stem
     end
+    M->>M: normalize and limit (optional, same gains on master and stems)
 ```
 
 - Geometry and all control-rate parameters are computed once per source for the whole render

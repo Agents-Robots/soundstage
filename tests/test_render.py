@@ -84,8 +84,8 @@ def test_pcm24_output(make_scene, sine, tmp_path):
 
 
 def test_unimplemented_parameters_are_warned(make_scene, sine):
-    result = render.render(make_scene([{"sample": sine, "occlusion_radius": 2.0}], [[0, 1, 0]]))
-    assert any("'occlusion_radius' is not implemented" in w for w in result.warnings)
+    result = render.render(make_scene([{"sample": sine, "gain_jitter_db": 2.0}], [[0, 1, 0]]))
+    assert any("'gain_jitter_db' is not implemented" in w for w in result.warnings)
 
 
 def test_metrics_of_a_full_scale_sine():

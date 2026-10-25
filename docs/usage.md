@@ -96,8 +96,68 @@ Rules of thumb for parameters:
 | Doppler too subtle / too strong for the story | scene `doppler_factor` 1.5–3 / 0.3–0.5 |
 | Space scene that should feel "quieter" | scene `air_absorption` 2–4, lower `reverb_send_db` |
 
-Tags can also be added or edited by hand in the UI (Object Properties → Custom Properties), or by
-placing Blender Speaker objects (from Phase 3).
+Tags can also be added or edited by hand in the UI (Object Properties → Custom Properties). A tag
+on an object inside an asset collection gives one source per instance of that collection
+(collection instances and geometry-nodes scatters), at most `instance_limit` (32) per tagged object,
+the ones that come closest to the camera.
+
+## 2b. Or place Speaker objects by hand
+
+Without scripts, use Blender's own Speaker objects; the bake reads every unmuted speaker in the view
+layer:
+
+1. Add → Speaker, place it (parent it to the moving object). Its −Z axis is its front.
+2. Object Data → Sound: open a sound file (mono for spatial sound). Blender adds an NLA sound strip
+   at the current frame; the speaker plays the whole file once at each strip's start. Duplicate or
+   move strips in the NLA editor for more triggers.
+3. Volume, Pitch, Distance (reference, maximum, attenuation) and Cone (inner/outer angle, outer
+   volume) carry over; the distance model comes from Scene → Audio. Mute a speaker to leave it out.
+4. For what a speaker cannot say, add a custom property `sfx_speaker` to the speaker object with a
+   dict of tag keys, e.g. `{"mode": "loop", "group": "engines", "reverb_send_db": -6}` (a loop starts
+   at the first strip).
+
+Speakers and tags can be mixed in one scene; `--set read_speakers=false` at bake time
+(`tag.set_scene_settings(read_speakers=False)`) ignores the speakers. The mapping in detail:
+[spec/tagging.md](spec/tagging.md#speaker-objects).
+
+## 2c. Environment: occluders and reverb
+
+**Occlusion** works without setup: every rendered mesh larger than 2 m blocks sound with its
+bounding box (a merged mesh with the boxes of its parts); a source behind it gets quieter and duller, smoothly, with the low
+frequencies bending around edges. Fog and light volumes, light beams and holograms (light-only materials), text objects and the
+vehicle the camera rides on are left out automatically; glass blocks, as it does in reality. Adjust with a
+custom property `sfx_occluder` on an object or on the collection that is instanced:
+
+| Object | `sfx_occluder` |
+|---|---|
+| foliage, fences, nets, grilles, scaffolding, helper meshes that render | `False` |
+| arches, gates, L-shaped or hollow buildings (one part with an opening) | `"mesh"` (its real triangles) |
+
+Per source: `occlusion=False` to switch it off, `occlusion_mode="occlusion"` for a source in another
+room (behind a closed door: its reverb is muffled too). Scene: `occlusion_gain_db`,
+`occlusion_cutoff_hz` set how much passes through walls (render-time, no new bake).
+
+**Reverb**: one environment per shot, by name, at render time or in the scene settings:
+
+```bash
+.venv/bin/soundstage presets                    # 113 EFX environments with decay times
+.venv/bin/soundstage presets space              # spacestation_hall, spacestation_alcove, ...
+.venv/bin/soundstage render …/scene.json -o out/shot.wav --set reverb=hangar
+.venv/bin/soundstage render …/scene.json -o out/shot.wav --set reverb=/path/to/hall_ir.wav
+```
+
+| Shot | Preset ideas |
+|---|---|
+| City street, canyon of buildings | `city`, `alley`, `city_streets`, `city_subway` |
+| Open landscape | `plain`, `mountains`, `forest`, `outdoors_valley` |
+| Hangar, factory, warehouse | `hangar`, `factory_hall`, `factory_largeroom` |
+| Space station, ship interior | `spacestation_hall`, `spacestation_largeroom`, `spacestation_cupboard` |
+| Tunnel, pipe, sewer | `sewerpipe`, `pipe_large`, `pipe_longthin` |
+| Underwater | `underwater` |
+
+All spatial sources send to it (0 dB by default); `reverb_send_db` per source or scene changes the
+amount. The reverberant level stays constant with distance while the direct sound falls, which is
+what makes far sources sound far.
 
 ## 3. Bake
 
@@ -114,14 +174,20 @@ Bake again whenever the animation, the camera or the tags change. Then check it:
 ```
 
 Look for sources that never get close enough to be heard, implausible speeds (a source teleporting
-reads as a huge speed), and missing cuts.
+reads as a huge speed), missing cuts, and visibility below 1 for sources that are always in the
+open (an occluder to mark `sfx_occluder = False`).
 
 ## 4. Render
 
 ```bash
 .venv/bin/soundstage render <project>/audio/bake/shot1/scene.json \
-    -o <project>/audio/out/shot1_mix.wav --stems --report --plot
+    -o <project>/audio/out/shot1_mix.wav --stems --report --plot --set reverb=city
 ```
+
+`--stems` writes one WAV per group (`shot1_mix_stem_engines.wav`, …) and `shot1_mix_stem_reverb.wav`;
+they sum to the master. `--plot` draws distance, level, pan, delay, playback rate and visibility per
+source over the frames. For a standalone file (not mixed further in Resolve):
+`--normalize -23 --limit -1` (EBU R128) or `--normalize -14 --limit -1` (streaming).
 
 Iterate quickly on one part:
 
@@ -154,19 +220,21 @@ In DaVinci Resolve:
 4. Stems go on separate tracks for balancing in Fairlight; their sum equals the master, so use
    either the master or the stems, not both.
 5. 32-bit float files can exceed 0 dBFS without clipping; set final levels and limiting in
-   Fairlight (*(later)*: render with `--normalize -23 --limit -1`).
+   Fairlight, or render with `--normalize -23 --limit -1` (the same gains go to the stems).
 
 ## For agents
 
 Agents drive the same commands; the step-by-step procedure is the [agent guide](agent-guide.md).
 Things that differ from a person's workflow:
 
-- **You cannot listen.** Verify with the report, measurements and (later) the plot (see
+- **You cannot listen.** Verify with the report, measurements and the plot (see
   [AGENTS.md](../AGENTS.md#you-cannot-listen-verify-with-numbers-and-pictures)). After each
   render, read `<mix>.report.json` and check: exit code 0; no unexpected warnings; every source
   that the shot is meant to feature has `audible_frames > 0`; `distance_m` and `rate` ranges are
-  plausible for the motion; peaks are sane. Open `<mix>.plot.png` as an image to check that pan
-  moves to the expected side and Doppler peaks where a source passes the camera.
+  plausible for the motion; `visibility` and `occluded_frames` match what the picture shows
+  (a source behind a building should be occluded there, a source in the open should not); peaks are
+  sane. Open `<mix>.plot.png` as an image to check that pan moves to the expected side, Doppler
+  peaks where a source passes the camera, and visibility drops where the source is hidden.
 - **Tag in generator scripts, never only in a live session.** A tag set in a live Blender session but not
   in `scripts/` is lost when the scene is rebuilt (NFR-1).
 - **Bake reads the file on disk**: `soundstage bake` runs `blender -b … --factory-startup -y`. If
@@ -190,3 +258,7 @@ Things that differ from a person's workflow:
 | Sudden pitch jump or warble | Bad keyframes, a jump slower than `teleport_speed` (not recognized as a teleport), or sub-frames too coarse for very fast motion | `inspect` for speed spikes; lower `teleport_speed`; raise `--substeps` |
 | "playback rate clamped" warning | Source near or above Mach 1 | Lower `doppler` for that source, or accept the clamp |
 | Clicks at a camera cut | Cut not detected (camera jumps without a camera switch) | Bake detects jumps above a threshold; report a bug with the scene file |
+| Source muffled though it is in view | An open or invisible object blocks it (foliage, a fence, a helper mesh that renders), or a connected part whose box covers open space | `soundstage inspect` lists the objects that block each source; mark them `sfx_occluder=False` (or `"mesh"`) |
+| Muffled through an arch or open structure | Its bounding box closes the opening | `sfx_occluder="mesh"` on that object |
+| Too many or too few engines in instanced traffic | `instance_limit` keeps the 32 closest per tagged object | Raise or lower `instance_limit` in the scene settings |
+| Bake slow with occlusion | Many occluding sources or moving occluders | `occlusion_rate` 5; `occlusion=False` on beds-like or distant sources |

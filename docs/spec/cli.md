@@ -37,8 +37,10 @@ length, max speed), `counts`, `moving` (per object: `name`, `type`, `parent`, `c
 `dimensions_m`, `hide_render`, `distance_m` [min, max] to the camera, `closest_frame`,
 `side_at_closest` (front/behind, left/right), `path_length_m`, `max_speed_m_s`, `moving_frames`,
 `moves_with_camera`, `keyframes`), `static_near` (same fields without motion, nearest first),
-`scene_settings`, `tagged` (existing tags). Distances in metres; speeds are estimates from the
-sampled frames.
+`scene_settings`, `tagged` (existing tags), `speakers` (Speaker objects: `name`, `sound`, `packed`,
+`strip_frames`, `muted`, `volume`, `overrides` from `sfx_speaker`), `instanced_tags` (tagged objects
+reached through instances, with the number of instances). Distances in metres; speeds are estimates
+from the sampled frames.
 
 ## `soundstage bake`
 
@@ -68,8 +70,10 @@ soundstage inspect <scene.json> [--json]
 ```
 
 Table of sources: id, group, sample, mode, frames, distance min/max over the shot, maximum radial
-speed, and the playback-rate range it implies (estimated from the baked samples; the render
-report has the exact values). Lists cuts and warnings. Reads only the
+speed, the playback-rate range it implies (estimated from the baked samples; the render
+report has the exact values), and the baked visibility range (mean of the bands; 1 = in the open).
+Below the table, for each occluded source, the objects that block it most (share of its paths over
+the shot): the objects to look at when a source is muffled although it should not be. Lists cuts and warnings. Reads only the
 scene file and sample headers; renders nothing. `--json` for machine use.
 
 ## `soundstage render`
@@ -84,12 +88,35 @@ soundstage render <scene.json>
     [--pcm24]                24-bit PCM with TPDF dither instead of 32-bit float
     [--report]               write <mix>.report.json
     [--strict]               warnings become errors (exit 1)
-    [--stems]                (later) also write <mix>_stem_<group>.wav
+    [--stems]                also write <mix>_stem_<group>.wav per group, and <mix>_stem_reverb.wav
     [--quality standard|high] fractional-delay interpolation (same as --set quality=...)
-    [--normalize LUFS]       (later) normalize the master to a target loudness
-    [--limit DBTP]           (later) true-peak limiter on the master
-    [--plot]                 (later) write <mix>.plot.png
+    [--normalize LUFS]       normalize the master to a target loudness (e.g. -23, -14)
+    [--limit DBTP]           true-peak limiter on the master (e.g. -1)
+    [--plot]                 write <mix>.plot.png (needs matplotlib: pip install 'soundstage[plot]')
 ```
+
+Stems sum to the master; `--normalize` and `--limit` apply the same gains to the master and every
+stem, in that order (normalize, then limit). Typical calls:
+
+```
+soundstage render shot/scene.json -o out/shot.wav --report --plot                  # check
+soundstage render shot/scene.json -o out/shot.wav --stems --set reverb=city        # for Fairlight
+soundstage render shot/scene.json -o out/shot.wav --normalize -23 --limit -1       # standalone mix
+```
+
+The plot (`<mix>.plot.png`) shows, for up to the 12 loudest spatial sources on a frame axis:
+distance, level (gain × distance × cone, dB), pan, delay, playback rate and, with occlusion,
+visibility. Read it as an image to check a render without listening.
+
+## `soundstage presets`
+
+```
+soundstage presets [TEXT]    list the reverb presets whose names contain TEXT (default: all 113)
+```
+
+Table of the EFX environments: name, decay time at mid frequencies, low and high decay times (s),
+and the preset's early-plus-late level (dB). Use a name as `--set reverb=<name>` or scene setting
+`reverb`.
 
 ## `soundstage preview`
 
@@ -123,12 +150,13 @@ the deliverables are the WAVs.
 
 ## Report (`<mix>.report.json`)
 
-Example from the flyby example (three of its sources):
+Example from the flyby example rendered with `--report --set reverb=city` (three of its sources,
+two of its groups):
 
 ```json
 {
-  "scene": "/\u2026/audio/bake/flyby/scene.json",
-  "output": "/\u2026/audio/out/flyby.wav",
+  "scene": "/…/audio/bake/flyby/scene.json",
+  "output": "/…/audio/out/flyby.wav",
   "sample_rate": 48000,
   "frames": [
     1,
@@ -137,13 +165,32 @@ Example from the flyby example (three of its sources):
   "fps": 30.0,
   "length_samples": 384000,
   "settings": {
-    "\u2026": "effective settings after --set"
+    "…": "effective settings after --set"
   },
-  "overrides": {},
+  "overrides": {
+    "reverb": "city"
+  },
   "master": {
-    "peak_dbfs": -6.13,
-    "true_peak_dbtp": -6.12,
-    "lufs_integrated": -23.16
+    "peak_dbfs": -6.05,
+    "true_peak_dbtp": -6.05,
+    "lufs_integrated": -22.9,
+    "loudness_range_lu": 4.11
+  },
+  "reverb": "city",
+  "groups": {
+    "engines": {
+      "peak_dbfs": -9.01,
+      "true_peak_dbtp": -9.0,
+      "lufs_integrated": -25.52,
+      "loudness_range_lu": 5.46
+    },
+    "reverb": {
+      "peak_dbfs": -24.18,
+      "true_peak_dbtp": -24.17,
+      "lufs_integrated": -36.78,
+      "loudness_range_lu": 0.75
+    },
+    "…": "one entry per group"
   },
   "sources": [
     {
@@ -169,7 +216,7 @@ Example from the flyby example (three of its sources):
         180.0,
         225.0
       ],
-      "peak_dbfs": -7.8,
+      "peak_dbfs": -7.77,
       "audible_frames": 41,
       "distance_m": [
         9.02,
@@ -180,9 +227,14 @@ Example from the flyby example (three of its sources):
         48.7
       ],
       "rate": [
-        0.9992,
-        1.0127
-      ]
+        0.9995,
+        1.0113
+      ],
+      "visibility": [
+        1.0,
+        1.0
+      ],
+      "occluded_frames": 0
     },
     {
       "id": "Ship:0",
@@ -206,21 +258,43 @@ Example from the flyby example (three of its sources):
       ],
       "rate": [
         0.9204,
-        1.1121
-      ]
+        1.0942
+      ],
+      "visibility": [
+        1.0,
+        1.0
+      ],
+      "occluded_frames": 0
     }
   ],
   "cuts": [],
   "warnings": [],
   "timing_s": {
-    "load": 0.968,
-    "dsp": 0.256,
+    "load": 1.175,
+    "dsp": 0.199,
     "workers": 5
-  }
+  },
+  "processing": {}
 }
 ```
 
-Fields: `master` peak (dBFS), true peak (dBTP, 4× oversampled), integrated loudness (LUFS, BS.1770; null for silence or clips shorter than 0.4 s). Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its contribution, `audible_frames` (frames whose peak is above −60 dBFS); spatial sources also `distance_m` [min, max] (propagation distance), `delay_ms` [min, max] (propagation delay as read, after the Doppler factor), `rate` [min, max] (playback rate: above 1 approaching, below 1 receding). Warnings: unimplemented keys, sources never audible, playback rate clamped (near- or supersonic motion), sound emitted before the baked range (padding too short). *(later)*: per-group metrics, loudness range.
+Fields:
+
+- `master` and each entry of `groups` (one per group, and `reverb` for the reverb return): sample
+  peak (dBFS), true peak (dBTP, 4× oversampled, BS.1770-4), integrated loudness (LUFS, BS.1770;
+  null for silence or clips shorter than 0.4 s), loudness range (LU, EBU Tech 3342; null for clips
+  shorter than 3 s).
+- `reverb`: the environment (preset name or file), null without reverb.
+- `processing`: `normalize_gain_db`, `limiter_max_reduction_db`, `limiter_active_s` when
+  `--normalize` / `--limit` were given.
+- Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its
+  contribution, `audible_frames` (frames whose peak is above −60 dBFS); spatial sources also
+  `distance_m` [min, max] (propagation distance), `delay_ms` [min, max] (propagation delay as read,
+  after the Doppler factor), `rate` [min, max] (playback rate: above 1 approaching, below 1
+  receding); with baked visibility `visibility` [min, max] (per frame, mean of the bands) and
+  `occluded_frames` (frames with visibility below 0.5).
+- Warnings: unimplemented keys, sources never audible, playback rate clamped (near- or supersonic
+  motion), sound emitted before the baked range (padding too short).
 
 ## Exit criteria for agents
 

@@ -64,7 +64,8 @@ ticket, not in a document.
 .venv/bin/soundstage preview <mix.wav> --frames <frames dir>   # MP4 for a sync check (ffmpeg)
 ```
 
-Asked to add sound to an animation? Follow [docs/agent-guide.md](docs/agent-guide.md).
+Asked to add sound to an animation? Follow [docs/agent-guide.md](docs/agent-guide.md). Writing scripts
+that build scenes? [docs/scene-builder-guide.md](docs/scene-builder-guide.md).
 
 ## You cannot listen: verify with numbers and pictures
 
@@ -72,8 +73,8 @@ An agent has no speakers. Every claim about how a render sounds must rest on som
 
 - the render report (`<mix>.report.json`): peaks, true peak, LUFS, per-source distance range,
   audible frames, warnings (later also playback-rate ranges);
-- the debug plot (`<mix>.plot.png`, Phase 3): per-source distance, gain, pan, delay, pitch over
-  time, on a frame axis; read it as an image;
+- the debug plot (`<mix>.plot.png`): per-source distance, level, pan, delay, pitch and visibility
+  over time, on a frame axis; read it as an image;
 - known-answer tests: put a synthetic source where the answer is known (distance, side, speed)
   and assert the measured level, channel balance, onset time or frequency;
 - spectrograms of the output (`scipy.signal.spectrogram` → PNG) for filters and Doppler sweeps.

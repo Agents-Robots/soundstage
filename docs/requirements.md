@@ -47,7 +47,7 @@ Decisions taken with the user (2026-10-25):
 | FR-6 | A sound can be placed at a local offset from the object origin (e.g. an engine nozzle at the rear). | 2 |
 | FR-7 | Per-sound directivity cone (inner angle, outer angle, outer gain) around a chosen object axis. | 2 |
 | FR-8 | Native Blender Speaker objects are read as sources too (their sound, volume, distances, cone and NLA start frame), so sounds can also be placed in the UI. | 3 |
-| FR-9 | Tagged objects inside collection instances produce one source per instance. | 3 |
+| FR-9 | Tagged objects inside collection instances (and geometry-nodes instances) produce one source per instance; the number per tagged object is limited to the closest ones. | 3 |
 | FR-10 | Animated parameters: a keyframed custom property on the object (e.g. gain or pitch for engine throttle) modulates the sound over time. | 4 |
 
 ### Bake: from the scene to the scene file
@@ -59,7 +59,7 @@ Decisions taken with the user (2026-10-25):
 | FR-22 | Bake samples sub-frames (default 4 per frame) so fast motion and Doppler are smooth. | 2 |
 | FR-23 | Bake covers padding before and after the shot, long enough for the longest propagation delay, so sounds emitted before the first frame arrive correctly. | 2 |
 | FR-24 | Bake follows camera switches (markers bound to cameras) and records them as cuts. | 2 |
-| FR-25 | Bake computes visibility of each source from the listener by ray casting against the scene and records it per sub-frame. | 3 |
+| FR-25 | Bake computes visibility of each source from the listener by ray casting against the scene, per frequency band, often enough for smooth occlusion (default 10 Hz). | 3 |
 | FR-26 | Bake respects the scene unit scale (`unit_settings.scale_length`), so distances are in metres. | 1 |
 | FR-27 | Bake writes a versioned, documented scene file ([scene-format](spec/scene-format.md)) that can also be produced or edited without Blender. | 1 |
 | FR-28 | Bake reports tagging errors (missing sample file, unknown parameter, bad value) with object name and stops, unless told to skip. | 1 |

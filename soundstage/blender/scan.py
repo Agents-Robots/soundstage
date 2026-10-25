@@ -9,8 +9,8 @@ Run headless (or through ``soundstage scan``)::
 Samples the shot at evenly spaced frames and writes a JSON summary: frame range and fps, cameras
 and when they are active, objects that move (attached-to-camera ones last; path length, speed, distance range to the camera,
 closest frame, side at the closest frame, keyframes), the static objects closest to the camera
-path, and existing sound tags. An agent reads it to decide which objects get which sounds
-(docs/agent-guide.md). Distances are in metres.
+path, existing sound tags, Speaker objects, and tags that come in through instances. An agent reads
+it to decide which objects get which sounds (docs/agent-guide.md). Distances are in metres.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 
-from soundstage.blender import tag, util  # noqa: E402
+from soundstage.blender import emitters, tag, util  # noqa: E402
 from soundstage.blender.util import log  # noqa: E402
 
 MOVING_THRESHOLD_M = 0.01
@@ -64,6 +64,26 @@ def side(q: np.ndarray) -> str:
     lr = "right" if x > 0 else "left"
     fb = "front" if z < 0 else "behind"
     return f"{fb}-{lr}" if abs(x) > 0.25 * abs(z) else fb
+
+
+def speaker_info(obj) -> dict:
+    """What a Speaker object will play (read as a source by the bake unless muted)."""
+    spk = obj.data
+    frames = []
+    if obj.animation_data:
+        for track in obj.animation_data.nla_tracks:
+            if not track.mute:
+                frames += [s.frame_start for s in track.strips if s.type == "SOUND" and not s.mute]
+    sound = spk.sound
+    return {
+        "name": obj.name,
+        "sound": None if sound is None else (sound.name if sound.packed_file else bpy.path.abspath(sound.filepath)),
+        "packed": bool(sound and sound.packed_file),
+        "strip_frames": sorted(float(f) for f in frames),
+        "muted": spk.muted,
+        "volume": spk.volume,
+        "overrides": dict(obj["sfx_speaker"].to_dict()) if "sfx_speaker" in obj else None,
+    }
 
 
 def scan(args: argparse.Namespace) -> None:
@@ -142,6 +162,10 @@ def scan(args: argparse.Namespace) -> None:
     static.sort(key=lambda j: dist[:, j].min())
 
     tagged = [{"object": o.name, "index": i, "entry": e} for o, i, e in tag.iter_tagged(scene)]
+    speakers = [speaker_info(o) for o in emitters.view_layer_objects(scene) if o.type == "SPEAKER"]
+    instanced: dict[str, int] = {}
+    for em in emitters.instances(scene, 0, [], scale)[0]:
+        instanced[em.obj.name] = instanced.get(em.obj.name, 0) + 1
     cam_steps = np.linalg.norm(np.diff(cam_pos, axis=0), axis=1)
     result = {
         "blend_file": bpy.data.filepath,
@@ -164,6 +188,8 @@ def scan(args: argparse.Namespace) -> None:
         "static_near": [describe(j) for j in static[: args.max_static]],
         "scene_settings": tag.get_scene_settings(scene),
         "tagged": tagged,
+        "speakers": speakers,
+        "instanced_tags": [{"object": k, "instances": v} for k, v in sorted(instanced.items())],
     }
     util.write_json(Path(args.out).resolve(), result)
     log(f"wrote {Path(args.out).resolve()}")

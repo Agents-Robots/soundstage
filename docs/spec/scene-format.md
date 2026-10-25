@@ -5,6 +5,7 @@ The contract between the Blender bake and the engine. A bake writes one director
 ```
 <out>/scene.json   manifest: time base, settings, sources with resolved parameters
 <out>/scene.npz    arrays: listener and source trajectories, visibility, cuts
+<out>/sounds/      sounds packed in the .blend and used by Speaker objects (only if any)
 ```
 
 Decision: ADR [0004](../adr/0004-scene-interchange-json-npz.md). The format can be written by
@@ -53,8 +54,13 @@ changing the meaning of a key does, together with this spec.
     "quality": "standard",
     "occlusion_gain_db": -12.0,
     "occlusion_cutoff_hz": 1500.0,
-    "reverb": null,
-    "reverb_send_db": -18.0
+    "occlusion_rate": 10.0,
+    "occluder_min_size": 2.0,
+    "reverb": "city",
+    "reverb_send_db": 0.0,
+    "reverb_room_rolloff": null,
+    "read_speakers": true,
+    "instance_limit": 32
   },
 
   "listener": {"objects": ["Camera", "Camera.002"]},
@@ -89,9 +95,20 @@ changing the meaning of a key does, together with this spec.
       "doppler": 1.0,
       "air_absorption": 1.0,
       "sync_to_picture": false,
-      "occlusion": true
+      "occlusion": true,
+      "occlusion_radius": 0.25,
+      "occlusion_mode": "obstruction",
+      "reverb_send_db": null
     }
   ],
+
+  "occlusion": {
+    "bands_hz": [250.0, 1000.0, 4000.0],
+    "samples": 2010,
+    "occluders": {"static": 111180, "moving": 7002, "carried": 9},
+    "geometry": "boxes",
+    "blockers": {"Ship.001:0": [["Hangar", 0.42], ["Crane", 0.05]]}
+  },
 
   "arrays": "scene.npz",
   "warnings": []
@@ -113,6 +130,14 @@ Rules:
 - Bed sources (`spatial: false`) have no track (`"track": null`).
 - `frame` of a one-shot is a number or a sorted list of numbers (repeated triggers).
 - `listener.objects` lists every camera that is active during the shot, in order of first use.
+- `object` names where the source comes from: the object name for a tag or a Speaker object,
+  `"<instancer>/<object>"` (collection instance) or `"<instancer>/<object>#<n>"` (geometry-nodes or
+  nested instance) for a tag inside an instance. Speaker sources have ids `"<object>:speaker"`.
+- `occlusion` describes the baked visibility: frequency bands of `src_visibility`, number of
+  visibility samples, occluder counts (static and moving boxes, objects left out because they
+  travel with the listener), and per source up to three objects that block it most, with the share
+  of all its paths over the shot they block (`"<instancer>/<object>"` for instances). `null` when no
+  source occludes or `occlusion_rate` is 0.
 
 ## `scene.npz`
 
@@ -127,7 +152,8 @@ Let `N` = number of time samples = `(frame_end − frame_start + pad_before + pa
 | `cuts` | (C,) float64 | Frames where the listener jumps (camera switch, or a jump detected in the trajectory). A cut lies between two time samples; its value is the first sample after it. |
 | `src_pos` | (N, S, 3) float64 | Emitter world position (object matrix applied to `offset`), metres. |
 | `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space (absent = omnidirectional). |
-| `src_visibility` | (N, S) float32 | Visible fraction 0…1 from the listener. *(Phase 3; absent = 1)* |
+| `vis_frames` | (M,) float64 | Frames of the visibility samples (every `round(fps · substeps / occlusion_rate)`-th time sample). |
+| `src_visibility` | (M, S, B) float32 | Visibility 0…1 per band (`occlusion.bands_hz`, B = 3): the open share of the first Fresnel zone of the path heard at that frame, from the source's retarded position to the listener ([model](../../research/models/occlusion.md)). Absent: fully visible. Sources with `occlusion: false` have 1. |
 | `src_cuts` | (K, 2) float64 | `(track, frame)` pairs where a source teleports. Optional: the bake writes it empty, because the engine detects teleports itself from `src_pos` (speed above `teleport_speed`); other tools may fill it. |
 | `prop_<name>` | (N, S) float32 | Sampled animated property values (`gain_prop`, `pitch_prop`). *(Phase 4)* |
 
@@ -142,6 +168,7 @@ Conventions:
 
 ## Producing scene files without Blender
 
-Tests and hand-written cues build the same structure in Python (a helper
-`soundstage.engine.scene.write_scene(path, manifest, arrays)` is planned). Example use: a static
-listener at the origin, one source moving along a line at a known speed.
+Tests and hand-written cues build the same structure in Python with
+`soundstage.engine.scene.build_manifest(...)` and `write_scene(path, manifest, arrays)`. Example
+use: a static listener at the origin, one source moving along a line at a known speed
+(`tests/conftest.py`, `research/experiments/scripts/common.py`).

@@ -29,6 +29,15 @@ PAPERS = {
                 "Fink-Holters-Z%C3%B6lzer-2016-Signal-matched-power-complementary-cross-fading-and-dry-wet-mixing.pdf",
     "itu1770": "https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.1770-4-201510-S!!PDF-E.pdf",
     "dynamicsound2026": "https://arxiv.org/pdf/2601.15433",
+    # Phase 3
+    "tsingos1997": "https://graphicsinterface.org/wp-content/uploads/gi1997-2.pdf",
+    "kapralos2007": "https://www.scitepress.org/Papers/2007/20758/20758.pdf",
+    "valimaki2017velvet": "https://acris.aalto.fi/ws/portalfiles/portal/13412521/applsci_07_00483_v2.pdf",
+    "albrecht2013distance": "https://mediatech.aalto.fi/publications/acoustics/ar/AlbrechtLokki2013Distance.pdf",
+    "ebu_r128": "https://tech.ebu.ch/docs/r/r128.pdf",
+    "ebu_tech3341": "https://tech.ebu.ch/docs/tech/tech3341.pdf",
+    "ebu_tech3342": "https://tech.ebu.ch/docs/tech/tech3342.pdf",
+    "giannoulis2012": "https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf",
 }
 
 OUT = Path(__file__).resolve().parent / "pdf"

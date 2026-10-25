@@ -30,8 +30,8 @@ established, so it is built here.
 | soundfile (libsndfile) | Read WAV/FLAC/OGG, write WAV float/PCM | Core |
 | soxr (python-soxr) | High-quality sample-rate conversion | Core; better and faster than `resample_poly` for arbitrary ratios |
 | numba | Per-sample kernels: time-varying filters, fractional-delay reads, control-rate interpolation; `nogil` so sources render in parallel threads | Core (ADR 0002) |
-| pyloudnorm | BS.1770 integrated loudness, normalization | Core (report) |
-| pedalboard (Spotify) | Limiter, optional effects, VST3 hosting | Optional extra `fx` |
+| pyloudnorm | BS.1770 integrated loudness, normalization, K-weighting filters (for the loudness range) | Core (report) |
+| pedalboard (Spotify) | Limiter, reverb, VST3 hosting | Considered for Phase 3, not used: its limiter works on sample peaks and its gain cannot be applied to stems; the reverb is synthesized from EFX presets instead ([mixing and loudness](models/mixing-and-loudness.md), [reverb](models/reverb.md)) |
 | matplotlib | Debug plot | Optional extra `plot` |
 | sofar | Read SOFA HRTF files (binaural, Phase 4) | Optional extra `hrtf`; alternatives: spaudiopy (also ambisonics/SH tools), hrtfpykit (research-oriented, 2026), python-sofa |
 | Blender `aud` | Only in `tools/blender_mixdown.py` (Phase 0 baseline); its loop/limit chains and file writer are unreliable ([E01](experiments/E01-blender-speaker-baseline.md)). Blender 5.2.2 ships numpy 2.3.4, which bake uses | Checked in Blender 5.2.2 |

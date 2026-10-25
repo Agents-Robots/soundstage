@@ -12,7 +12,6 @@ def test_schema_choices_match_registries():
     assert set(propagation.QUALITY.values()) <= set(propagation.INTERPOLATORS)
 
 
-def test_every_phase2_key_is_implemented():
+def test_only_phase4_keys_are_unimplemented():
     later = {k for k, f in {**schema.SOURCE_KEYS, **schema.SCENE_SETTINGS}.items() if f.phase > schema.IMPLEMENTED_PHASE}
-    assert later == {"occlusion", "occlusion_radius", "reverb_send_db", "variants", "gain_jitter_db", "pitch_jitter",
-                     "gain_prop", "pitch_prop", "occlusion_gain_db", "occlusion_cutoff_hz", "reverb"}
+    assert later == {"variants", "gain_jitter_db", "pitch_jitter", "gain_prop", "pitch_prop"}

@@ -5,7 +5,8 @@ interpolator, air absorption and rear low-pass) feeding a delay line; reception 
 delays, fractional-delay read, ear stages, gains and pan). At jumps (cuts, teleports) a branch
 with every parameter held at its value before the jump is read as well and crossfaded out over
 10 ms. ``BedRenderer``: non-spatial sources, gain and fades only. Both render output samples
-``[a, b)`` chunk by chunk and keep their state in between.
+``[a, b)`` chunk by chunk, keep their state in between, and return the stereo contribution and the
+mono reverb send (None without a reverb or for beds without ``reverb_send_db``).
 
 ``make_renderers`` turns a source into one renderer, or one per trigger for one-shots whose
 triggers need their own reference delay (``sync_to_picture`` or a Doppler factor other than 1).
@@ -40,6 +41,8 @@ class RenderContext:
     interp: propagation.Interpolator
     panner: object
     rate: int
+    room_rolloff: float | None = None  # reverb send's distance rolloff; None: no reverb in this render
+    output_start: int | None = None  # first output sample; the grid may start earlier (reverb pre-roll)
 
     @property
     def emission_rate(self) -> int:
@@ -56,10 +59,14 @@ class BedRenderer:
         self.source = source
         self.dry = signals.DryGenerator(sample, p, rate, start, end, source.id)
         self.gain = float(filters.db_to_gain(p["gain_db"]))
+        self.send = None
+        if ctx.room_rolloff is not None and p["reverb_send_db"] is not None:
+            self.send = self.gain * float(filters.db_to_gain(p["reverb_send_db"] + ctx.scene.settings["reverb_send_db"]))
         self.info: dict = {}
 
-    def render(self, a: int, b: int) -> np.ndarray:
-        return self.dry.window(a, b) * self.gain
+    def render(self, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
+        dry = self.dry.window(a, b)
+        return dry * self.gain, (dry.mean(axis=1) * self.send if self.send is not None else None)
 
 
 class _Branch:
@@ -72,8 +79,10 @@ class _Branch:
         self.gain_l, self.gain_r = float(r.gain_l[index]), float(r.gain_r[index])
         self.ear_l = [st.held(index) for st in r.ear_l]
         self.ear_r = [st.held(index) for st in r.ear_r]
+        self.tau_c = float(d.centre[index])
+        self.send = float(r.send[index]) if r.send is not None else None
 
-    def render(self, r: SpatialRenderer, a: int, b: int) -> np.ndarray:
+    def render(self, r: SpatialRenderer, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
         t = np.arange(a, b) / r.rate
         ones = np.ones(b - a)
         yl = r.line.read(r.interp, (t - self.tau_l) * r.fe, ones)
@@ -82,7 +91,10 @@ class _Branch:
             yl = st.process(yl, a, b)
         for st in self.ear_r:
             yr = st.process(yr, a, b)
-        return np.stack([yl * self.gain_l, yr * self.gain_r], axis=1)
+        send = None
+        if self.send is not None:
+            send = r.line.read(r.interp, (t - self.tau_c) * r.fe, ones) * self.send
+        return np.stack([yl * self.gain_l, yr * self.gain_r], axis=1), send
 
     def position(self, r: SpatialRenderer, n: int) -> float:
         return (n / r.rate - max(self.tau_l, self.tau_r)) * r.fe
@@ -94,6 +106,7 @@ class SpatialRenderer:
         scene, s, grid = ctx.scene, ctx.scene.settings, ctx.grid
         self.source, self.params, self.path, self.voice = source, params, path, voice
         self.grid, self.rate, self.interp = grid, ctx.rate, ctx.interp
+        self.output_start = ctx.output_start
         self.fe = ctx.emission_rate
         self.crossfade = int(round(CROSSFADE_S * ctx.rate))
         p = params
@@ -112,8 +125,27 @@ class SpatialRenderer:
         if ctx.panner.rear_cue:
             g = g * filters.rear_gain(path.rear, s["rear_gain_db"])
         g = g * path.audible
+        occ_gain, occ_cutoff = None, None
+        if p["occlusion"] and path.visibility is not None:
+            occ_gain, occ_cutoff = filters.occlusion_filter(path.visibility, scene.visibility_bands,
+                                                            s["occlusion_gain_db"], s["occlusion_cutoff_hz"],
+                                                            grid.step / grid.rate)
+            g = g * occ_gain
+        self.visibility = path.visibility
         gl, gr = ctx.panner.gains(path)
         self.gain_l, self.gain_r = g * gl, g * gr
+
+        # reverb send: the distance law with the environment's room rolloff (EFX), no pan or ear cues
+        self.send = None
+        if ctx.room_rolloff is not None:
+            send_db = (p["reverb_send_db"] or 0.0) + s["reverb_send_db"]
+            self.send = (float(filters.db_to_gain(p["gain_db"] + send_db)) * path.audible
+                         * filters.distance_gain(path.distance, p["distance_model"], p["ref_distance"],
+                                                 p["max_distance"], ctx.room_rolloff)
+                         * filters.cone_gain(path.cos_emit, p["cone_inner_deg"], p["cone_outer_deg"],
+                                             p["cone_outer_gain_db"]))
+            if occ_gain is not None and p["occlusion_mode"] == "occlusion":
+                self.send = self.send * occ_gain
 
         # emission side: parameters on emission time
         te = np.maximum.accumulate(grid.times - self.delays.centre)
@@ -123,6 +155,12 @@ class SpatialRenderer:
         if ctx.panner.rear_cue:
             self.emission_stages.append(filters.RearStage(te, path.rear, s["rear_cutoff_hz"], self.fe))
         self.ear_l, self.ear_r = ctx.panner.ear_stages(path, ctx.rate)
+        self.send_stages = []
+        if occ_cutoff is not None and np.isfinite(occ_cutoff).any():
+            self.ear_l = [filters.GridOnePoleStage(grid, occ_cutoff, ctx.rate, path.jumps)] + self.ear_l
+            self.ear_r = [filters.GridOnePoleStage(grid, occ_cutoff, ctx.rate, path.jumps)] + self.ear_r
+            if p["occlusion_mode"] == "occlusion" and self.send is not None:
+                self.send_stages = [filters.GridOnePoleStage(grid, occ_cutoff, ctx.rate, path.jumps)]
 
         f = p["frame"]
         start = None if f is None else ([self._emission_index(x, scene) for x in f] if isinstance(f, list)
@@ -171,45 +209,73 @@ class SpatialRenderer:
             yl = st.process(yl, a, b)
         for st in self.ear_r:
             yr = st.process(yr, a, b)
-        return np.stack([yl * g.linear(self.gain_l, a, b, jumps), yr * g.linear(self.gain_r, a, b, jumps)], axis=1)
+        out = np.stack([yl * g.linear(self.gain_l, a, b, jumps), yr * g.linear(self.gain_r, a, b, jumps)], axis=1)
+        send = None
+        if self.send is not None:
+            yc = self.line.read(self.interp, (t - g.cubic(d.centre, a, b, jumps)) * self.fe, rate)
+            for st in self.send_stages:
+                yc = st.process(yc, a, b)
+            send = yc * g.linear(self.send, a, b, jumps)
+        return out, send
 
-    def render(self, a: int, b: int) -> np.ndarray:
+    def render(self, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
         out = np.empty((b - a, 2))
+        send_out = np.empty(b - a) if self.send is not None else None
         cuts = sorted(n for n in self.jump_starts if a < n < b)
         edges = [a, *cuts, b]
         for u, v in zip(edges[:-1], edges[1:]):
             if u in self.jump_starts:
                 self.branches.append(_Branch(u, self.jump_starts[u], self))
-            y = self._main(u, v)
+            y, ys = self._main(u, v)
             for br in self.branches:
                 o0, o1 = max(u, br.start), min(v, br.end)
                 if o0 >= o1:
                     continue
                 w = (np.arange(o0, o1) - br.start + 0.5) / self.crossfade * (np.pi / 2)
-                y[o0 - u:o1 - u] = (y[o0 - u:o1 - u] * np.sin(w)[:, None]
-                                    + br.render(self, o0, o1) * np.cos(w)[:, None])
+                held, held_send = br.render(self, o0, o1)
+                y[o0 - u:o1 - u] = y[o0 - u:o1 - u] * np.sin(w)[:, None] + held * np.cos(w)[:, None]
+                if ys is not None:
+                    ys[o0 - u:o1 - u] = ys[o0 - u:o1 - u] * np.sin(w) + held_send * np.cos(w)
             out[u - a:v - a] = y
+            if send_out is not None:
+                send_out[u - a:v - a] = ys
         self.branches = [br for br in self.branches if br.end > b]
         keep = self.keep[min(self.grid.index_of(b), len(self.keep) - 1)]
         for br in self.branches:
             keep = min(keep, br.position(self, b))
         self.line.trim(int(math.floor(keep)) - self.interp.halfwidth - 2)
-        return out
+        return out, send_out
 
     def _info(self, scene: Scene) -> dict:
         g, path, d = self.grid, self.path, self.delays
-        inside = (g.samples >= g.start + 3 * g.step) & (g.samples <= g.samples[-1] - 3 * g.step)
+        first = g.start + 3 * g.step if self.output_start is None else self.output_start
+        inside = (g.samples >= first) & (g.samples <= g.samples[-1] - 3 * g.step)
         settle = np.ones(len(d.rate), dtype=bool)
         for j in path.jumps:
             settle[max(j - 2, 0):j + 2] = False
         sel = inside & settle & path.audible
+        # per-frame tracks for the debug plot (control points nearest to each frame start)
+        frames = np.arange(scene.frame_start, scene.frame_end + 1)
+        idx = np.clip(((frames - scene.frame_start) / scene.fps * g.rate - g.start) // g.step, 0, g.count - 1).astype(int)
+        level = np.sqrt(self.gain_l ** 2 + self.gain_r ** 2)
+        track = {
+            "frame": frames.astype(float),
+            "distance_m": path.distance[idx],
+            "level_db": 20 * np.log10(np.maximum(level[idx], 1e-6)),
+            "pan": path.lateral[idx],
+            "delay_ms": d.centre[idx] * 1e3,
+            "rate": d.rate[idx],
+        }
+        if self.visibility is not None and self.params["occlusion"]:
+            track["visibility"] = self.visibility[idx].mean(axis=1)
         return {
             "distance": path.distance[inside],
             "rate": d.rate[sel] if sel.any() else d.rate[inside],
             "delay": d.centre[inside],
             "clamped": d.clamped,
-            "before_bake": path.before_bake,
+            "before_bake": int(np.sum(path.before_bake & (g.samples >= first))) if path.before_bake is not None else 0,
             "jumps": len(path.jumps),
+            "track": track,
         }
 
 

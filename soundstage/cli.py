@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -40,7 +41,8 @@ def run_blender(script: str, blend: str, script_args: list[str], blender: str | 
     cmd = [find_blender(blender), "-b", blend, "--factory-startup", "-y", "--python-exit-code", "1",
            "--python", str(BLENDER_DIR / script), "--", *script_args]
     other: list[str] = []
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as proc:
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}  # keep the scripts' prints in order with tracebacks
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env) as proc:
         for line in proc.stdout:
             line = line.rstrip("\n")
             if line.startswith(PREFIX):
@@ -48,8 +50,10 @@ def run_blender(script: str, blend: str, script_args: list[str], blender: str | 
             else:
                 other.append(line)
     if proc.returncode != 0:
+        tb = max((i for i, line in enumerate(other) if line.startswith("Traceback")), default=None)
+        tail = other[-30:] if tb is None or tb >= len(other) - 30 else other[tb:tb + 40] + ["..."] + other[-5:]
         print(f"error: blender exited with code {proc.returncode}; last output:", file=sys.stderr)
-        print("\n".join(other[-30:]), file=sys.stderr)
+        print("\n".join(tail), file=sys.stderr)
         return 1
     return 0
 
@@ -100,6 +104,11 @@ def cmd_scan(a: argparse.Namespace) -> int:
                   for m in s["static_near"][: a.limit]], ["object", "type", "dist m", "closest", "side"]))
     if s["tagged"]:
         print(f"\nalready tagged: {len(s['tagged'])} sounds")
+    for spk in s.get("speakers", []):
+        state = "muted" if spk["muted"] else f"strips at frames {', '.join(f'{f:g}' for f in spk['strip_frames']) or 'none'}"
+        print(f"speaker {spk['name']}: {Path(spk['sound']).name if spk['sound'] else 'no sound'}, {state}")
+    for it in s.get("instanced_tags", []):
+        print(f"tagged object {it['object']} inside {it['instances']} instances")
     print(f"\nfull JSON: {out}" if a.out else "\n(use --out scan.json to keep the full JSON)")
     return 0
 
@@ -131,6 +140,10 @@ def cmd_inspect(a: argparse.Namespace) -> int:
     q = geometry.camera_space(scene.listener_matrix[inside], scene.src_pos[inside])
     dist = np.linalg.norm(q, axis=2)
     dt = np.diff(scene.seconds(scene.frames[inside]))
+    vis = None
+    if scene.src_visibility is not None and scene.vis_frames is not None and len(scene.vis_frames):
+        shot = (scene.vis_frames >= scene.frame_start) & (scene.vis_frames <= scene.frame_end)
+        vis = scene.src_visibility[shot].mean(axis=2) if shot.any() else None  # (samples, tracks)
     rows, data = [], []
     for s in scene.sources:
         p = s.params
@@ -144,17 +157,28 @@ def cmd_inspect(a: argparse.Namespace) -> int:
             row["max_radial_speed_m_s"] = round(float(np.abs(vr).max()), 2)
             # Doppler factor of a moving source: c / (c + v_r), approximate for a moving camera
             row["rate"] = [round(float(c / (c + vr.max())), 3), round(float(c / max(c + vr.min(), 1e-6)), 3)]
+            if vis is not None:
+                v = vis[:, s.track]
+                row["visibility"] = [round(float(v.min()), 2), round(float(v.max()), 2)]
+            blocked = (scene.manifest.get("occlusion") or {}).get("blockers", {}).get(s.id)
+            if blocked:
+                row["blocked_by"] = blocked
         data.append(row)
         rows.append([row["id"], row["group"], row["sample"], row["mode"],
                      _frames(p["frame"]),
                      _range(row.get("distance_m")) if s.spatial else "bed", row.get("max_radial_speed_m_s", "-"),
-                     _range(row.get("rate"))])
+                     _range(row.get("rate")), _range(row.get("visibility"))])
     if a.json:
         print(json.dumps({"sources": data, "cuts": scene.cuts.tolist(), "warnings": scene.warnings}, indent=2))
         return 0
     print(f"{scene.path}: frames {scene.frame_start}-{scene.frame_end} @ {scene.fps:g} fps, "
           f"{len(scene.sources)} sources, listener {', '.join(scene.manifest['listener']['objects'])}")
-    print(_table(rows, ["id", "group", "sample", "mode", "frame", "dist m", "radial m/s", "rate"]))
+    print(_table(rows, ["id", "group", "sample", "mode", "frame", "dist m", "radial m/s", "rate", "visibility"]))
+    blocked = [r for r in data if r.get("blocked_by")]
+    if blocked:
+        print("\nblocked by (share of the paths to the source over the shot):")
+        for r in sorted(blocked, key=lambda r: -r["blocked_by"][0][1]):
+            print(f"  {r['id']}: " + ", ".join(f"{name} {share:.0%}" for name, share in r["blocked_by"]))
     if len(scene.cuts):
         print("cuts at frames: " + ", ".join(f"{c:g}" for c in scene.cuts))
     for w in scene.warnings:
@@ -180,12 +204,24 @@ def cmd_render(a: argparse.Namespace) -> int:
         frames = (int(x), int(y or x))
     out = Path(a.output) if a.output else scene.path.parent / "mix.wav"
     try:
-        result = render.render(scene, frames=frames, solo=a.solo, mute=a.mute)
+        # group buses also for the report's per-group metrics; written as files only with --stems
+        result = render.render(scene, frames=frames, solo=a.solo, mute=a.mute, stems=a.stems or a.report)
     except (OSError, RuntimeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    processing = mix.finish(result.audio, result.stems, result.rate, normalize=a.normalize, limit=a.limit)
     mix.write_wav(out, result.audio, result.rate, pcm24=a.pcm24)
+    for group, audio in result.stems.items() if a.stems else ():
+        mix.write_wav(mix.stem_path(out, group), audio, result.rate, pcm24=a.pcm24)
     rep = report.build_report(scene, result, out, overrides)
+    rep["processing"] = processing
+    if a.plot:
+        try:
+            from soundstage.engine import plot
+        except ImportError as e:
+            print(f"error: --plot needs matplotlib (pip install 'soundstage[plot]'): {e}", file=sys.stderr)
+            return 1
+        plot.write_plot(out.with_suffix(".plot.png"), scene, result)
     if a.report:
         report.write_report(out.with_suffix(".report.json"), rep)
     m = rep["master"]
@@ -195,6 +231,12 @@ def cmd_render(a: argparse.Namespace) -> int:
                   for s in result.sources], ["source", "group", "peak dBFS", "audible frames", "dist m"]))
     for w in result.warnings:
         print(f"warning: {w}", file=sys.stderr)
+    if a.stems:
+        print("stems: " + ", ".join(str(mix.stem_path(out, g).name) for g in result.stems))
+    if processing:
+        print("processing: " + ", ".join(f"{k} {v}" for k, v in processing.items()))
+    if a.plot:
+        print(f"plot: {out.with_suffix('.plot.png')}")
     if a.report:
         print(f"report: {out.with_suffix('.report.json')}")
     return 1 if (a.strict and result.warnings) else 0
@@ -218,6 +260,21 @@ def cmd_preview(a: argparse.Namespace) -> int:
     if res.audio_offset_samples:
         what = "skipped" if res.audio_offset_samples > 0 else "of silence inserted"
         print(f"audio: {abs(res.audio_offset_samples)} samples {what} to line up with frame {first}")
+    return 0
+
+
+def cmd_presets(a: argparse.Namespace) -> int:
+    from soundstage.engine import reverb
+
+    rows = []
+    for name, p in sorted(reverb.presets().items()):
+        if a.filter and a.filter.lower() not in name:
+            continue
+        low, mid, high = reverb.decay_times(p)
+        level = 20 * math.log10(max(p["gain"] * math.hypot(p["reflections_gain"], p["late_reverb_gain"]), 1e-9))
+        rows.append([name, f"{mid:.2f}", f"{low:.2f}", f"{high:.2f}", f"{level:+.1f}"])
+    print(_table(rows, ["preset", "decay s", "low s", "high s", "level dB"]))
+    print("\nUse: --set reverb=<preset> or scene setting reverb; level = early + late gain of the preset")
     return 0
 
 
@@ -264,8 +321,16 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--quality", choices=("standard", "high"), help="interpolation quality (same as --set quality=)")
     r.add_argument("--pcm24", action="store_true", help="24-bit PCM instead of 32-bit float")
     r.add_argument("--report", action="store_true", help="write <output>.report.json")
+    r.add_argument("--stems", action="store_true", help="also write <output>_stem_<group>.wav (and _stem_reverb)")
+    r.add_argument("--normalize", type=float, metavar="LUFS", help="normalize the master to this loudness")
+    r.add_argument("--limit", type=float, metavar="DBTP", help="true-peak limiter with this ceiling")
+    r.add_argument("--plot", action="store_true", help="write <output>.plot.png (needs matplotlib)")
     r.add_argument("--strict", action="store_true", help="exit 1 if there are warnings")
     r.set_defaults(func=cmd_render)
+
+    e = sub.add_parser("presets", help="list the reverb presets (EFX environments)")
+    e.add_argument("filter", nargs="?", help="only names containing this text")
+    e.set_defaults(func=cmd_presets)
 
     v = sub.add_parser("preview", help="mux a mix with the shot's frames or a video into an MP4")
     v.add_argument("mix", help="WAV from render (its .report.json supplies first frame and fps)")

@@ -307,6 +307,17 @@ def rear_shelf_track(x, a, rate, times, weight, gain, state, out):
     return out
 
 
+@_jit
+def follow(x, down, up, out):
+    """One-pole follower with separate coefficients for falling (``down``) and rising (``up``) input."""
+    y = x[0]
+    for i in range(x.shape[0]):
+        c = down if x[i] < y else up
+        y = y + (x[i] - y) * (1.0 - c)
+        out[i] = y
+    return out
+
+
 def warmup() -> None:
     """Compile (or load from cache) every kernel in the calling thread, before threads use them."""
     buf, pos, one = np.zeros(16), np.full(2, 8.0), np.ones(2)
@@ -322,6 +333,7 @@ def warmup() -> None:
     fir_valid(buf, one, np.empty(15))
     onepole_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1)), np.zeros(1), np.empty(2))
     rear_shelf_track(buf[:2], 0, 48000, np.arange(2.0), one, 0.5, np.zeros(1), np.empty(2))
+    follow(one, 0.5, 0.5, np.empty(2))
 
 
 # ---------------------------------------------------------------- reference implementations

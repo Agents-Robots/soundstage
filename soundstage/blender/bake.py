@@ -9,7 +9,8 @@ Run headless (or through ``soundstage bake``)::
 Steps: run tagging scripts (``--run``, not saved to the .blend), validate tags and resolve their
 defaults and sample paths, step through frames and sub-frames over the shot plus padding, record
 the listener (active camera per frame) and every emitter's world position in metres, record camera
-switches as cuts, write the scene file (docs/spec/scene-format.md).
+switches as cuts, sample each source's visibility (occlusion.py) at ``occlusion_rate``, write the
+scene file (docs/spec/scene-format.md).
 
 Uses bpy, stdlib and Blender's bundled numpy only.
 """
@@ -20,6 +21,8 @@ import argparse
 import math
 import os
 import sys
+import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,7 +32,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
-from soundstage.blender import schema, tag, util  # noqa: E402
+from soundstage.blender import emitters, occlusion, schema, tag, util  # noqa: E402
 from soundstage.blender.util import log  # noqa: E402
 
 FORMAT = "soundstage.scene"
@@ -78,30 +81,43 @@ def resolve_sample_path(sample: str, samples_root: str) -> str:
     return os.path.normpath(os.path.join(bpy.path.abspath(samples_root), sample))
 
 
-def collect_sources(scene, settings: dict, skip_invalid: bool) -> tuple[list[dict], list[str]]:
-    """Validated, resolved sources and warnings. Exits with all errors listed if any are fatal."""
-    sources, errors, warnings, seen = [], [], [], set()
-    for obj, index, entry in tag.iter_tagged(scene):
-        where = f"{obj.name}[{index}]"
-        problems = schema.validate_source(entry)
-        resolved = None
-        if not problems:
-            resolved = schema.resolve_source(entry, default_id=f"{obj.name}:{index}")
-            resolved["sample"] = resolve_sample_path(resolved["sample"], settings["samples_root"])
-            if not os.path.isfile(resolved["sample"]):
-                problems.append(f"sample not found: {resolved['sample']}")
-            if resolved["id"] in seen:
-                problems.append(f"duplicate id {resolved['id']!r}")
-        if problems:
-            (warnings if skip_invalid else errors).extend(f"{where}: {m}" for m in problems)
-            continue
-        seen.add(resolved["id"])
-        sources.append({"object": obj.name, "index": index, **resolved})
+def collect_sources(scene, settings: dict, skip_invalid: bool, out: Path, frame_range: tuple[int, int],
+                    scale: float) -> tuple[list[dict], list[emitters.Emitter], list[str]]:
+    """Validated, resolved sources with their emitters, and warnings. Exits listing all fatal errors."""
+    found = emitters.tagged_objects(scene)
+    warnings = []
+    if settings["read_speakers"]:
+        spk, w = emitters.speakers(scene, out / "sounds")
+        found += spk
+        warnings += w
+    inst, w = emitters.instances(scene, int(settings["instance_limit"]),
+                                 emitters.sample_frames(*frame_range), scale)
+    found += inst
+    warnings += w
+    sources, owners, errors, seen = [], [], [], set()
+    for em in found:
+        for index, entry in em.entries:
+            where = f"{em.label}[{index}]"
+            problems = schema.validate_source(entry)
+            resolved = None
+            if not problems:
+                resolved = schema.resolve_source(entry, default_id=f"{em.label}:{index}")
+                resolved["sample"] = resolve_sample_path(resolved["sample"], settings["samples_root"])
+                if not os.path.isfile(resolved["sample"]):
+                    problems.append(f"sample not found: {resolved['sample']}")
+                if resolved["id"] in seen:
+                    problems.append(f"duplicate id {resolved['id']!r}")
+            if problems:
+                (warnings if skip_invalid else errors).extend(f"{where}: {m}" for m in problems)
+                continue
+            seen.add(resolved["id"])
+            sources.append({"object": em.label, "index": index, **resolved})
+            owners.append(em)
     if errors:
         for e in errors:
             log(f"ERROR {e}")
         raise SystemExit(1)
-    return sources, warnings
+    return sources, owners, warnings
 
 
 def bake(args: argparse.Namespace) -> None:
@@ -121,24 +137,26 @@ def bake(args: argparse.Namespace) -> None:
     if args.pad is not None:
         settings["pad_seconds"] = args.pad
 
-    sources, warnings = collect_sources(scene, settings, args.skip_invalid)
-    for w in warnings:
-        log(f"WARNING {w}")
-    if not sources:
-        log("WARNING no sound tags found")
-
     frame_start, frame_end = util.parse_frames(args.frames, scene)
     fps = util.fps(scene)
     substeps = int(settings["substeps"])
     pad = math.ceil(settings["pad_seconds"] * fps)
     scale = scene.unit_settings.scale_length or 1.0
+    out = Path(args.out).resolve()
+
+    sources, owners, warnings = collect_sources(scene, settings, args.skip_invalid, out, (frame_start, frame_end), scale)
+    for w in warnings:
+        log(f"WARNING {w}")
+    if not sources:
+        log("WARNING no sound tags or speakers found")
 
     spatial = [s for s in sources if s["spatial"]]
     for track, s in enumerate(spatial):
         s["track"] = track
     for s in sources:
         s.setdefault("track", None)
-    objects = [scene.objects[s["object"]] for s in spatial]
+    objects = [em for em, s in zip(owners, sources) if s["spatial"]]
+    slow_keys = {(e.instancer.name, e.pid) for e in objects if e.instancer is not None and not e.fast}
     offsets = [Vector(s["offset"]) for s in spatial]
     axes = [AXIS_VECTORS[s["forward_axis"]] for s in spatial]
 
@@ -152,9 +170,26 @@ def bake(args: argparse.Namespace) -> None:
     listener_names: list[str] = []
     cuts: list[float] = []
 
+    occluding = [j for j, s in enumerate(spatial) if s["occlusion"]]
+    occluders, vis_frames, vis, vis_seconds = None, [], [], 0.0
+    blockers = [Counter() for _ in spatial]  # per source: blocked paths by object, over the shot
+    vis_step = max(1, round(fps * substeps / settings["occlusion_rate"])) if settings["occlusion_rate"] > 0 else 0
+    if occluding and vis_step:
+        t0 = time.perf_counter()
+        occluders = occlusion.Occluders(scene, [float(first), (first + last) / 2, float(last)],
+                                        settings["occluder_min_size"], scale, settings["listener"])
+        log(f"occluders: {occluders.counts['static']} static, {occluders.counts['moving']} moving boxes, "
+            f"{occluders.counts['carried']} travelling with the listener ({time.perf_counter() - t0:.1f} s); "
+            f"visibility every {vis_step} samples")
+    radii = [spatial[j]["occlusion_radius"] for j in occluding]
+
     original_frame = scene.frame_current
     log(f"baking frames {first}..{last} x{substeps} ({n} samples), {len(spatial)} spatial sources")
+    t_start, report_every = time.perf_counter(), max(1, n // 10)
     for k, f in enumerate(frames):
+        if k and k % report_every == 0:
+            spent = time.perf_counter() - t_start
+            log(f"  {k}/{n} samples, {spent:.0f} s, about {spent * (n - k) / k:.0f} s to go")
         util.set_frame(scene, float(f))
         depsgraph = bpy.context.evaluated_depsgraph_get()
         listener = util.listener_object(scene, settings["listener"])
@@ -170,14 +205,32 @@ def bake(args: argparse.Namespace) -> None:
         loc, rot, _ = listener.evaluated_get(depsgraph).matrix_world.decompose()
         m = Matrix.LocRotScale(loc * scale, rot, None)
         listener_matrix[k] = np.array(m)
-        for j, (obj, off, axis) in enumerate(zip(objects, offsets, axes)):
-            mw = obj.evaluated_get(depsgraph).matrix_world
+        lookup = emitters.instance_lookup(depsgraph, slow_keys) if slow_keys else None
+        for j, (em, off, axis) in enumerate(zip(objects, offsets, axes)):
+            mw = em.matrix(depsgraph, lookup)
             src_pos[k, j] = np.array(mw @ off) * scale
             fwd = mw.to_3x3() @ axis
             src_fwd[k, j] = np.array(fwd.normalized() if fwd.length > 1e-12 else axis)
+        if occluders is not None and k % vis_step == 0:
+            # the path of the sound heard now: from where the source emitted it to the listener and occluders now
+            t_vis = time.perf_counter()
+            occluders.update(depsgraph, frames[k] / fps, np.array(loc), settings["speed_of_sound"] / scale)
+            emitted = occlusion.retarded_positions(frames[:k + 1] / fps, src_pos[:k + 1, occluding],
+                                                   np.array(loc) * scale, settings["speed_of_sound"])
+            v = np.ones((len(spatial), len(occlusion.BANDS_HZ)), dtype=np.float32)
+            counts = [Counter() for _ in occluding]
+            v[occluding] = occlusion.visibility(occluders, np.array(loc), emitted / scale, radii, scale,
+                                                settings["speed_of_sound"], counts)
+            for j, c in zip(occluding, counts):
+                blockers[j].update(c)
+            vis_frames.append(float(f))
+            vis.append(v)
+            vis_seconds += time.perf_counter() - t_vis
     scene.frame_set(original_frame)
+    if vis:
+        log(f"visibility: {len(vis)} samples x {len(occluding)} sources in {vis_seconds:.1f} s "
+            f"({vis_seconds / len(vis) * 1000:.0f} ms per sample)")
 
-    out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out / "scene.npz",
@@ -188,6 +241,7 @@ def bake(args: argparse.Namespace) -> None:
         src_pos=src_pos,
         src_fwd=src_fwd,
         src_cuts=np.zeros((0, 2)),
+        **({"vis_frames": np.array(vis_frames), "src_visibility": np.array(vis, dtype=np.float32)} if vis else {}),
     )
     for w in padding_warnings(spatial, listener_matrix, src_pos, settings["speed_of_sound"], pad / fps):
         log(f"WARNING {w}")
@@ -211,6 +265,11 @@ def bake(args: argparse.Namespace) -> None:
         "units": {"scale_length": scale},
         "settings": settings,
         "listener": {"objects": listener_names},
+        "occlusion": ({"bands_hz": list(occlusion.BANDS_HZ), "samples": len(vis_frames),
+                       "occluders": occluders.counts, "geometry": "boxes",
+                       "blockers": {s["id"]: [[name, round(n / (len(vis_frames) * occlusion.PATHS), 3)]
+                                              for name, n in blockers[j].most_common(3)]
+                                    for j, s in enumerate(spatial) if blockers[j]}} if vis else None),
         "sources": sources,
         "arrays": "scene.npz",
         "warnings": warnings,

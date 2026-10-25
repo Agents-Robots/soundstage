@@ -55,6 +55,8 @@ class Scene:
     src_pos: np.ndarray  # (N, S, 3)
     src_fwd: np.ndarray | None = None  # (N, S, 3) emitter forward vectors (absent: omnidirectional)
     src_cuts: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))  # (K, 2) (track, frame)
+    vis_frames: np.ndarray | None = None  # (M,) frames of the visibility samples
+    src_visibility: np.ndarray | None = None  # (M, S, bands) open share of each band
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -69,6 +71,11 @@ class Scene:
     @property
     def frame_end(self) -> int:
         return self.manifest["time"]["frame_end"]
+
+    @property
+    def visibility_bands(self) -> list[float]:
+        occ = self.manifest.get("occlusion") or {}
+        return occ.get("bands_hz", [250.0, 1000.0, 4000.0])
 
     @property
     def sample_rate(self) -> int:
@@ -153,6 +160,8 @@ def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
         src_fwd=(arrays["src_fwd"].astype(np.float64).reshape(len(arrays["frames"]), n_tracks, 3)
                  if "src_fwd" in arrays else None),
         src_cuts=arrays.get("src_cuts", np.zeros((0, 2))).reshape(-1, 2),
+        vis_frames=arrays["vis_frames"].astype(np.float64) if "vis_frames" in arrays else None,
+        src_visibility=arrays["src_visibility"].astype(np.float64) if "src_visibility" in arrays else None,
         warnings=list(manifest.get("warnings", [])),
     )
 
