@@ -11,9 +11,12 @@ What you produce:
 - `<project>/audio/out/<shot>.wav` + `<shot>.report.json`: the stereo mix and its report;
 - `<project>/audio/out/<shot>_preview.mp4`: the mix on the rendered frames, if there are any.
 
-What the engine does today (Phase 1): loudness by distance, left/right panning by the side of the
-camera, loops and one-shots, ambience beds, a 48 kHz float WAV that starts exactly at the first
-frame, and an MP4 preview on the rendered frames. Not yet: Doppler, propagation delay, filters, occlusion, reverb ([roadmap](roadmap.md)).
+What the engine does today (Phase 2): loudness by distance; sound travels at 343 m/s, so distant
+events are heard late; Doppler from the motion of sources and camera; left/right panning with a
+small interaural delay and head shadow; air absorption (distant sounds lose treble); a mild treble
+cut and level drop for sources behind the camera; directivity cones; clean camera cuts; loops,
+one-shots and ambience beds; a 48 kHz float WAV that starts exactly at the first frame; an MP4
+preview on the rendered frames. Not yet: occlusion, reverb, stems ([roadmap](roadmap.md)).
 
 ## 0. Setup (once per checkout)
 
@@ -65,14 +68,22 @@ Rules of thumb:
 | Source | Mode | `ref_distance` | Notes |
 |---|---|---|---|
 | Vehicle, ship, machine | loop | about its size: 5-50 m | `group="engines"` |
-| Flyby accent | once, `frame` = closest frame − half the sample length | as the engine | whoosh |
-| Impact, door, explosion | once, `frame` = the frame of the event | 2-20 m | from `keyframes` or `moving_frames` (end of a fall) |
+| Flyby accent | once, `frame` = closest frame − the pass moment in the sample | as the engine | whoosh without baked pitch fall: the engine adds the Doppler |
+| Impact, door, explosion | once, `frame` = the frame of the event | 2-20 m | from `keyframes` or `moving_frames` (end of a fall); `sync_to_picture=True` if it must hit on the frame |
 | Repeating event (beacon, footsteps) | once, `frame=[...]` | 0.5-3 m | one source, list of frames |
 | Ambience, room tone, music | loop, `spatial=False` | — | on any object, `group="ambience"` |
 
 - The inverse distance law loses 6 dB per doubling beyond `ref_distance`. A source whose
   `distance_m` minimum is 20× its `ref_distance` peaks at −26 dB: raise `ref_distance` or `gain_db`
   if it must be heard.
+- Sound is heard `distance / 343` s after it is emitted: one frame (30 fps) per 11 m. An explosion
+  300 m away is heard 26 frames late, which sells scale but can look like a sync error on a cut; set
+  `sync_to_picture=True` on one-shots that must land on their frame (the Doppler during the sound
+  stays).
+- A sound that should point somewhere (a horn, a jet nozzle, a loudspeaker): `forward_axis` and
+  `cone_inner_deg` / `cone_outer_deg` / `cone_outer_gain_db`.
+- Doppler too strong or too weak for the story: scene `doppler_factor` (0 = off, 1 = physical), or
+  per source `doppler`.
 - Keep the number of sources small (up to ~50); prefer the few objects that the viewer looks at.
 - Frames are in the scene's frame numbers; fractional frames are allowed.
 
@@ -91,9 +102,12 @@ soundstage bake <project>/shot.blend --run <project>/audio/sounds.py --out <proj
 soundstage inspect <project>/audio/bake/<shot>/scene.json
 ```
 
-The bake prints one line per source; `inspect` shows each source's distance range. For very heavy
-scenes, `--substeps 1 --pad 0` makes the bake several times faster at no cost in the current MVP (sub-frames
-and padding are only used by Doppler and delay, which come later).
+The bake prints one line per source; `inspect` shows each source's distance range and the
+playback-rate range its motion implies (Doppler). Keep the defaults (`--substeps 4 --pad 3`) when
+you can: sub-frames keep fast motion smooth, and the padding must cover the travel time of the
+farthest source (the bake warns otherwise, with the `--pad` it needs). The bake costs one scene
+evaluation per sub-frame; for very heavy scenes `--substeps 2` is fine for objects slower than
+about 50 m/s, but never drop the padding below what the warning asks for.
 
 ## 6. Render
 
@@ -112,11 +126,17 @@ Read `<shot>.report.json` and check:
 - every source has `audible_frames > 0`; a source that should be prominent has a `peak_dbfs`
   between about −30 and −3;
 - `master.peak_dbfs` below 0 and `lufs_integrated` roughly −30 to −16 for an effects mix;
-- `distance_m` ranges match what the scan said.
+- `distance_m` ranges match what the scan said; `delay_ms` ≈ distance / 343;
+- `rate` (playback rate) of moving sources: above 1 while approaching, below 1 while receding,
+  `c / (c ∓ v)` for speed `v` (30 m/s ≈ 1.10 / 0.92); a warning "playback rate clamped" means
+  near-supersonic motion (lower `doppler` for that source) or a jump the engine did not recognize
+  as a teleport (check `scene["sfx_settings"]["teleport_speed"]`).
 
 For a stronger check, render single sources with `--solo` and measure with numpy/soundfile: the
-onset of a one-shot must be at sample `round((frame − frame_start) · 48000 / fps)`; a source left
-of the camera must be louder in channel 0, right in channel 1.
+onset of a one-shot is at sample `round((frame − frame_start) · 48000 / fps)` plus its travel time
+(exactly on the frame with `sync_to_picture`); a source left of the camera is louder in channel 0,
+right in channel 1. A spectrogram of a solo render (`scipy.signal.spectrogram`, saved as PNG) shows
+the Doppler glide of a passing source; read it as an image.
 
 ## 8. Preview and hand over
 

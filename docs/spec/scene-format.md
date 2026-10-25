@@ -126,9 +126,9 @@ Let `N` = number of time samples = `(frame_end − frame_start + pad_before + pa
 | `listener_index` | (N,) int16 | Index into `listener.objects` of the active camera. |
 | `cuts` | (C,) float64 | Frames where the listener jumps (camera switch, or a jump detected in the trajectory). A cut lies between two time samples; its value is the first sample after it. |
 | `src_pos` | (N, S, 3) float64 | Emitter world position (object matrix applied to `offset`), metres. |
-| `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space. *(Phase 2; absent = omnidirectional)* |
+| `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space (absent = omnidirectional). |
 | `src_visibility` | (N, S) float32 | Visible fraction 0…1 from the listener. *(Phase 3; absent = 1)* |
-| `src_cuts` | (K, 2) float64 | `(track, frame)` pairs where a source teleports (hide/unhide, keyframe jump). |
+| `src_cuts` | (K, 2) float64 | `(track, frame)` pairs where a source teleports. Optional: the bake writes it empty, because the engine detects teleports itself from `src_pos` (speed above `teleport_speed`); other tools may fill it. |
 | `prop_<name>` | (N, S) float32 | Sampled animated property values (`gain_prop`, `pitch_prop`). *(Phase 4)* |
 
 Conventions:

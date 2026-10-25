@@ -7,18 +7,21 @@ import soundfile as sf
 from soundstage.engine import mix, render
 from soundstage.engine.report import metrics
 
-from conftest import RATE, onset, rms_db
+from conftest import RATE, onset, peak_index, rms_db
+
+
+PLAIN = {"panner": "amplitude", "air_absorption": 0.0}  # distance gain and pan only
 
 
 def test_level_drops_6db_at_twice_the_reference_distance(make_scene, sine):
-    near = make_scene([{"sample": sine, "ref_distance": 5}], [[0, 5, 0]])
-    far = make_scene([{"sample": sine, "ref_distance": 5}], [[0, 10, 0]])
+    near = make_scene([{"sample": sine, "ref_distance": 5}], [[0, 5, 0]], settings=PLAIN)
+    far = make_scene([{"sample": sine, "ref_distance": 5}], [[0, 10, 0]], settings=PLAIN)
     a, b = render.render(near).audio, render.render(far).audio
     assert rms_db(b) - rms_db(a) == pytest.approx(-6.02, abs=0.1)
 
 
 def test_source_in_front_is_centred_at_minus_3db(make_scene, sine):
-    out = render.render(make_scene([{"sample": sine, "loop_phase": 0.0}], [[0, 1, 0]])).audio
+    out = render.render(make_scene([{"sample": sine, "loop_phase": 0.0}], [[0, 1, 0]], settings=PLAIN)).audio
     assert np.allclose(out[:, 0], out[:, 1])
     assert rms_db(out[:, 0]) == pytest.approx(rms_db(0.5 * np.sin(np.linspace(0, 2000 * np.pi, 96000))) - 3.01, abs=0.05)
 
@@ -29,10 +32,11 @@ def test_source_on_the_right_is_louder_right(make_scene, sine):
 
 
 def test_one_shot_onset_and_output_length(make_scene, click):
-    scene = make_scene([{"sample": click, "mode": "once", "frame": 120}], [[0, 1, 0]], frame_end=240)
+    scene = make_scene([{"sample": click, "mode": "once", "frame": 120, "sync_to_picture": True}], [[0, 1, 0]],
+                       frame_end=240, settings=PLAIN)
     result = render.render(scene)
     assert len(result.audio) == 240 * 1600
-    assert onset(result.audio) == 190400
+    assert peak_index(result.audio) == 190400  # band-limited reads ring symmetrically around the click
 
 
 def test_moving_source_pans_left_to_right(make_scene, sine):
@@ -52,10 +56,11 @@ def test_bed_ignores_position_and_keeps_stereo(make_scene, wav):
 
 
 def test_frame_subrange_starts_at_its_first_frame(make_scene, click):
-    scene = make_scene([{"sample": click, "mode": "once", "frame": 50}], [[0, 1, 0]])
+    scene = make_scene([{"sample": click, "mode": "once", "frame": 50, "sync_to_picture": True}], [[0, 1, 0]],
+                       settings=PLAIN)
     result = render.render(scene, frames=(41, 60))
     assert len(result.audio) == 20 * 1600
-    assert onset(result.audio) == 9 * 1600
+    assert peak_index(result.audio) == 9 * 1600
 
 
 def test_solo_and_mute(make_scene, sine, click):
@@ -79,8 +84,8 @@ def test_pcm24_output(make_scene, sine, tmp_path):
 
 
 def test_unimplemented_parameters_are_warned(make_scene, sine):
-    result = render.render(make_scene([{"sample": sine, "doppler": 2.0}], [[0, 1, 0]]))
-    assert any("'doppler' is not implemented" in w for w in result.warnings)
+    result = render.render(make_scene([{"sample": sine, "occlusion_radius": 2.0}], [[0, 1, 0]]))
+    assert any("'occlusion_radius' is not implemented" in w for w in result.warnings)
 
 
 def test_metrics_of_a_full_scale_sine():

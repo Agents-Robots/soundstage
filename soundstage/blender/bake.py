@@ -48,6 +48,28 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+AXIS_VECTORS = {
+    "X": Vector((1, 0, 0)), "-X": Vector((-1, 0, 0)),
+    "Y": Vector((0, 1, 0)), "-Y": Vector((0, -1, 0)),
+    "Z": Vector((0, 0, 1)), "-Z": Vector((0, 0, -1)),
+}
+
+
+def padding_warnings(spatial: list[dict], listener_matrix, src_pos, speed_of_sound: float,
+                     pad_seconds: float) -> list[str]:
+    """One warning if sources are farther away (in travel time) than the padding covers."""
+    if not spatial:
+        return []
+    delay = np.linalg.norm(src_pos - listener_matrix[:, None, :3, 3], axis=2).max(axis=0) / speed_of_sound
+    over = np.nonzero(delay > pad_seconds)[0]
+    if not len(over):
+        return []
+    worst = int(over[np.argmax(delay[over])])
+    return [f"padding {pad_seconds:.2f} s is shorter than the travel time of {len(over)} source(s) (up to "
+            f"{delay[worst]:.2f} s, {spatial[worst]['id']}); bake with --pad {math.ceil(delay[worst] * 10) / 10:g} "
+            "for exact delays and Doppler at the start of the shot"]
+
+
 def resolve_sample_path(sample: str, samples_root: str) -> str:
     if sample.startswith("//"):
         return os.path.normpath(bpy.path.abspath(sample))
@@ -118,6 +140,7 @@ def bake(args: argparse.Namespace) -> None:
         s.setdefault("track", None)
     objects = [scene.objects[s["object"]] for s in spatial]
     offsets = [Vector(s["offset"]) for s in spatial]
+    axes = [AXIS_VECTORS[s["forward_axis"]] for s in spatial]
 
     first, last = frame_start - pad, frame_end + pad
     n = (last - first) * substeps + 1
@@ -125,6 +148,7 @@ def bake(args: argparse.Namespace) -> None:
     listener_matrix = np.zeros((n, 4, 4))
     listener_index = np.zeros(n, dtype=np.int16)
     src_pos = np.zeros((n, len(spatial), 3))
+    src_fwd = np.zeros((n, len(spatial), 3), dtype=np.float32)
     listener_names: list[str] = []
     cuts: list[float] = []
 
@@ -146,8 +170,11 @@ def bake(args: argparse.Namespace) -> None:
         loc, rot, _ = listener.evaluated_get(depsgraph).matrix_world.decompose()
         m = Matrix.LocRotScale(loc * scale, rot, None)
         listener_matrix[k] = np.array(m)
-        for j, (obj, off) in enumerate(zip(objects, offsets)):
-            src_pos[k, j] = np.array(obj.evaluated_get(depsgraph).matrix_world @ off) * scale
+        for j, (obj, off, axis) in enumerate(zip(objects, offsets, axes)):
+            mw = obj.evaluated_get(depsgraph).matrix_world
+            src_pos[k, j] = np.array(mw @ off) * scale
+            fwd = mw.to_3x3() @ axis
+            src_fwd[k, j] = np.array(fwd.normalized() if fwd.length > 1e-12 else axis)
     scene.frame_set(original_frame)
 
     out = Path(args.out).resolve()
@@ -159,8 +186,12 @@ def bake(args: argparse.Namespace) -> None:
         listener_index=listener_index,
         cuts=np.array(cuts, dtype=np.float64),
         src_pos=src_pos,
+        src_fwd=src_fwd,
         src_cuts=np.zeros((0, 2)),
     )
+    for w in padding_warnings(spatial, listener_matrix, src_pos, settings["speed_of_sound"], pad / fps):
+        log(f"WARNING {w}")
+        warnings.append(w)
     manifest = {
         "format": FORMAT,
         "version": VERSION,

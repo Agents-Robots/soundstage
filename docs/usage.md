@@ -187,6 +187,6 @@ Things that differ from a person's workflow:
 | Event sound late compared to picture | Propagation delay (by design) or leading silence in the sample | `sync_to_picture=True`; trim the sample |
 | Audio drifts against picture over the shot | Resolve timeline fps differs from Blender fps | Match timeline fps to `fps/fps_base` |
 | Source inaudible | `ref_distance` too small for the scene scale, or wrong `scale_length` | Check `distance_m` in the report; raise `ref_distance` |
-| Sudden pitch jump or warble | Object teleports or bad keyframes; sub-frames too coarse for very fast motion | `inspect` for speed spikes; raise `--substeps` |
+| Sudden pitch jump or warble | Bad keyframes, a jump slower than `teleport_speed` (not recognized as a teleport), or sub-frames too coarse for very fast motion | `inspect` for speed spikes; lower `teleport_speed`; raise `--substeps` |
 | "playback rate clamped" warning | Source near or above Mach 1 | Lower `doppler` for that source, or accept the clamp |
 | Clicks at a camera cut | Cut not detected (camera jumps without a camera switch) | Bake detects jumps above a threshold; report a bug with the scene file |

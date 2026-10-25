@@ -1,28 +1,33 @@
 """Render orchestration: scene in, stereo buffer and statistics out.
 
-Processes the output window in chunks (10 s). Per chunk and source: dry timeline, then for spatial
-sources the control-rate geometry (distance gain, constant-power pan) upsampled to audio rate;
-bed sources get gain only. Sources accumulate into the master.
+Builds the shared context (control grid, scene geometry, interpolator, panner) and one renderer
+per source or voice (``engine/source.py``), then renders the output window in chunks (4 s). Within
+a chunk the renderers run in a thread pool (numba kernels release the GIL); contributions are
+summed in source order, so the output is bit-identical between runs (NFR-2, ADR 0009).
 
-Supports frame sub-ranges and solo/mute (FR-67). Phase 1: no propagation delay, Doppler, ear
-model or filters. Data flow: docs/architecture.md#data-flow-inside-a-render.
+Supports frame sub-ranges and solo/mute (FR-67). Data flow: docs/architecture.md#data-flow-inside-a-render.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from soundstage.blender import schema
-from soundstage.engine import filters, geometry, panning, signals
+from soundstage.engine import filters, kernels, panning, propagation, signals
+from soundstage.engine.control import CONTROL_STEP, ControlGrid
+from soundstage.engine.geometry import SceneGeometry
 from soundstage.engine.scene import Scene, Source
+from soundstage.engine.source import RenderContext, make_renderers
 
-CHUNK_BLOCKS = 10_000
-"""Control blocks per chunk (10 s at 48 kHz)."""
+CHUNK_BLOCKS = 4_000
+"""Control blocks per chunk (4 s at 48 kHz)."""
 
 AUDIBLE_DBFS = -60.0
 
@@ -62,92 +67,116 @@ def _active_frames(src: Source, sample_len: int, scene: Scene, fa: int, fb: int)
 
 
 def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] = (),
-           mute: list[str] = ()) -> RenderResult:
+           mute: list[str] = (), workers: int | None = None) -> RenderResult:
     t_start = time.perf_counter()
     rate = scene.sample_rate
+    s = scene.settings
     fa, fb = frames or (scene.frame_start, scene.frame_end)
     n0 = scene.sample_of(fa)
     n1 = n0 + scene.length_samples(fa, fb)
-    step = geometry.CONTROL_STEP
+    step = CONTROL_STEP
     warnings = list(scene.warnings)
     for key in schema.unimplemented(scene.manifest.get("settings", {}), schema.SCENE_SETTINGS):
         warnings.append(f"setting {key!r} is not implemented yet, ignored")
 
     active = select(scene.sources, list(solo), list(mute))
-    samples = {}
-    for s in active:
-        samples[s.id] = signals.load_sample(s.params["sample"], rate, pitch=s.params["pitch"], stereo=not s.spatial)
-        for key in schema.unimplemented(s.params, schema.SOURCE_KEYS):
-            warnings.append(f"{s.id}: {key!r} is not implemented yet, ignored")
-    t_loaded = time.perf_counter()
+    interp = propagation.interpolator_for(s["quality"])
+    grid = ControlGrid.covering(n0, n1, rate)
+    ctx = RenderContext(scene=scene, grid=grid, geometry=SceneGeometry(scene, grid), interp=interp,
+                        panner=panning.PANNERS[s["panner"]](s), rate=rate)
+    kernels.warmup()
+    filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], ctx.emission_rate)  # fit once, cached
+    n_workers = max(1, min(workers or os.cpu_count() or 1, len(active)))
 
-    t_baked = scene.seconds(scene.frames)
-    cut_times = scene.seconds(scene.cuts)
-    q_baked = geometry.camera_space(scene.listener_matrix, scene.src_pos)
+    def build(src: Source) -> tuple[list, float]:
+        sample_rate = ctx.emission_rate if src.spatial else rate
+        sample = signals.load_sample(src.params["sample"], sample_rate, pitch=src.params["pitch"],
+                                     stereo=not src.spatial)
+        return make_renderers(ctx, src, sample), len(sample) * rate / sample_rate
+
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        built = list(pool.map(build, active))
+    voices = [b[0] for b in built]
+    sample_len = {src.id: b[1] for src, b in zip(active, built)}
+    for src in active:
+        for key in schema.unimplemented(src.params, schema.SOURCE_KEYS):
+            warnings.append(f"{src.id}: {key!r} is not implemented yet, ignored")
+    t_loaded = time.perf_counter()
 
     master = np.zeros((n1 - n0, 2))
     n_blocks = -(-(n1 - n0) // step)
-    block_peak = {s.id: np.zeros(n_blocks) for s in active}
-    dist_range = {s.id: [np.inf, -np.inf] for s in active if s.spatial}
+    block_peak = [np.zeros(n_blocks) for _ in active]
     chunk = CHUNK_BLOCKS * step
-    for c0 in range(n0, n1, chunk):
-        c1 = min(c0 + chunk, n1)
-        idx = np.arange(c0, c1)
-        ctl = np.arange(c0, c1 + step, step)
-        for s in active:
-            p = s.params
-            f = p["frame"]
-            start = None if f is None else [scene.sample_of(x) for x in f] if isinstance(f, list) else scene.sample_of(f)
-            end = scene.sample_of(p["end_frame"]) if p["end_frame"] is not None else None
-            dry = signals.dry_timeline(samples[s.id], p, rate, start, end, c0, c1, s.id)
-            gain = filters.db_to_gain(p["gain_db"])
-            if s.spatial:
-                q = geometry.interpolate(t_baked, q_baked[:, s.track], ctl / rate, cut_times)
-                d = geometry.derived(q)
-                g = gain * filters.distance_gain(d["distance"], p["distance_model"], p["ref_distance"],
-                                                 p["max_distance"], p["rolloff"])
-                gl, gr = panning.constant_power(d["lateral"])
-                contrib = np.stack([dry * np.interp(idx, ctl, g * gl), dry * np.interp(idx, ctl, g * gr)], axis=1)
-                r = dist_range[s.id]
-                r[0], r[1] = min(r[0], d["distance"].min()), max(r[1], d["distance"].max())
-            else:
-                contrib = dry * gain
-            master[c0 - n0: c1 - n0] += contrib
-            peaks = np.abs(contrib).max(axis=1)
-            b0 = (c0 - n0) // step
-            block_peak[s.id][b0: b0 + -(-(c1 - c0) // step)] = np.maximum.reduceat(peaks, np.arange(0, c1 - c0, step))
-    master *= filters.db_to_gain(scene.settings["master_gain_db"])
+
+    def source_chunk(i: int, c0: int, c1: int) -> np.ndarray:
+        """All voices of source i over [c0, c1), and its 1 ms block peaks (in the worker thread)."""
+        contrib = voices[i][0].render(c0, c1)
+        for r in voices[i][1:]:
+            contrib = contrib + r.render(c0, c1)
+        b0 = (c0 - n0) // step
+        starts = np.arange(0, c1 - c0, step)
+        block_peak[i][b0: b0 + len(starts)] = np.maximum.reduceat(np.abs(contrib).max(axis=1), starts)
+        return contrib
+
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for c0 in range(n0, n1, chunk):
+            c1 = min(c0 + chunk, n1)
+            for contrib in pool.map(lambda i: source_chunk(i, c0, c1), range(len(active))):
+                master[c0 - n0: c1 - n0] += contrib  # in source order: deterministic
+    master *= filters.db_to_gain(s["master_gain_db"])
     t_dsp = time.perf_counter()
 
     # Block index of each frame boundary, for per-frame audibility.
     frame_blocks = [(scene.sample_of(f) - n0) // step for f in range(fa, fb + 2)]
+    infos = {i: [r.info for r in v] for i, v in enumerate(voices)}
+    before_bake: list[tuple[float, str]] = []
     stats = []
-    for s in active:
-        bp = block_peak[s.id]
-        audible = sum(
-            1 for a, b in zip(frame_blocks[:-1], frame_blocks[1:])
-            if b > a and filters.gain_to_db(bp[a:b].max()) > AUDIBLE_DBFS
-        )
+    fb_lo = np.clip(np.array(frame_blocks[:-1]), 0, n_blocks - 1)
+    fb_ok = np.array(frame_blocks[1:]) > np.array(frame_blocks[:-1])
+    threshold = float(filters.db_to_gain(AUDIBLE_DBFS))
+    for i, src in enumerate(active):
+        bp = block_peak[i]
+        frame_peak = np.maximum.reduceat(bp, fb_lo) if len(bp) else np.zeros(0)
+        audible = int(np.sum((frame_peak > threshold) & fb_ok)) if len(bp) else 0
         st = {
-            "id": s.id,
-            "group": s.group,
-            "sample": os.path.basename(s.params["sample"]),
-            "mode": s.params["mode"],
-            "spatial": s.spatial,
-            "active_frames": _active_frames(s, len(samples[s.id]), scene, fa, fb),
+            "id": src.id,
+            "group": src.group,
+            "sample": os.path.basename(src.params["sample"]),
+            "mode": src.params["mode"],
+            "spatial": src.spatial,
+            "active_frames": _active_frames(src, sample_len[src.id], scene, fa, fb),
             "peak_dbfs": round(float(filters.gain_to_db(bp.max() if len(bp) else 0.0)), 2),
             "audible_frames": audible,
         }
-        if s.spatial:
-            st["distance_m"] = [round(float(v), 2) for v in dist_range[s.id]]
+        if src.spatial:
+            info = infos[i]
+            dist = np.concatenate([x["distance"] for x in info])
+            rates = np.concatenate([x["rate"] for x in info])
+            delay = np.concatenate([x["delay"] for x in info])
+            st["distance_m"] = [round(float(dist.min()), 2), round(float(dist.max()), 2)]
+            st["delay_ms"] = [round(float(delay.min()) * 1e3, 1), round(float(delay.max()) * 1e3, 1)]
+            st["rate"] = [round(float(rates.min()), 4), round(float(rates.max()), 4)]
+            clamped = max(x["clamped"] for x in info)
+            if clamped:
+                warnings.append(f"{src.id}: playback rate clamped to [{propagation.RATE_MIN:g}, "
+                                f"{propagation.RATE_MAX:g}] for {clamped * step / rate:.2f} s "
+                                "(near- or supersonic motion)")
+            early = max(x["before_bake"] for x in info) * step / rate
+            if early:
+                before_bake.append((early, src.id))
         stats.append(st)
         if audible == 0:
-            warnings.append(f"{s.id}: never audible (peak below {AUDIBLE_DBFS:g} dBFS in every frame)")
+            warnings.append(f"{src.id}: never audible (peak below {AUDIBLE_DBFS:g} dBFS in every frame)")
+    if before_bake:
+        worst, worst_id = max(before_bake)
+        warnings.append(f"{len(before_bake)} source(s) need positions from before the baked range (up to "
+                        f"{worst:.2f} s, {worst_id}); positions are held there. Re-bake with --pad "
+                        f"{math.ceil(worst * 10) / 10:g} for exact delays and Doppler at the start")
     return RenderResult(
         audio=master,
         rate=rate,
         frames=(fa, fb),
         sources=stats,
         warnings=warnings,
-        timing_s={"load": round(t_loaded - t_start, 3), "dsp": round(t_dsp - t_loaded, 3)},
+        timing_s={"load": round(t_loaded - t_start, 3), "dsp": round(t_dsp - t_loaded, 3), "workers": n_workers},
     )

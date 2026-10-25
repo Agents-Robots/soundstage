@@ -55,5 +55,5 @@ def test_settings_defaults_and_parse_value():
 
 
 def test_unimplemented_reports_only_non_default_later_phase_keys():
-    entry = schema.resolve_source({"sample": "a", "doppler": 2.0, "gain_db": -3})
-    assert schema.unimplemented(entry, schema.SOURCE_KEYS) == ["doppler"]
+    entry = schema.resolve_source({"sample": "a", "occlusion": False, "doppler": 2.0, "gain_db": -3})
+    assert schema.unimplemented(entry, schema.SOURCE_KEYS) == ["occlusion"]

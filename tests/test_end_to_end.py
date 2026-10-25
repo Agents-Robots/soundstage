@@ -52,8 +52,15 @@ def test_bake_and_render(flyby):
 
     assert main(["render", str(bake_dir / "scene.json"), "-o", str(flyby / "crate.wav"), "--solo", "Crate:*"]) == 0
     crate, _ = sf.read(flyby / "crate.wav")
-    assert abs(onset(crate) - 179 * 1600) <= 2  # impact at frame 180
+    arrays = np.load(bake_dir / "scene.npz")
+    k = int(np.argmin(np.abs(arrays["frames"] - 180)))
+    track = next(s["track"] for s in manifest["sources"] if s["id"] == "Crate:0")
+    distance = np.linalg.norm(arrays["src_pos"][k, track] - arrays["listener_matrix"][k, :3, 3])
+    expected = 179 * 1600 + distance / 343.0 * RATE  # impact at frame 180, heard after its travel time
+    assert abs(onset(crate, threshold=0.01 * np.abs(crate).max()) - expected) <= 20
     assert rms_db(crate[:, 1]) > rms_db(crate[:, 0])  # crate is right of the camera
+    assert arrays["src_fwd"].shape == arrays["src_pos"].shape
+    assert np.allclose(np.linalg.norm(arrays["src_fwd"], axis=2), 1.0, atol=1e-5)
 
     assert main(["render", str(bake_dir / "scene.json"), "-o", str(flyby / "ship.wav"), "--solo", "Ship:0"]) == 0
     ship, _ = sf.read(flyby / "ship.wav")
@@ -120,7 +127,9 @@ def test_preview_of_rendered_frames(flyby, tmp_path):
                          capture_output=True, check=True).stdout
     audio = np.frombuffer(raw, dtype=np.float32).reshape(-1, 2)
     loud = np.nonzero(np.abs(audio).max(axis=1) > 0.1 * np.abs(audio).max())[0]
-    assert abs(loud[0] - 179 * 1600) <= 48  # the impact at frame 180, within 1 ms
+    mixed, _ = sf.read(mix)
+    in_mix = np.nonzero(np.abs(mixed).max(axis=1) > 0.1 * np.abs(mixed).max())[0][0]
+    assert abs(loud[0] - in_mix) <= 48  # the MP4 keeps the WAV's timing to within 1 ms
 
 
 def test_bake_and_scan_a_named_scene(flyby, tmp_path):
@@ -175,3 +184,31 @@ tag.add_sound(bpy.data.objects["Crate"], "click.wav", mode="once", frame=180, re
     assert rate == RATE and len(audio) == 240 * 1600
     assert onset(audio, threshold=0.1 * np.abs(audio).max()) == 179 * 1600  # same frame as soundstage
     assert np.abs(audio[:, 1]).max() > np.abs(audio[:, 0]).max()  # crate on the right
+
+
+def test_bake_records_marker_camera_switches_and_warns_about_padding(flyby, tmp_path):
+    build = tmp_path / "switch.py"
+    build.write_text(f"""
+import bpy
+s = bpy.context.scene
+cam2 = bpy.data.objects.new("Camera2", bpy.data.cameras.new("Camera2"))
+s.collection.objects.link(cam2)
+cam2.location = (0, -50, 1.7)
+cam2.rotation_euler = (1.5708, 0, 0)
+m1 = s.timeline_markers.new("A", frame=1)
+m1.camera = s.objects["Camera"]
+m2 = s.timeline_markers.new("B", frame=100)
+m2.camera = cam2
+bpy.ops.wm.save_as_mainfile(filepath={str(tmp_path / "switch.blend")!r})
+""")
+    subprocess.run(["blender", "-b", str(flyby / "flyby.blend"), "--factory-startup", "--python-exit-code", "1",
+                    "--python", str(build)], check=True, capture_output=True)
+    out = tmp_path / "bake"
+    assert main(["bake", str(tmp_path / "switch.blend"), "--run", str(REPO / "examples" / "flyby_sounds.py"),
+                 "--out", str(out), "--pad", "0", "--substeps", "1"]) == 0
+    manifest = json.loads((out / "scene.json").read_text())
+    arrays = np.load(out / "scene.npz")
+    assert manifest["listener"]["objects"] == ["Camera", "Camera2"]
+    assert list(arrays["cuts"]) == [100.0]
+    assert any(w.startswith("padding 0.00 s") for w in manifest["warnings"])
+    assert main(["render", str(out / "scene.json"), "-o", str(tmp_path / "mix.wav")]) == 0

@@ -20,7 +20,7 @@ reference to beat and a confirmed list of what they lack.
   [spec/tagging.md](spec/tagging.md)).
 
 Done when: a mixdown WAV exists (or the failure is understood), findings are in
-[research.md](research.md), and the ID-property question is answered.
+[research/](../research/experiments/E01-blender-speaker-baseline.md), and the ID-property question is answered.
 
 ## Phase 1: MVP, the minimum requirements
 

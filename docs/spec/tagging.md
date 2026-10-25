@@ -30,14 +30,14 @@ linked duplicates can carry different sounds). Keys not listed below are an erro
 | `ref_distance` | float m | 1.0 | Distance at which the gain is `gain_db`. Closer does not get louder. |
 | `max_distance` | float m \| null | null | Beyond this the gain stops falling (inverse/exponential) or reaches 0 (linear, required there). Also the culling distance. |
 | `rolloff` | float | 1.0 | Steepness of the distance model. |
-| `offset` | [x, y, z] m | [0, 0, 0] | Emitter position in object-local coordinates. *(Phase 2)* |
-| `forward_axis` | str | `"-Z"` | Object axis the cone points along: `±X`, `±Y`, `±Z`. Same default as Blender Speaker objects. *(Phase 2)* |
-| `cone_inner_deg` | float | 360 | Full angle of the cone with full gain. *(Phase 2)* |
-| `cone_outer_deg` | float | 360 | Full angle beyond which the gain is `cone_outer_gain_db`. *(Phase 2)* |
-| `cone_outer_gain_db` | float | −12.0 | Gain outside the outer cone. *(Phase 2)* |
-| `doppler` | float | 1.0 | Multiplies the scene's `doppler_factor` for this source. *(Phase 2)* |
-| `air_absorption` | float | 1.0 | Multiplies the scene's `air_absorption`. *(Phase 2)* |
-| `sync_to_picture` | bool | false | One-shots: remove the propagation delay at the trigger, so the onset lands on `frame`. Doppler during playback stays. *(Phase 2)* |
+| `offset` | [x, y, z] m | [0, 0, 0] | Emitter position in object-local coordinates. |
+| `forward_axis` | str | `"-Z"` | Object axis the cone points along: `±X`, `±Y`, `±Z`. Same default as Blender Speaker objects. |
+| `cone_inner_deg` | float | 360 | Full angle of the cone with full gain. |
+| `cone_outer_deg` | float | 360 | Full angle beyond which the gain is `cone_outer_gain_db`. |
+| `cone_outer_gain_db` | float | −12.0 | Gain outside the outer cone. |
+| `doppler` | float | 1.0 | Multiplies the scene's `doppler_factor` for this source. |
+| `air_absorption` | float | 1.0 | Multiplies the scene's `air_absorption`. |
+| `sync_to_picture` | bool | false | One-shots: remove the propagation delay at the trigger, so the onset lands on `frame`. Doppler during playback stays. |
 | `occlusion` | bool | true | Apply occlusion from the baked visibility. *(Phase 3)* |
 | `occlusion_radius` | float m | 0.5 | Spread of the visibility rays around the emitter (soft occlusion edges). *(Phase 3)* |
 | `reverb_send_db` | float \| null | null | Send level to the scene reverb; null = scene default. *(Phase 3)* |
@@ -58,8 +58,12 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `sample_rate` | 48000 | Output sample rate. |
 | `speed_of_sound` | 343.0 m/s | Propagation speed. |
 | `doppler_factor` | 1.0 | 0 = no Doppler (constant delay), 1 = physical, >1 exaggerated. |
-| `air_absorption` | 1.0 | Scales the air absorption coefficient; 0 = off. |
+| `air_absorption` | 1.0 | Scales the air absorption coefficient (ISO 9613-1); 0 = off. |
+| `air_temperature_c` | 20.0 | Air temperature for the absorption coefficient. |
+| `air_humidity_pct` | 50.0 | Relative humidity for the absorption coefficient. |
+| `teleport_speed` | null | Speed (m/s) between two baked samples above which a source or the listener counts as teleported (no Doppler glide across the jump); null = 3 × `speed_of_sound`. |
 | `panner` | `"hybrid"` | `amplitude`, `hybrid`; `binaural` in Phase 4. |
+| `pan_law` | `"sine"` | `sine` (φ = (λ+1)π/4) or `power` (g² = (1 ± λ)/2, softer at the sides, as Blender's speakers). |
 | `itd_scale` | 0.5 | Fraction of the physical interaural time difference used by `hybrid`. |
 | `head_shadow` | 0.5 | Strength of the head-shadow filter in `hybrid` (0 = off, 1 = full spherical-head model). |
 | `head_radius` | 0.0875 m | Listener head radius. |
@@ -67,9 +71,9 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `rear_gain_db` | −2.0 | Extra gain for a source directly behind the camera. |
 | `master_gain_db` | 0.0 | Gain on the master sum. |
 | `substeps` | 4 | Bake sub-frames per frame. |
-| `pad_seconds` | 3.0 | Bake padding before and after the shot (covers ~1 km of propagation). |
+| `pad_seconds` | 3.0 | Bake padding before and after the shot (covers ~1 km of propagation; the bake warns if a source is farther away in travel time). |
 | `listener` | null | Object name to use instead of the active camera. |
-| `quality` | `"standard"` | Fractional-delay interpolation: `standard` (cubic) or `high` (windowed sinc). *(Phase 2)* |
+| `quality` | `"standard"` | Fractional-delay interpolation: `standard` (2× oversampled, 6-point polynomial) or `high` (anti-aliased windowed sinc, slower; for extreme Doppler). |
 | `occlusion_gain_db` | −12.0 | Gain of a fully occluded source. *(Phase 3)* |
 | `occlusion_cutoff_hz` | 1500 | Low-pass cutoff of a fully occluded source. *(Phase 3)* |
 | `reverb` | null | Preset name or impulse-response path. *(Phase 3)* |

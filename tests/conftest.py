@@ -29,21 +29,39 @@ def static_listener(n: int) -> np.ndarray:
     return np.repeat(m[None], n, axis=0)
 
 
+def listener_at(positions: np.ndarray) -> np.ndarray:
+    """Listener matrices looking along +Y at the given positions (N, 3)."""
+    m = static_listener(len(positions))
+    m[:, :3, 3] = positions
+    return m
+
+
 @pytest.fixture
 def make_scene(tmp_path):
-    """Build and load a scene. ``positions`` is (S, 3) static or (N, S, 3) per baked frame."""
+    """Build and load a scene. ``positions`` is (S, 3) static or (N, S, 3) per baked sample.
 
-    def make(sources, positions=None, *, frame_start=1, frame_end=60, fps=30, fps_base=1.0, settings=None):
+    Baked samples run from ``frame_start`` to ``frame_end + 1`` with ``substeps`` per frame.
+    ``listener`` (N, 4, 4) replaces the static listener at the origin; ``cuts`` are frames where
+    the listener changes (camera switches); ``src_fwd`` (N, S, 3) gives emitter forward vectors.
+    """
+
+    def make(sources, positions=None, *, frame_start=1, frame_end=60, fps=30, fps_base=1.0, settings=None,
+             substeps=1, listener=None, cuts=(), src_fwd=None):
         manifest = build_manifest(sources=sources, frame_start=frame_start, frame_end=frame_end,
-                                  fps=fps, fps_base=fps_base, settings=settings)
-        frames = np.arange(frame_start, frame_end + 2, dtype=np.float64)
+                                  fps=fps, fps_base=fps_base, substeps=substeps, settings=settings)
+        frames = frame_start + np.arange((frame_end + 1 - frame_start) * substeps + 1) / substeps
         n_tracks = sum(1 for s in manifest["sources"] if s["track"] is not None)
         pos = np.zeros((len(frames), n_tracks, 3))
         if positions is not None:
             positions = np.asarray(positions, dtype=np.float64)
             pos[:] = positions if positions.ndim == 3 else positions[None]
-        arrays = {"frames": frames, "listener_matrix": static_listener(len(frames)),
-                  "listener_index": np.zeros(len(frames), np.int16), "cuts": np.zeros(0), "src_pos": pos}
+        index = np.zeros(len(frames), np.int16)
+        for c in cuts:
+            index[frames >= c] += 1
+        arrays = {"frames": frames, "listener_matrix": static_listener(len(frames)) if listener is None else listener,
+                  "listener_index": index, "cuts": np.asarray(cuts, dtype=np.float64), "src_pos": pos}
+        if src_fwd is not None:
+            arrays["src_fwd"] = np.asarray(src_fwd, dtype=np.float64)
         return load_scene(write_scene(tmp_path / "scene", manifest, arrays))
 
     return make
@@ -78,7 +96,20 @@ def rms_db(x: np.ndarray) -> float:
     return 20 * np.log10(np.sqrt(np.mean(np.square(x))))
 
 
+def peak_index(x: np.ndarray) -> int:
+    """Sample of the largest absolute value (any channel): where a click lands."""
+    a = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)
+    return int(np.argmax(a))
+
+
 def onset(x: np.ndarray, threshold: float = 1e-6) -> int:
     """First sample whose absolute value (any channel) exceeds the threshold."""
     a = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)
     return int(np.argmax(a > threshold))
+
+
+def frequency(x: np.ndarray, rate: int = RATE) -> float:
+    """Frequency of a sine from sub-sample zero crossings (mono)."""
+    z = np.nonzero((x[:-1] <= 0) & (x[1:] > 0))[0]
+    t = z + x[z] / (x[z] - x[z + 1])
+    return (len(t) - 1) / ((t[-1] - t[0]) / rate)

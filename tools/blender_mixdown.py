@@ -20,7 +20,7 @@ seam crossfade, so compare levels, pan and pitch, not loop phase.
 The audio comes from a video render whose picture is a black sequencer strip (``--method render``,
 the default; 16-bit). ``bpy.ops.sound.mixdown`` (``--method mixdown``) leaves speakers out in
 background mode, and runs as a job that the script has to wait for. Output: a 32-bit float WAV of
-the shot's length, sample 0 at the first frame. Findings: docs/research.md (Phase 0).
+the shot's length, sample 0 at the first frame. Findings: research/experiments/E01-blender-speaker-baseline.md.
 """
 
 from __future__ import annotations

@@ -139,17 +139,22 @@ def cmd_inspect(a: argparse.Namespace) -> int:
         if s.spatial and dist.size:
             d = dist[:, s.track]
             row["distance_m"] = [round(float(d.min()), 2), round(float(d.max()), 2)]
-            row["max_radial_speed_m_s"] = round(float(np.abs(np.diff(d) / dt).max()), 2) if len(dt) else 0.0
+            vr = np.diff(d) / dt if len(dt) else np.zeros(1)  # > 0 receding
+            c = scene.settings["speed_of_sound"]
+            row["max_radial_speed_m_s"] = round(float(np.abs(vr).max()), 2)
+            # Doppler factor of a moving source: c / (c + v_r), approximate for a moving camera
+            row["rate"] = [round(float(c / (c + vr.max())), 3), round(float(c / max(c + vr.min(), 1e-6)), 3)]
         data.append(row)
         rows.append([row["id"], row["group"], row["sample"], row["mode"],
                      _frames(p["frame"]),
-                     _range(row.get("distance_m")) if s.spatial else "bed", row.get("max_radial_speed_m_s", "-")])
+                     _range(row.get("distance_m")) if s.spatial else "bed", row.get("max_radial_speed_m_s", "-"),
+                     _range(row.get("rate"))])
     if a.json:
         print(json.dumps({"sources": data, "cuts": scene.cuts.tolist(), "warnings": scene.warnings}, indent=2))
         return 0
     print(f"{scene.path}: frames {scene.frame_start}-{scene.frame_end} @ {scene.fps:g} fps, "
           f"{len(scene.sources)} sources, listener {', '.join(scene.manifest['listener']['objects'])}")
-    print(_table(rows, ["id", "group", "sample", "mode", "frame", "dist m", "radial m/s"]))
+    print(_table(rows, ["id", "group", "sample", "mode", "frame", "dist m", "radial m/s", "rate"]))
     if len(scene.cuts):
         print("cuts at frames: " + ", ".join(f"{c:g}" for c in scene.cuts))
     for w in scene.warnings:
@@ -163,6 +168,8 @@ def cmd_render(a: argparse.Namespace) -> int:
 
     try:
         overrides = parse_overrides(a.set)
+        if a.quality:
+            overrides["quality"] = a.quality
         scene = load_scene(a.scene, overrides)
     except SceneError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -254,6 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--solo", action="append", default=[], help="source id glob or group:NAME")
     r.add_argument("--mute", action="append", default=[], help="source id glob or group:NAME")
     r.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="override a scene setting")
+    r.add_argument("--quality", choices=("standard", "high"), help="interpolation quality (same as --set quality=)")
     r.add_argument("--pcm24", action="store_true", help="24-bit PCM instead of 32-bit float")
     r.add_argument("--report", action="store_true", help="write <output>.report.json")
     r.add_argument("--strict", action="store_true", help="exit 1 if there are warnings")

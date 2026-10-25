@@ -17,3 +17,4 @@ Supersede it with a new one and set the old one's status to `Superseded by NNNN`
 | [0006](0006-propagation-retarded-time-delay-line.md) | Delay and Doppler from retarded time and a fractional-delay read | Accepted |
 | [0007](0007-stereo-ear-model.md) | Stereo target with a hybrid ear model; binaural optional | Accepted |
 | [0008](0008-cinematic-air-physics.md) | Cinematic air physics with overridable constants | Accepted |
+| [0009](0009-processing-chain.md) | Per-source processing chain with replaceable models | Accepted |

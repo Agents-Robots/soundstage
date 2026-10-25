@@ -7,7 +7,8 @@
   seam crossfade and a seeded start phase, one-shots placed at their trigger sample,
   raised-cosine fades.
 
-Phase 1 has no propagation delay, so emission time equals reception time.
+Spatial sources are built at the emission rate (2x the output rate for the ``optimal2x``
+interpolator) over emission time; beds at the output rate over reception time.
 Spec: docs/spec/signal-model.md#dry-timeline.
 """
 
@@ -102,37 +103,61 @@ def _envelope(n0: int, n1: int, start: int | None, fade_in: int, end: int | None
     return env
 
 
+class DryGenerator:
+    """Dry signal of one source, produced window by window (loop cycle and phase computed once).
+
+    Sample indices are at ``rate`` (the emission rate for spatial sources, the output rate for beds)
+    with index 0 at the first frame; ``start``/``end`` are the indices of the tag's
+    ``frame``/``end_frame`` (None if unset); for one-shots ``start`` may be a list of triggers.
+    """
+
+    def __init__(self, sample: np.ndarray, params: dict, rate: int, start, end: int | None, source_id: str,
+                 prefilter: np.ndarray | None = None):
+        """``prefilter``: a symmetric FIR applied once to the sample (one-shots, which then start
+        ``len // 2`` samples early) or circularly to the loop cycle (exactly periodic)."""
+        self.sample, self.params, self.rate = sample, params, rate
+        self.start, self.end = start, end
+        self.lead = 0
+        self.fade_in = int(round(params["fade_in"] * rate))
+        self.fade_out = int(round(params["fade_out"] * rate))
+        self.once = params["mode"] == "once"
+        if self.once and prefilter is not None:
+            self.sample = np.convolve(sample, prefilter)  # full: starts len // 2 before the trigger
+            self.lead = len(prefilter) // 2
+        if not self.once:
+            self.cycle = loop_cycle(sample, int(round(params["loop_crossfade"] * rate)))
+            if prefilter is not None:
+                m = len(prefilter) // 2
+                wrapped = np.concatenate([self.cycle[-m:], self.cycle, self.cycle[:m]]) if m else self.cycle
+                self.cycle = np.convolve(wrapped, prefilter, mode="valid")
+            period = len(self.cycle)
+            if params["loop_phase"] == "random":
+                self.phase = int(np.random.default_rng(seed_for(source_id)).integers(0, period))
+            else:
+                self.phase = int(round(params["loop_phase"] * rate)) % period
+
+    def window(self, n0: int, n1: int) -> np.ndarray:
+        """Samples [n0, n1)."""
+        sample = self.sample
+        if self.once:
+            out = np.zeros((n1 - n0,) + sample.shape[1:])
+            for start in (self.start if isinstance(self.start, list) else [self.start]):
+                trigger = start - self.lead
+                a, b = max(trigger, n0), min(trigger + len(sample), n1)
+                if a < b:
+                    seg = sample[a - trigger: b - trigger]
+                    if self.fade_in > 0:
+                        env = _envelope(a, b, start, self.fade_in, None, 0)
+                        seg = seg * (env[:, None] if seg.ndim == 2 else env)
+                    out[a - n0: b - n0] += seg
+            return out
+        origin = self.start if self.start is not None else 0
+        out = self.cycle[(np.arange(n0, n1) - origin + self.phase) % len(self.cycle)]
+        env = _envelope(n0, n1, self.start, self.fade_in, self.end, self.fade_out)
+        return out * (env[:, None] if out.ndim == 2 else env)
+
+
 def dry_timeline(sample: np.ndarray, params: dict, rate: int, start: int | None, end: int | None,
                  n0: int, n1: int, source_id: str) -> np.ndarray:
-    """Dry signal of one source over output samples [n0, n1).
-
-    ``start``/``end`` are the output samples of the tag's ``frame``/``end_frame`` (None if unset);
-    for one-shots ``start`` may be a list of trigger samples.
-    """
-    n = n1 - n0
-    shape = (n,) + sample.shape[1:]
-    out = np.zeros(shape)
-    fade_in = int(round(params["fade_in"] * rate))
-    if params["mode"] == "once":
-        for trigger in (start if isinstance(start, list) else [start]):
-            a, b = max(trigger, n0), min(trigger + len(sample), n1)
-            if a < b:
-                seg = sample[a - trigger: b - trigger]
-                if fade_in > 0:
-                    env = _envelope(a, b, trigger, fade_in, None, 0)
-                    seg = seg * (env[:, None] if seg.ndim == 2 else env)
-                out[a - n0: b - n0] += seg
-        return out
-    else:
-        cycle = loop_cycle(sample, int(round(params["loop_crossfade"] * rate)))
-        period = len(cycle)
-        if params["loop_phase"] == "random":
-            phase = int(np.random.default_rng(seed_for(source_id)).integers(0, period))
-        else:
-            phase = int(round(params["loop_phase"] * rate)) % period
-        origin = start if start is not None else 0
-        idx = (np.arange(n0, n1) - origin + phase) % period
-        out = cycle[idx]
-        fade_out = int(round(params["fade_out"] * rate))
-        env = _envelope(n0, n1, start, fade_in, end, fade_out)
-    return out * (env[:, None] if out.ndim == 2 else env)
+    """Dry signal of one source over samples [n0, n1) (see ``DryGenerator``)."""
+    return DryGenerator(sample, params, rate, start, end, source_id).window(n0, n1)

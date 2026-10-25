@@ -7,7 +7,9 @@ reason here.
 
 Decisions behind this model: ADR [0006](../adr/0006-propagation-retarded-time-delay-line.md)
 (propagation), [0007](../adr/0007-stereo-ear-model.md) (ears and panning),
-[0008](../adr/0008-cinematic-air-physics.md) (physics defaults).
+[0008](../adr/0008-cinematic-air-physics.md) (physics defaults),
+[0009](../adr/0009-processing-chain.md) (processing chain and replaceable models). Research behind
+the Phase 2 choices: [research/](../../research/README.md), one page per model.
 
 ## Coordinate frames
 
@@ -35,16 +37,23 @@ Decisions behind this model: ADR [0006](../adr/0006-propagation-retarded-time-de
 ## Processing chain (per source)
 
 ```
-sample ─▶ decode, downmix, resample to fs, pitch ─▶ dry timeline x(t_e)   (loops tiled, one-shots placed, fades)
-                                                            │
-geometry (control rate 1 kHz):                              │
-  listener p,R(t) and source s(t) splines                   ▼
-  ─▶ retarded time τ_c(t) ─▶ τ_read,L/R(t) (Doppler factor, sync, ITD) ─▶ fractional-delay read ─▶ y_L, y_R
-  ─▶ q_ret = Rᵀ(s(t−τ_c) − p)  ─▶ distance gain, cone, pan gains, rear cue, occlusion, filter cutoffs
-                                                                                  │
-y_L, y_R ─▶ air-absorption LP ─▶ directional LP (rear/occlusion) ─▶ head shadow (per ear) ─▶ gains ─▶ group bus
-                                                     └─▶ reverb send (mono, pre-pan) ─▶ scene reverb ─▶ master
+geometry (control rate 1 kHz, once per source):
+  listener p,R(t) and source s(t) splines per segment ─▶ retarded delay τ_c(t) ─▶ path:
+  d = c·τ_c, q_ret = Rᵀ(s(t−τ_c) − p), lateral λ, rear ρ, emitter angle β, jumps (cuts, teleports)
+
+emission side (mono, emission rate f_e = f_s · oversample):
+  sample ─▶ decode, downmix, resample to f_e, pitch ─▶ dry timeline x(t_e) ─▶ air absorption ─▶ rear low-pass
+        ─▶ delay line (emission samples)
+
+reception side (per ear, f_s):
+  τ_read,L/R(t) (Doppler factor, sync, ITD, rate clamp) ─▶ fractional-delay read ─▶ head shadow (per ear)
+        ─▶ × gain · g_dist · g_cone · g_rear ─▶ × pan gains ─▶ group bus
+  at jumps: a second read with the parameters before the jump held, 10 ms equal-power crossfade
 ```
+
+Emission-side parameters are functions of the path; they are placed on emission time
+`t_e = t − τ_read` (made monotonic where a jump makes it go back). The reverb send (Phase 3) is
+taken from the centre read before panning.
 
 All spatial parameters use the **retarded** source position `s(t − τ_c)`: the sound is heard from
 where it was emitted, with the loudness of the distance it actually travelled.
@@ -72,8 +81,18 @@ gain and fades.
 ## Trajectories and control rate
 
 - Baked positions (`substeps` per frame) are interpolated with cubic splines (scipy
-  `CubicSpline`, not-a-knot) in time, **separately per segment** between cuts. The listener
-  rotation is interpolated by spherical linear interpolation of quaternions between time samples.
+  `CubicSpline`, not-a-knot, exact for constant velocity and acceleration) in time, **separately per
+  segment** between cuts and per piece between source teleports, and **separately on each side of a
+  kink**: a sample where the velocity changes faster than 200 m/s² (about 20 g; keyframed motion
+  that starts or stops instantly). A spline through such a kink rings (the playback rate of the
+  flyby's ship overshot by 1.8 % where it starts moving); split there, the rate steps cleanly.
+  Position stays continuous at a kink, so it is not a jump and gets no crossfade. The listener rotation uses scipy's `RotationSpline` per segment (continuous
+  angular rate and acceleration; piecewise slerp would step the rate of change of pan and ITD at
+  every baked sample).
+- **Jumps.** Listener segments are split at the scene's `cuts` (camera switches) and wherever the
+  listener moves faster than `teleport_speed` between two baked samples; source pieces likewise at
+  `src_cuts` and at such teleports (default `teleport_speed`: 3 × `speed_of_sound`). A spline is
+  evaluated only inside its own segment or piece (held at its ends).
 - Geometry is evaluated at the **control rate** `f_ctl = 1000 Hz` (48-sample blocks). Delays are
   upsampled from control rate to audio rate with cubic interpolation (they are smooth); gains are
   interpolated linearly per sample; filter coefficients are updated per block.
@@ -118,11 +137,24 @@ At `θ_l = 90°`, `a = 0.0875 m`, `itd_scale = 1`: ITD = 0.656 ms.
 `[0.25, 4.0]` (two octaves); where clamping applies, `τ_read` is re-integrated from the clamped
 rate and the report warns (near- or super-sonic motion, FR-51).
 
-**Fractional-delay read.** `y_e(t) = x(t − τ_read,e(t))`, read at fractional sample positions:
+**Voices.** A one-shot with several trigger frames is rendered as one voice per trigger when
+`sync_to_picture` is set or `k ≠ 1`, so each trigger has its own `τ₀`; otherwise as one voice.
 
-- `quality = "standard"`: 4-point cubic Hermite (Catmull-Rom) interpolation.
-- `quality = "high"`: Kaiser-windowed sinc, 32 taps, cutoff `0.45 · fs · min(1, 1/rate)`, which
-  also band-limits when reading faster than real time.
+**Delays at audio rate.** `τ_read,e` is interpolated from the control rate with a cubic
+(Catmull-Rom) curve; the read position in the delay line is `(t − τ_read,e(t)) · f_e`.
+
+**Fractional-delay read.** `y_e(t) = x(t − τ_read,e(t))`, read at fractional sample positions
+(interpolator registry, chosen by `quality`):
+
+- `quality = "standard"` (`optimal2x`): the dry signal is built at `f_e = 2 f_s` (samples
+  resampled once by soxr), pre-emphasized by a 63-tap symmetric FIR that flattens the
+  interpolator's passband, and read with Niemitalo's 6-point, 5th-order polynomial optimized for 2×
+  oversampled input. Read error below −90 dB up to 18 kHz. Reading faster than about 1.09× real time folds content
+  above 22 kHz back below 24 kHz.
+- `quality = "high"` (`sinc`): `f_e = f_s`; Kaiser-windowed sinc (β = 9, 16 zero crossings per
+  side, table with linear interpolation) with the cutoff `0.92 · f_s/2 · min(1, 1/rate)` and the
+  kernel widened accordingly, which band-limits when reading faster than real time.
+- `hermite4` (4-point cubic Hermite at `f_e = f_s`) is kept as a reference in tests only.
 
 ## Distance gain
 
@@ -151,23 +183,30 @@ otherwise              → linear interpolation of g in between
 
 ## Air absorption
 
-Absorption coefficient approximated as `α(f) = A · α₈ · (f / 8000)²` dB/m, with
-`α₈ = 0.1 dB/m` (ISO 9613-1, 20 °C, 50 % RH, *(tune)*) and `A = air_absorption · source.air_absorption`.
-Realized as a one-pole low-pass whose cutoff is where the loss reaches 3 dB:
+Pure-tone attenuation coefficient `α(f)` in dB/m from ISO 9613-1 (oxygen and nitrogen
+relaxation), at `air_temperature_c` (20 °C), `air_humidity_pct` (50 %) and standard pressure,
+scaled by `A = air_absorption · source.air_absorption`. The loss over the propagation distance `d`
+is `A · α(f) · d` dB. At 20 °C, 50 % RH: about 0.005 dB/m at 1 kHz, 0.03 at 4 kHz, 0.1 at 8 kHz.
 
-```
-f_air(d) = clamp(8000 · sqrt(3 / (A · α₈ · d)), 300, 20000) Hz
-```
-
-Examples (`A = 1`): 10 m → 13.9 kHz, 100 m → 4.4 kHz, 1 km → 1.4 kHz.
+Realization: four cascaded one-pole low-passes (TPT form) on the emission side. Their cutoffs are
+fitted once per render, by least squares on the loss in dB from 100 Hz to 20 kHz where the target
+loss is below 20 dB, on a log-spaced grid of effective distances `A·d` from 5 cm to 20 km
+(continuation from the previous grid point keeps the cutoffs smooth); at control rate the cutoffs
+are interpolated in log distance. Measured error: within about 2 dB of ISO 9613-1 wherever the loss
+is below 20 dB; beyond that the filter keeps attenuating more than 18 dB. Where the loss at 20 kHz
+is below 0.05 dB the stage passes the signal unchanged.
 
 ## Panning
 
-**`amplitude`**: constant-power pan from the lateral sine only:
+**`amplitude`**: constant-power pan from the lateral sine only, by the pan law `pan_law`:
 
 ```
-φ = (λ + 1) · π / 4,   g_L = cos φ,   g_R = sin φ          (g_L² + g_R² = 1; centre = −3.01 dB each)
+sine  (default):  φ = (λ + 1) · π / 4,   g_L = cos φ,   g_R = sin φ
+power:            g_L = sqrt((1 − λ) / 2),   g_R = sqrt((1 + λ) / 2)      (Blender's speakers, Phase 0)
 ```
+
+Both keep `g_L² + g_R² = 1` (centre −3.01 dB each). `power` is softer at the sides (−18 dB for
+the far channel at 76°, against −32 dB for `sine`); the default is decided by listening (#15).
 
 **`hybrid`** (default): the amplitude pan above, plus ITD scaled by `itd_scale` (default 0.5,
 *(tune)*: full ITD across speakers causes comb filtering in mono downmixes), plus a head-shadow
@@ -183,19 +222,26 @@ H(ω) = (1 + j · α_eff · ω / (2ω₀)) / (1 + j · ω / (2ω₀)),   ω₀ =
 ```
 
 a first-order shelf (up to +6 dB treble at the near ear, down to −20 dB at the far ear at full
-strength), discretized with the bilinear transform per control block.
+strength), discretized with the bilinear transform prewarped at the pole `2ω₀` (1.25 kHz for
+`a = 8.75 cm`). The pole does not depend on `α`, so only the numerator coefficients change; they
+are interpolated per sample between control points, which is exact and always stable.
 
 **`binaural`** (Phase 4): replaces pan, ITD and head shadow with HRIR convolution from a SOFA set,
 interpolated between measured directions.
 
 ## Rear cue
 
-Stereo cannot place a source behind the camera, so behind is marked spectrally:
+Stereo cannot place a source behind the camera, so behind is marked spectrally and by level
+(hybrid panner), with the rear factor `ρ`:
 
 ```
-f_rear = 20000 · (rear_cutoff_hz / 20000) ^ ρ          (log interpolation, 20 kHz at the side)
+y = x + ρ · (LP(x) − x)          LP: one-pole low-pass at rear_cutoff_hz (emission side)
 g_rear = 10 ^ (rear_gain_db · ρ / 20)
 ```
+
+The low-pass mixed with the dry signal is a first-order high-frequency shelf whose depth grows with
+`ρ`: transparent in front and at the side, the plain low-pass straight behind. (A low-pass whose
+cutoff moves to 20 kHz at the side would still take 1–2 dB off 15 kHz for every source.)
 
 ## Occlusion
 
@@ -208,8 +254,11 @@ g_occ = 10 ^ ((1 − v) · occlusion_gain_db / 20)                     occlusion
 f_occ = 20000 · (occlusion_cutoff_hz / 20000) ^ (1 − v)             occlusion_cutoff_hz = 1500 (tune)
 ```
 
-The directional low-pass uses `min(f_rear, f_occ)`; air absorption is a separate stage. Both are
-one-pole low-passes with per-block coefficients.
+Occlusion gets its own low-pass stage (Phase 3); air absorption and the rear cue are separate
+stages. All low-passes are one-poles in TPT (zero-delay feedback) form: `g = tan(π f_c / f_e)`,
+`G = g / (1 + g)`, per sample `v = G (x − s)`, `y = v + s`, `s = y + v`. `G` is computed at control
+rate and interpolated linearly per sample; it stays in (0, 1), so every intermediate filter is
+stable and modulation does not zipper.
 
 ## Reverb send
 
@@ -227,13 +276,15 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 
 ## Cuts
 
-- **Listener cuts** split reception time into segments. Each segment uses its own listener
-  trajectory (splines never cross a cut). The output around a cut is an equal-power crossfade of
-  10 ms between the read of the old segment (listener held) and the new one. There is no Doppler
-  sweep across the cut.
-- **Source teleports** (`src_cuts`): the source trajectory is piecewise; `s(t_e)` is evaluated in
-  the piece that contains the emission time, so sound emitted before the jump still comes from the
-  old place. The delay discontinuity is handled with the same 10 ms crossfade.
+- **Listener cuts** (camera switches from the bake, listener jumps detected by speed) split
+  reception time into segments. Each segment uses its own listener trajectory (splines never cross
+  a cut). The output around a cut is an equal-power crossfade of 10 ms between a second read with
+  every parameter held at its value before the cut (delays, gains, pan, filters) and the new read.
+  There is no Doppler sweep across the cut.
+- **Source teleports** (`src_cuts` and jumps detected by speed): the source trajectory is
+  piecewise; `s(t_e)` is evaluated in the piece that contains the emission time, so sound emitted
+  before the jump still comes from the old place. Where the piece changes in reception time, the
+  same 10 ms crossfade applies.
 
 ## Mixing and output
 
@@ -264,10 +315,14 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 | Near-field softening `r_min` | 0.25 m | engine constant |
 | Retarded-time iterations | 4 | engine constant |
 | Playback-rate clamp | [0.25, 4.0] | engine constant |
+| Teleport speed | 3 × speed of sound | scene `teleport_speed` |
+| Interpolator | `optimal2x` (standard), `sinc` (high) | scene `quality` |
+| Pan law | `sine` *(tune)* | scene `pan_law` |
+| Air temperature / humidity | 20 °C / 50 % | scene `air_temperature_c`, `air_humidity_pct` |
 | Head radius `a` | 0.0875 m | scene `head_radius` |
 | ITD scale (hybrid) | 0.5 *(tune)* | scene `itd_scale` |
 | Head shadow (hybrid) | 0.5 *(tune)* | scene `head_shadow` |
-| `α₈` air absorption at 8 kHz | 0.1 dB/m *(tune)* | engine constant × scene/source `air_absorption` |
+| Air absorption scale | 1 (ISO 9613-1) | scene/source `air_absorption` |
 | Rear cutoff / gain | 6000 Hz / −2 dB *(tune)* | scene `rear_cutoff_hz`, `rear_gain_db` |
 | Occlusion gain / cutoff | −12 dB / 1500 Hz *(tune)* | scene `occlusion_gain_db`, `occlusion_cutoff_hz` |
 | Occlusion smoothing | 60 ms / 150 ms *(tune)* | engine constant |
@@ -285,5 +340,7 @@ need no licensed files. Presets: `none`, `small_room`, `hall`, `hangar`, `outdoo
 - R. S. Woodworth, *Experimental Psychology*, 1938 (ITD formula).
 - ISO 9613-1:1993, attenuation of sound during propagation outdoors, part 1: absorption by the
   atmosphere.
+- O. Niemitalo, *Polynomial Interpolators for High-Quality Resampling of Oversampled Audio*, 2001.
+- V. Zavalishin, *Preserving the LTI system topology in s- to z-plane transforms*, 2008.
 - OpenAL 1.1 specification, distance models and cones.
 - ITU-R BS.1770-4, loudness and true-peak measurement; EBU R128.

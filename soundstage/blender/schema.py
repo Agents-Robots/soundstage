@@ -30,7 +30,11 @@ class Field:
 
 
 AXES = ("X", "-X", "Y", "-Y", "Z", "-Z")
+# Model names; the engine's registries must offer the same names (tests/test_models.py).
 DISTANCE_MODELS = ("inverse_clamped", "linear_clamped", "exponential_clamped", "none")
+PANNERS = ("amplitude", "hybrid")
+PAN_LAWS = ("sine", "power")
+QUALITIES = ("standard", "high")
 
 SOURCE_KEYS: dict[str, Field] = {
     "sample": Field("str", REQUIRED),
@@ -74,7 +78,11 @@ SCENE_SETTINGS: dict[str, Field] = {
     "speed_of_sound": Field("float", 343.0, min=1.0, phase=2),
     "doppler_factor": Field("float", 1.0, min=0.0, phase=2),
     "air_absorption": Field("float", 1.0, min=0.0, phase=2),
-    "panner": Field("choice", "hybrid", choices=("amplitude", "hybrid")),
+    "air_temperature_c": Field("float", 20.0, min=-50.0, max=60.0, phase=2),
+    "air_humidity_pct": Field("float", 50.0, min=0.0, max=100.0, phase=2),
+    "teleport_speed": Field("float", None, min=1.0, nullable=True, phase=2),  # None: 3 x speed_of_sound
+    "panner": Field("choice", "hybrid", choices=PANNERS),
+    "pan_law": Field("choice", "sine", choices=PAN_LAWS, phase=2),
     "itd_scale": Field("float", 0.5, min=0.0, max=1.0, phase=2),
     "head_shadow": Field("float", 0.5, min=0.0, max=1.0, phase=2),
     "head_radius": Field("float", 0.0875, min=0.01, max=1.0, phase=2),
@@ -84,14 +92,14 @@ SCENE_SETTINGS: dict[str, Field] = {
     "substeps": Field("int", 4, min=1, max=64),
     "pad_seconds": Field("float", 3.0, min=0.0),
     "listener": Field("str", None, nullable=True),
-    "quality": Field("choice", "standard", choices=("standard", "high"), phase=2),
+    "quality": Field("choice", "standard", choices=QUALITIES, phase=2),
     "occlusion_gain_db": Field("float", -12.0, phase=3),
     "occlusion_cutoff_hz": Field("float", 1500.0, min=20.0, max=20000.0, phase=3),
     "reverb": Field("str", None, nullable=True, phase=3),
     "reverb_send_db": Field("float", -18.0, phase=3),
 }
 
-IMPLEMENTED_PHASE = 1
+IMPLEMENTED_PHASE = 2
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
 
 

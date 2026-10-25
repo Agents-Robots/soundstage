@@ -46,7 +46,7 @@ coding agents, readable for people).
 - [Usage](docs/usage.md): tagging sounds, baking, rendering, importing into Resolve
 - [Requirements](docs/requirements.md) and [roadmap](docs/roadmap.md)
 - [Architecture](docs/architecture.md) and the [specifications](docs/spec/): [tagging](docs/spec/tagging.md), [scene format](docs/spec/scene-format.md), [signal model](docs/spec/signal-model.md), [command line](docs/spec/cli.md)
-- [Research](docs/research.md) on existing tools and libraries, and the [decision records](docs/adr/README.md)
+- [Research](research/README.md): survey of existing tools, one page per acoustic model with its choices, reproducible experiments, papers; and the [decision records](docs/adr/README.md)
 - [AGENTS.md](AGENTS.md) for coding agents working on this repo
 
 Work is tracked in this repository's GitHub issues.

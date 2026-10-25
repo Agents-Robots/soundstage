@@ -60,15 +60,18 @@ decisions behind the structure are in [adr/](adr/README.md).
 | Module | Responsibility |
 |---|---|
 | `scene.py` | Load `scene.json` + `scene.npz`, check format/version, apply `--set` overrides, build `Scene`/`Source`/`Settings` dataclasses; `write_scene` for tests and hand-made scenes. |
-| `signals.py` | Decode and cache samples (soundfile), downmix, resample (soxr), pitch; build each source's dry timeline over emission time: loop tiling with seam crossfade and seeded phase, one-shot placement, fades. |
-| `geometry.py` | Segment the timeline at cuts; cubic splines for positions, quaternion slerp for listener rotation; evaluate listener pose and source positions at control rate; camera-space vectors and derived angles. |
-| `propagation.py` | Retarded-time solver, Doppler factor and picture sync, ITD offsets, playback-rate clamp, upsampling of delays to audio rate, fractional-delay read kernels (cubic, windowed sinc). |
-| `filters.py` | Gain laws (distance models, cone, rear, occlusion), cutoff laws (air absorption, rear, occlusion), time-varying one-pole low-pass and head-shadow shelf kernels. |
-| `panning.py` | Pan gains for `amplitude` and `hybrid`; later `binaural` (HRIR selection and interpolation). |
+| `signals.py` | Decode and cache samples (soundfile), downmix, resample (soxr) to the emission rate, pitch; `DryGenerator` builds each source's dry timeline window by window over emission time: loop tiling with seam crossfade and seeded phase, one-shot placement, fades. |
+| `control.py` | The control grid (1 kHz) and interpolation of control-rate tracks to audio samples (linear for gains and filter parameters, Catmull-Rom for delays), never across a jump. |
+| `geometry.py` | Tracks: positions as cubic splines per piece (split at cuts and detected teleports), listener rotation as `RotationSpline` per segment; retarded-time solver (fixed point + Newton, audibility mask); the per-source `Path` on the control grid; camera-space vectors and derived angles. |
+| `propagation.py` | Read delays per ear (Doppler factor, picture sync, ITD, playback-rate clamp per run between jumps); interpolator registry (`optimal2x`, `sinc`, `hermite4`); the `DelayLine` of emission samples. |
+| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients; stages `OnePoleStage`, `RearStage` (emission side) and `ShelfStage` (per ear). |
+| `panning.py` | Pan-law registry (`sine`, `power`) and panner registry (`amplitude`, `hybrid`): per-ear delays (ITD), per-ear stages and pan gains from the path; later `binaural`. |
+| `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascade, first-order section) with reference implementations; the optimal-2× pre-emphasis design. |
+| `source.py` | The processing chain of one source or voice (ADR [0009](adr/0009-processing-chain.md)): emission chain → delay line → per-ear read and stages → gains and pan; held branches crossfaded at jumps; beds. |
 | `reverb.py` | Send bus, IR presets synthesized by seed or loaded from file, partitioned FFT convolution. *(Phase 3)* |
-| `mix.py` | Group buses, master gain, optional limiter and loudness normalization, WAV and stem writing, dither for PCM. |
-| `report.py` | Loudness and peak metrics, per-source statistics, warnings, the debug plot. |
-| `render.py` | Orchestrates a render: plan chunks, process each source per chunk through propagation → filters → panning, accumulate buses, hand over to mix and report. |
+| `mix.py` | WAV writing (float or PCM24 with dither); later group buses and stems, limiter and loudness normalization. |
+| `report.py` | Loudness and peak metrics, per-source statistics, warnings; later the debug plot. |
+| `render.py` | Orchestrates a render: control grid, scene geometry, renderers per source, chunked rendering with sources in a thread pool, summed in source order (deterministic), statistics. |
 
 ### `soundstage/cli.py`
 
@@ -82,28 +85,32 @@ number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in
 
 ## Data flow inside a render
 
-1. **Load**: manifest and arrays, resolved settings. Fail early on missing samples.
-2. **Geometry pass** (all sources, control rate 1 kHz, cheap): retarded time, delays, all gains
-   and cutoffs as control-rate arrays per source. This also yields report statistics (distance
-   range, rate range) and allows **culling**: sources whose gain stays below −80 dB for a whole
-   chunk are skipped there.
-3. **Audio pass**, in chunks of ~10 s with overlap for filter state and delay reach: per source,
-   fractional-delay read of the dry timeline (two ears), then the filter cascade, gains, pan,
-   accumulate into its group bus and the reverb send. Filter states carry across chunks.
-4. **Mix**: groups → master (+ reverb return), optional limiter/normalization, trim to the shot,
-   write files.
-5. **Report**: metrics, warnings, plot.
+1. **Load**: manifest and arrays, resolved settings; samples decoded and resampled to the emission
+   rate (2× the output rate for the standard interpolator).
+2. **Geometry pass** (per source, control rate 1 kHz, whole render range): retarded delay,
+   distance, direction, emitter angle, jumps (`Path`); from it the read delays per ear, gains, pan
+   gains and filter parameters as control-rate arrays. This also yields report statistics
+   (distance, delay and rate ranges).
+3. **Audio pass**, in chunks of 4 s of output: per source, the delay line is extended by the
+   emission chain (dry timeline → pre-emphasis → air absorption → rear cue) as far as the reads need,
+   then read per ear at fractional positions, filtered per ear (head shadow), multiplied by gains
+   and pan gains; at jumps a held branch is crossfaded out. Sources run in parallel threads; their
+   chunks are summed in source order. All filter states carry across chunks.
+4. **Mix**: master gain, trim to the shot, write the WAV (later: groups, stems, reverb return,
+   limiter/normalization).
+5. **Report**: metrics, warnings.
 
 Chunking keeps memory bounded (a 5-minute stereo float64 bus is ~230 MB; 50 sources at once would
-not fit comfortably) and makes partial renders (`--frames`) cheap.
+not fit comfortably) and makes partial renders (`--frames`) cheap. The delay line keeps every
+emission sample a later read may still need (a cut to a farther camera reads further back).
 
 ## Performance model
 
-Per source and audio sample: one fractional-delay read per ear (4 taps standard, 32 high), three
-one-pole/shelf sections per ear, two gains. At 48 kHz, 50 sources, 300 s that is ~1.4·10⁹
-source-samples; numba kernels at ~10⁸–10⁹ simple ops/s per core give a few minutes on one core,
-less with sources processed in parallel (threads in numba, `prange` over sources). Geometry at
-1 kHz is about 2 % of that. NFR-3 (≤ real time for 50 sources) is the target from Phase 2.
+Per source and output sample: the emission chain at the 2× rate (63-tap pre-emphasis, four
+one-poles for air absorption, the rear shelf), one 6-point read per ear, one first-order section
+per ear, gains. Geometry at 1 kHz is negligible. Sources render in parallel (numba kernels release
+the GIL). Measured with `tools/benchmark.py`: 50 sources × 5 minutes in 46 s on a 16-core desktop
+CPU, a single thread 2.2× real time for 50 sources ([E10](../research/experiments/E10-performance.md)).
 
 ## Testing strategy
 

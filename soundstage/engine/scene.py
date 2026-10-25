@@ -53,6 +53,8 @@ class Scene:
     listener_index: np.ndarray  # (N,)
     cuts: np.ndarray  # (C,) frames
     src_pos: np.ndarray  # (N, S, 3)
+    src_fwd: np.ndarray | None = None  # (N, S, 3) emitter forward vectors (absent: omnidirectional)
+    src_cuts: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))  # (K, 2) (track, frame)
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -148,6 +150,9 @@ def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
         listener_index=arrays.get("listener_index", np.zeros(len(arrays["frames"]), np.int16)),
         cuts=arrays.get("cuts", np.zeros(0)),
         src_pos=arrays["src_pos"].astype(np.float64).reshape(len(arrays["frames"]), n_tracks, 3),
+        src_fwd=(arrays["src_fwd"].astype(np.float64).reshape(len(arrays["frames"]), n_tracks, 3)
+                 if "src_fwd" in arrays else None),
+        src_cuts=arrays.get("src_cuts", np.zeros((0, 2))).reshape(-1, 2),
         warnings=list(manifest.get("warnings", [])),
     )
 

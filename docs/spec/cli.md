@@ -67,8 +67,9 @@ so scripts that use `bpy.context.scene` see it too; the manifest records it as `
 soundstage inspect <scene.json> [--json]
 ```
 
-Table of sources: id, object, sample, mode, frames, group, distance min/max over the shot,
-maximum radial speed, the playback rate it implies. Lists cuts and warnings. Reads only the
+Table of sources: id, group, sample, mode, frames, distance min/max over the shot, maximum radial
+speed, and the playback-rate range it implies (estimated from the baked samples; the render
+report has the exact values). Lists cuts and warnings. Reads only the
 scene file and sample headers; renders nothing. `--json` for machine use.
 
 ## `soundstage render`
@@ -84,7 +85,7 @@ soundstage render <scene.json>
     [--report]               write <mix>.report.json
     [--strict]               warnings become errors (exit 1)
     [--stems]                (later) also write <mix>_stem_<group>.wav
-    [--quality standard|high] (later)
+    [--quality standard|high] fractional-delay interpolation (same as --set quality=...)
     [--normalize LUFS]       (later) normalize the master to a target loudness
     [--limit DBTP]           (later) true-peak limiter on the master
     [--plot]                 (later) write <mix>.plot.png
@@ -140,9 +141,9 @@ Example from the flyby example (three of its sources):
   },
   "overrides": {},
   "master": {
-    "peak_dbfs": -7.08,
-    "true_peak_dbtp": -7.05,
-    "lufs_integrated": -23.37
+    "peak_dbfs": -6.13,
+    "true_peak_dbtp": -6.12,
+    "lufs_integrated": -23.16
   },
   "sources": [
     {
@@ -168,11 +169,19 @@ Example from the flyby example (three of its sources):
         180.0,
         225.0
       ],
-      "peak_dbfs": -7.49,
-      "audible_frames": 40,
+      "peak_dbfs": -7.8,
+      "audible_frames": 41,
       "distance_m": [
         9.02,
         16.69
+      ],
+      "delay_ms": [
+        26.3,
+        48.7
+      ],
+      "rate": [
+        0.9992,
+        1.0127
       ]
     },
     {
@@ -185,24 +194,33 @@ Example from the flyby example (three of its sources):
         1,
         240
       ],
-      "peak_dbfs": -11.2,
+      "peak_dbfs": -11.14,
       "audible_frames": 240,
       "distance_m": [
-        25.08,
+        24.99,
         123.71
+      ],
+      "delay_ms": [
+        72.9,
+        360.7
+      ],
+      "rate": [
+        0.9204,
+        1.1121
       ]
     }
   ],
   "cuts": [],
   "warnings": [],
   "timing_s": {
-    "load": 0.014,
-    "dsp": 0.125
+    "load": 0.968,
+    "dsp": 0.256,
+    "workers": 5
   }
 }
 ```
 
-Fields: `master` peak (dBFS), true peak (dBTP, 4× oversampled), integrated loudness (LUFS, BS.1770; null for silence or clips shorter than 0.4 s). Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its contribution, `audible_frames` (frames whose peak is above −60 dBFS), `distance_m` [min, max] for spatial sources. *(later)*: per-group metrics, loudness range, playback-rate ranges, per-source warnings.
+Fields: `master` peak (dBFS), true peak (dBTP, 4× oversampled), integrated loudness (LUFS, BS.1770; null for silence or clips shorter than 0.4 s). Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its contribution, `audible_frames` (frames whose peak is above −60 dBFS); spatial sources also `distance_m` [min, max] (propagation distance), `delay_ms` [min, max] (propagation delay as read, after the Doppler factor), `rate` [min, max] (playback rate: above 1 approaching, below 1 receding). Warnings: unimplemented keys, sources never audible, playback rate clamped (near- or supersonic motion), sound emitted before the baked range (padding too short). *(later)*: per-group metrics, loudness range.
 
 ## Exit criteria for agents
 
