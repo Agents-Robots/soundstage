@@ -1,6 +1,6 @@
 # Survey: existing solutions, libraries, formats
 
-Done on 2026-10-25 before the design, updated after Phase 0 and Phase 2. Facts about third-party
+Done on 2026-10-25 before the design, updated after Phases 0, 2 and 3. Facts about third-party
 tools reflect what was found then; recheck before relying on details. The acoustic models
 themselves are in [models/](models/), measurements in [experiments/](experiments/).
 
@@ -8,7 +8,7 @@ themselves are in [models/](models/), measurements in [experiments/](experiments
 
 | Option | Has | Missing / problem | Verdict |
 |---|---|---|---|
-| **Blender Speaker objects + `bpy.ops.sound.mixdown`** (audaspace inside Blender) | Distance models, attenuation, reference/max distance, cone, Doppler settings (speed of sound + factor), constant-power panning relative to the active camera; mono sources only for 3D | Measured in Phase 0 ([E01](experiments/E01-blender-speaker-baseline.md)): no Doppler shift in rendered audio, 3D parameters stepped once per audio buffer, headless mixdown leaves speakers out (a video render works), 16-bit audio from renders; no delay, air absorption, occlusion, reverb or stems; little control or insight | **Baseline** (`tools/blender_mixdown.py`). Speaker objects may still be read as an alternative tag source (FR-8). |
+| **Blender Speaker objects + `bpy.ops.sound.mixdown`** (audaspace inside Blender) | Distance models, attenuation, reference/max distance, cone, Doppler settings (speed of sound + factor), constant-power panning relative to the active camera; mono sources only for 3D | Measured in Phase 0 ([E01](experiments/E01-blender-speaker-baseline.md)): no Doppler shift in rendered audio, 3D parameters stepped once per audio buffer, headless mixdown leaves speakers out (a video render works), 16-bit audio from renders; no delay, air absorption, occlusion, reverb or stems; little control or insight | **Baseline** (`tools/blender_mixdown.py`). Speaker objects are read as sources (FR-8, [ADR 0012](../docs/adr/0012-speakers-and-instanced-tags-as-sources.md)). |
 | **audaspace** standalone (C++ with Python bindings, Apache-2.0) | Blender's audio engine as a library; 3D device, sequencer | No pip package found; same DSP limits as in Blender | No |
 | **Steam Audio** (Valve, C SDK) | HRTF, occlusion, reflections, pathing for moving sources | No Python binding (Rust wrapper audionimbus exists); real-time game API; heavy | No (ideas for occlusion and reflections) |
 | **pyroomacoustics** | Room acoustics by image sources, arrays | Static sources only; moving sources need a segmented approximation | No (could generate room IRs for the reverb later) |

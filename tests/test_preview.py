@@ -81,7 +81,7 @@ def test_sequence_with_gap_starting_after_the_mix(tmp_path):
 
 def test_sequence_starting_before_the_mix_ntsc_rate(tmp_path):
     fps = 30000 / 1001
-    seq = frames(tmp_path / "seq", range(1, 61), prefix="frame_", digits=4)
+    frames(tmp_path / "seq", range(1, 61), prefix="frame_", digits=4)
     wav = mix(tmp_path / "mix.wav", fps, 10, 50, bursts=[12, 50])
     res = pv.preview(wav, tmp_path / "p.mp4", frames=tmp_path / "seq" / "frame_")
     assert res.fps == Fraction(30000, 1001) and res.audio_offset_samples < 0

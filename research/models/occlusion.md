@@ -73,8 +73,9 @@ g_b = v_b + (1 − v_b) · T(f_b),     T(f) = 10^(occlusion_gain_db/20) / sqrt(1
 
 (−12 dB and 1.5 kHz by default). The lowest band's gain is applied as a broadband gain; the higher
 bands' ratios to it set the cutoff of a one-pole low-pass, fitted to their attenuations in dB by
-least squares. Fully hidden, this reproduces the transmission curve exactly (it is itself a
-one-pole); partly hidden, within 0.8 dB at the band centres. Both go on the direct sound only, per
+least squares. Fully hidden, this reproduces the transmission curve within 0.12 dB up to 4 kHz
+(it is itself a one-pole; the broadband gain is taken at 250 Hz, not at DC); partly hidden, within
+0.8 dB at the band centres. Both go on the direct sound only, per
 ear after the read, on the reception-time control grid: the visibility already describes the path
 of the sound heard at that time (see below).
 
@@ -169,7 +170,7 @@ to mark are found without guessing.
   occlude; a sliding door is detected as moving and occludes at the end; a source 343 m away
   passing behind a wall edge at 100 m/s is occluded from 3.3–3.5 s (retarded, expected 3.33 s), not
   at 2.2 s; baked and rendered, a 1 kHz tone behind a wall is 13.67 ± 0.3 dB below the same render
-  with transmission set to 0 dB (−12.12 dB broadband plus the one-pole at 1524 Hz); a source above a
+  with transmission set to 0 dB (−12.12 dB broadband plus the one-pole at 1528 Hz); a source above a
   ground plane is fully visible, while a barrier the line of sight clears by 1.05 m cuts the 250 Hz
   zone but not the 4 kHz zone; a box moving at 60 m/s past the camera is not occluded by itself; a
   moving collection instance occludes; a fog volume and an emissive light beam do not occlude, a

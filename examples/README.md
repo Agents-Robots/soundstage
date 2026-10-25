@@ -11,11 +11,5 @@ Script-built example scenes and tagging scripts.
 ```bash
 blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend
 .venv/bin/soundstage bake out/flyby.blend --run examples/flyby_sounds.py --out out/flyby
-.venv/bin/soundstage render out/flyby/scene.json -o out/flyby/mix.wav --report
+.venv/bin/soundstage render out/flyby/scene.json -o out/flyby/mix.wav --report --plot --set reverb=city
 ```
-
-Planned:
-
-- `station_interior.py`: ambience bed, machinery loops with cones, doors as one-shots, occlusion
-  by walls.
-- `fleet.py`: many engines at distance, Doppler and air absorption, camera cuts.

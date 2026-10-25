@@ -17,18 +17,18 @@ linked duplicates can carry different sounds). Keys not listed below are an erro
 | `id` | str | `"<object name>:<index>"` | Stable source id: used in reports, solo/mute, and as random seed. Set it explicitly when object names are not stable. |
 | `mode` | `"loop"` \| `"once"` | `"loop"` | Loop the sample, or play it once. |
 | `frame` | float \| [float] \| null | null | Once: trigger frame, or a list of trigger frames (required). Loop: start frame; null = running since before the shot. Fractional frames allowed. |
-| `end_frame` | float \| null | null | Loop only: stop at this frame (after `fade_out`); null = runs to the end. |
+| `end_frame` | float \| null | null | Loop only: the fade-out starts at this frame and ends `fade_out` later; null = runs to the end. |
 | `fade_in` | float s | 0.0 (once), 0.05 (loop with `frame`) | Fade-in duration. |
 | `fade_out` | float s | 0.05 | Fade-out duration at `end_frame` (loop). |
 | `loop_phase` | float s \| `"random"` | `"random"` | Loop start offset into the sample at `frame` (or at the shot start); `"random"` is seeded from `id`. |
 | `loop_crossfade` | float s | 0.05 | Crossfade at the loop seam (correlation-adaptive, constant level); 0 for samples that are already seamless. |
 | `gain_db` | float | 0.0 | Source gain at the reference distance. |
 | `pitch` | float | 1.0 | Playback-rate ratio applied before spatial processing (2.0 = one octave up, shorter). |
-| `group` | str | `"sfx"` | Stem name. |
+| `group` | str | `"sfx"` | Stem name (`reverb` is the reverb return's stem; avoid it). |
 | `spatial` | bool | true | false = bed: no distance, pan, delay, filters; only gain and fades. |
 | `distance_model` | str | `"inverse_clamped"` | `inverse_clamped`, `linear_clamped`, `exponential_clamped`, `none` ([formulas](signal-model.md#distance-gain)). |
 | `ref_distance` | float m | 1.0 | Distance at which the gain is `gain_db`. Closer does not get louder. |
-| `max_distance` | float m \| null | null | Beyond this the gain stops falling (inverse/exponential) or reaches 0 (linear, required there). Also the culling distance. |
+| `max_distance` | float m \| null | null | Beyond this the gain stops falling (inverse/exponential) or reaches 0 (linear, required there). Not smaller than `ref_distance`. |
 | `rolloff` | float | 1.0 | Steepness of the distance model. |
 | `offset` | [x, y, z] m | [0, 0, 0] | Emitter position in object-local coordinates. |
 | `forward_axis` | str | `"-Z"` | Object axis the cone points along: `±X`, `±Y`, `±Z`. Same default as Blender Speaker objects. |
@@ -55,7 +55,7 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 
 | Key | Default | Meaning |
 |---|---|---|
-| `samples_root` | `"//audio/samples/"` | Base for relative sample paths. |
+| `samples_root` | `"//audio/samples/"` | Base for relative sample paths (bake). |
 | `sample_rate` | 48000 | Output sample rate. |
 | `speed_of_sound` | 343.0 m/s | Propagation speed. |
 | `doppler_factor` | 1.0 | 0 = no Doppler (constant delay), 1 = physical, >1 exaggerated. |
@@ -71,9 +71,9 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `rear_cutoff_hz` | 6000 | Low-pass cutoff for a source directly behind the camera. |
 | `rear_gain_db` | −2.0 | Extra gain for a source directly behind the camera. |
 | `master_gain_db` | 0.0 | Gain on the master sum. |
-| `substeps` | 4 | Bake sub-frames per frame. |
-| `pad_seconds` | 3.0 | Bake padding before and after the shot (covers ~1 km of propagation; the bake warns if a source is farther away in travel time). |
-| `listener` | null | Object name to use instead of the active camera. |
+| `substeps` | 4 | Sub-frames per frame (bake). |
+| `pad_seconds` | 3.0 | Padding before and after the shot (covers ~1 km of propagation; the bake warns if a source is farther away in travel time) (bake). |
+| `listener` | null | Object name to use instead of the active camera (bake). |
 | `quality` | `"standard"` | Fractional-delay interpolation: `standard` (2× oversampled, 6-point polynomial) or `high` (anti-aliased windowed sinc, slower; for extreme Doppler). |
 | `occlusion_gain_db` | −12.0 | Transmission through an occluder: gain of a fully occluded source at low frequencies. |
 | `occlusion_cutoff_hz` | 1500 | Transmission low-pass: a fully occluded source is a further −3 dB here. |
@@ -85,7 +85,8 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `read_speakers` | true | Read Blender Speaker objects as sources (bake). |
 | `instance_limit` | 32 | Per tagged object inside instances: keep at most this many instances, those that come closest to the camera; 0 = all (bake). |
 
-Ranges and the full signal meaning: [signal-model.md](signal-model.md).
+Settings marked *(bake)* are used only by the bake; `render --set` on them changes nothing and
+warns. Ranges and the full signal meaning: [signal-model.md](signal-model.md).
 
 ## Speaker objects
 
@@ -121,6 +122,11 @@ at most `instance_limit` instances are kept: those that come closest to the came
 (30 sampled frames); the bake warns when it drops some. A crowd of 500 instanced cars with an
 engine tag thus gives the 32 nearest engines.
 
+Instances are found at the scene's current frame (the frame the .blend was saved at, or the one a
+`--run` script sets). An instance that geometry nodes generate only at other frames is not a
+source; one that is not generated at some baked samples keeps its last position there, and the bake
+warns.
+
 ## Occluders
 
 Every rendered mesh object and mesh instance occludes by its oriented bounding box, or, when its
@@ -154,11 +160,14 @@ property `sfx_occluder` on the object, or on the collection that is instanced, o
 ```python
 add_sound(obj, sample, *, mode="loop", frame=None, **params) -> dict
     # Validate params against the table above, append the entry to obj["sfx"], return it.
+get_sounds(obj) -> list[dict]
+    # The object's entries as plain dicts.
 clear_sounds(obj) -> None
 set_scene_settings(scene=None, **settings) -> dict
-    # Merge into scene["sfx_settings"] (default: bpy.context.scene).
-iter_tagged(scene=None) -> Iterator[tuple[Object, dict]]
-    # All (object, entry) pairs of the scene's view layer; used by bake.
+    # Validate and merge into scene["sfx_settings"] (default: bpy.context.scene); return the result.
+get_scene_settings(scene=None) -> dict
+iter_tagged(scene=None) -> Iterator[tuple[Object, int, dict]]
+    # All (object, index, entry) triples of the scene's objects, sorted by object name.
 ```
 
 The helper imports only `bpy` and the standard library. Generator scripts add the repo to
@@ -179,8 +188,11 @@ tag.add_sound(scene_root, "station_ambience.wav", spatial=False, gain_db=-20, gr
 ## Validation at bake time
 
 - Unknown key, wrong type, value out of range → error naming object, entry index and key.
-- `mode="once"` without `frame` → error.
-- `distance_model="linear_clamped"` without `max_distance` → error.
+- `mode="once"` without `frame` → error; a list of frames for a loop → error.
+- `distance_model="linear_clamped"` without `max_distance` → error; `max_distance` below
+  `ref_distance` → error.
+- `end_frame` before `frame` → error.
+- Two sources with the same `id` → error.
 - Sample file missing or unreadable → error (bake checks existence; the engine decodes).
 - `--skip-invalid` turns errors into warnings and drops the entry.
 

@@ -142,6 +142,44 @@ def test_instance_limit_keeps_the_closest(tmp_path, sine):
     assert any("instances of tagged object Car" in w for w in manifest["warnings"])
 
 
+def test_instance_that_disappears_keeps_its_last_position(tmp_path, sine):
+    blend = blender(CAMERA + f"""
+asset = bpy.data.collections.new("CarAsset")
+car = bpy.data.objects.new("Car", None)
+asset.objects.link(car)
+car["sfx"] = [{{"sample": {sine!r}}}]
+mesh = bpy.data.meshes.new("pts"); mesh.from_pydata([(0, 20, 0), (5, 20, 0)], [], [])
+gn = bpy.data.objects.new("Scatter", mesh); s.collection.objects.link(gn)
+tree = bpy.data.node_groups.new("scatter", "GeometryNodeTree")
+tree.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+tree.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+N, L = tree.nodes, tree.links
+nin, nout = N.new("NodeGroupInput"), N.new("NodeGroupOutput")
+late = N.new("FunctionNodeCompare"); late.data_type = "FLOAT"; late.operation = "GREATER_THAN"
+L.new(N.new("GeometryNodeInputSceneTime").outputs["Frame"], late.inputs["A"]); late.inputs["B"].default_value = 30
+second = N.new("FunctionNodeCompare"); second.data_type = "INT"; second.operation = "EQUAL"
+L.new(N.new("GeometryNodeInputIndex").outputs[0], second.inputs["A"]); second.inputs["B"].default_value = 1
+both = N.new("FunctionNodeBooleanMath"); both.operation = "AND"
+L.new(late.outputs[0], both.inputs[0]); L.new(second.outputs[0], both.inputs[1])
+delete = N.new("GeometryNodeDeleteGeometry"); delete.domain = "POINT"  # point 1 is gone after frame 30
+L.new(nin.outputs[0], delete.inputs["Geometry"]); L.new(both.outputs[0], delete.inputs["Selection"])
+ci = N.new("GeometryNodeCollectionInfo"); ci.inputs["Collection"].default_value = asset
+iop = N.new("GeometryNodeInstanceOnPoints")
+L.new(delete.outputs[0], iop.inputs["Points"]); L.new(ci.outputs[0], iop.inputs["Instance"])
+L.new(iop.outputs[0], nout.inputs[0])
+gn.modifiers.new("GN", "NODES").node_group = tree
+bpy.ops.wm.save_as_mainfile(filepath={str(tmp_path / 'vanish.blend')!r})
+""", tmp_path, "vanish")
+    out = tmp_path / "bake"
+    assert main(["bake", str(blend), "--out", str(out), "--substeps", "1", "--pad", "0"]) == 0
+    manifest = json.loads((out / "scene.json").read_text())
+    assert len(manifest["sources"]) == 2
+    assert any("not generated at some baked samples (up to 30 of 60" in w for w in manifest["warnings"])
+    arrays = np.load(out / "scene.npz")
+    pos = arrays["src_pos"]
+    assert np.allclose(pos[:, 0], [0, 20, 0]) and np.allclose(pos[:, 1], [5, 20, 0])  # held after it vanished
+
+
 def test_tags_on_objects_created_by_a_run_script(tmp_path, sine):
     blend = blender(CAMERA + f"""
 asset = bpy.data.collections.new("Assets")  # excluded from the view layer: not a source by itself

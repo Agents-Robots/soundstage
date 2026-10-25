@@ -12,7 +12,7 @@ What you produce:
   report and its debug plot; stems `<shot>_stem_<group>.wav` if the user mixes in Fairlight;
 - `<project>/audio/out/<shot>_preview.mp4`: the mix on the rendered frames, if there are any.
 
-What the engine does (Phase 3): loudness by distance; sound travels at 343 m/s, so distant events
+What the engine does (Phases 0 to 3): loudness by distance; sound travels at 343 m/s, so distant events
 are heard late; Doppler from the motion of sources and camera; left/right panning with a small
 interaural delay and head shadow; air absorption (distant sounds lose treble); a mild treble cut and
 level drop for sources behind the camera; directivity cones; clean camera cuts; occlusion behind
@@ -162,15 +162,15 @@ Read `<shot>.report.json` and check:
 - every source has `audible_frames > 0`; a source that should be prominent has a `peak_dbfs`
   between about −30 and −3;
 - `master.peak_dbfs` below 0 and `lufs_integrated` roughly −30 to −16 for an effects mix;
-- `distance_m` ranges match what the scan said; `delay_ms` ≈ distance / 343;
+- `distance_m` ranges match what the scan said; `delay_ms` ≈ `distance_m` / 0.343 (2.9 ms per metre);
 - `rate` (playback rate) of moving sources: above 1 while approaching, below 1 while receding,
   `c / (c ∓ v)` for speed `v` (30 m/s ≈ 1.10 / 0.92); a warning "playback rate clamped" means
   near-supersonic motion (lower `doppler` for that source) or a jump the engine did not recognize
   as a teleport (check `scene["sfx_settings"]["teleport_speed"]`);
 - `visibility` [min, max] and `occluded_frames` per source: a source in the open should stay at 1;
   one that passes behind a building should drop where the picture hides it. A source muffled while
-  in view points to an occluder to mark `sfx_occluder = False` (find it by its position on the
-  line between camera and source in the scan's `static_near`);
+  in view points to an occluder to mark `sfx_occluder = False` or `"mesh"`: `soundstage inspect`
+  lists the objects that block each source;
 - `groups`: loudness per group; `groups.reverb` 10–20 LU below the master is a usual amount of
   space; with `--stems`, the stems exist for every group.
 

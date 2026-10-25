@@ -216,40 +216,6 @@ def control_cubic(values, jump, start, step, a, out):
 
 
 @_jit
-def interp_uniform(a, rate, xp, fp, out):
-    """np.interp at x = (a + i) / rate for increasing xp (held outside), walking the index."""
-    n = xp.shape[0]
-    j = 0
-    for i in range(out.shape[0]):
-        x = (a + i) / rate
-        if x <= xp[0]:
-            out[i] = fp[0]
-            continue
-        if x >= xp[n - 1]:
-            out[i] = fp[n - 1]
-            continue
-        if xp[j] > x:
-            j = 0
-        while xp[j + 1] < x:
-            j += 1
-        w = xp[j + 1] - xp[j]
-        out[i] = fp[j] if w <= 0 else fp[j] + (fp[j + 1] - fp[j]) * (x - xp[j]) / w
-    return out
-
-
-@_jit
-def fir_valid(x, h, out):
-    """'valid' convolution: out[i] = sum_k x[i + k] * h[len(h) - 1 - k]."""
-    m = h.shape[0]
-    for i in range(out.shape[0]):
-        acc = 0.0
-        for k in range(m):
-            acc += x[i + k] * h[m - 1 - k]
-        out[i] = acc
-    return out
-
-
-@_jit
 def onepole_cascade_track(x, a, rate, times, gains, state, out):
     """TPT one-pole cascade whose gains (n_ctl, P) are given at increasing ``times`` (s) and
     interpolated linearly at the sample times (a + i) / rate."""
@@ -329,8 +295,6 @@ def warmup() -> None:
     flags = np.zeros(4, dtype=np.uint8)
     control_linear(buf[:2], flags, 0, 48, 0, np.empty(2))
     control_cubic(buf[:2], flags, 0, 48, 0, np.empty(2))
-    interp_uniform(0, 48000, np.arange(2.0), one, np.empty(2))
-    fir_valid(buf, one, np.empty(15))
     onepole_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1)), np.zeros(1), np.empty(2))
     rear_shelf_track(buf[:2], 0, 48000, np.arange(2.0), one, 0.5, np.zeros(1), np.empty(2))
     follow(one, 0.5, 0.5, np.empty(2))

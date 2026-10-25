@@ -8,8 +8,10 @@ reason here.
 Decisions behind this model: ADR [0006](../adr/0006-propagation-retarded-time-delay-line.md)
 (propagation), [0007](../adr/0007-stereo-ear-model.md) (ears and panning),
 [0008](../adr/0008-cinematic-air-physics.md) (physics defaults),
-[0009](../adr/0009-processing-chain.md) (processing chain and replaceable models). Research behind
-the Phase 2 choices: [research/](../../research/README.md), one page per model.
+[0009](../adr/0009-processing-chain.md) (processing chain and replaceable models),
+[0010](../adr/0010-occlusion-fresnel-visibility-box-occluders.md) (occlusion),
+[0011](../adr/0011-reverb-efx-presets-synthetic-ir.md) (reverb). Research behind the choices:
+[research/](../../research/README.md), one page per model.
 
 ## Coordinate frames
 
@@ -28,11 +30,13 @@ the Phase 2 choices: [research/](../../research/README.md), one page per model.
 - Frame rate `F = fps / fps_base` (exact for 23.976 = 24/1.001, 29.97 = 30/1.001).
 - Time of frame `f` relative to the shot: `t(f) = (f − frame_start) / F`. Sub-frames are
   fractional `f`.
-- Output sample `n` ↔ `t = n / fs`, `fs = 48000` Hz. **Sample 0 = first frame.**
+- Output sample `n` ↔ `t = n / fs`, `fs = sample_rate` (48000 Hz). **Sample 0 = first frame.**
 - Output length: `round((frame_end − frame_start + 1) · fs / F)` samples, so the audio ends with
   the last frame's duration.
-- Internally the engine simulates from `t_min = t(frame_start − pad_frames_before)` (pre-roll) so
-  sound emitted before the first frame arrives correctly, and trims to `[0, length)` at the end.
+- Sound emitted before the first frame arrives correctly: reads reach back into emission times
+  before `t = 0`, where the dry signal exists too and positions are baked down to
+  `t_min = t(frame_start − pad_frames_before)` (held before that, with a warning). The output covers
+  `[0, length)` only.
 
 ## Processing chain (per source)
 
@@ -46,8 +50,9 @@ emission side (mono, emission rate f_e = f_s · oversample):
         ─▶ delay line (emission samples)
 
 reception side (per ear, f_s):
-  τ_read,L/R(t) (Doppler factor, sync, ITD, rate clamp) ─▶ fractional-delay read ─▶ head shadow (per ear)
-        ─▶ × gain · g_dist · g_cone · g_rear ─▶ × pan gains ─▶ group bus
+  τ_read,L/R(t) (Doppler factor, sync, ITD, rate clamp) ─▶ fractional-delay read ─▶ occlusion low-pass
+        ─▶ head shadow (per ear) ─▶ × gain · g_dist · g_cone · g_rear · G_occ ─▶ × pan gains ─▶ group bus
+  centre read (no ITD) ─▶ × send gain ─▶ reverb bus
   at jumps: a second read with the parameters before the jump held, 10 ms equal-power crossfade
 ```
 
@@ -63,20 +68,24 @@ gain and fades.
 
 ## Dry timeline
 
-- Decode with libsndfile (WAV, FLAC, OGG), convert to float64. Spatial sources: stereo samples are
-  downmixed `(L + R) / 2`. Beds keep stereo; mono beds go to both channels at −3.01 dB.
-- Resample to `fs` with soxr (VHQ). Apply `pitch` as a further soxr ratio `1 / pitch`.
+- Decode with libsndfile (WAV, FLAC, OGG), convert to float64. Spatial sources: multichannel
+  samples are downmixed to the mean of their channels (`(L + R) / 2` for stereo). Beds keep the
+  first two channels; mono beds go to both channels at −3.01 dB.
+- Resample with soxr (VHQ) to the emission rate `f_e` for spatial sources (`2 fs` with the standard
+  interpolator, `fs` with the sinc), to `fs` for beds; `pitch` is part of the same ratio
+  (`f_e / pitch`).
 - **One-shot**: the sample starts at emission time `t_trig = t(frame)`; zero elsewhere. `fade_in`
   as a raised-cosine ramp if set.
-- **Loop**: tiled from the loop start (`t(frame)`, or `t_min` if `frame` is null) to the loop end
-  (`t(end_frame) + fade_out`, or the end of the simulated range). The seam uses a crossfade of
+- **Loop**: tiled from the loop start (`t(frame)`; if `frame` is null, at every emission time) to
+  the loop end (`t(end_frame) + fade_out`, or without end). The seam uses a crossfade of
   `loop_crossfade` seconds (the tail overlaps the head) whose law adapts to the correlation `ρ` of
   head and tail: gains `a, b` with `a² + b² + 2ρab = 1` (equal power for uncorrelated material,
-  equal gain for identical material), so the level stays constant across the seam. Start offset `loop_phase`
-  seconds into the sample; `"random"` = uniform in [0, sample length), seeded from the source id.
-  Fades are raised-cosine.
-- The dry timeline covers emission times from `t_min − max delay` to the end, so every read
-  position exists.
+  equal gain for identical material), so the level stays constant across the seam. Start offset
+  `loop_phase` seconds into the loop cycle at `t(frame)`, or at `t = 0` (the first frame) when
+  `frame` is null; `"random"` = uniform over the cycle, seeded from the source id. Fades are
+  raised-cosine.
+- The dry timeline is produced on demand for whatever emission times the reads need (before the
+  first frame, too).
 
 ## Trajectories and control rate
 
@@ -86,33 +95,40 @@ gain and fades.
   kink**: a sample where the velocity changes faster than 200 m/s² (about 20 g; keyframed motion
   that starts or stops instantly). A spline through such a kink rings (the playback rate of the
   flyby's ship overshot by 1.8 % where it starts moving); split there, the rate steps cleanly.
-  Position stays continuous at a kink, so it is not a jump and gets no crossfade. The listener rotation uses scipy's `RotationSpline` per segment (continuous
-  angular rate and acceleration; piecewise slerp would step the rate of change of pan and ITD at
-  every baked sample).
+  Position stays continuous at a kink, so it is not a jump and gets no crossfade. The listener
+  rotation uses scipy's `RotationSpline` per segment (continuous angular rate and acceleration;
+  piecewise slerp would step the rate of change of pan and ITD at every baked sample).
 - **Jumps.** Listener segments are split at the scene's `cuts` (camera switches) and wherever the
   listener moves faster than `teleport_speed` between two baked samples; source pieces likewise at
   `src_cuts` and at such teleports (default `teleport_speed`: 3 × `speed_of_sound`). A spline is
   evaluated only inside its own segment or piece (held at its ends).
-- Geometry is evaluated at the **control rate** `f_ctl = 1000 Hz` (48-sample blocks). Delays are
-  upsampled from control rate to audio rate with cubic interpolation (they are smooth); gains are
-  interpolated linearly per sample; filter coefficients are updated per block.
+- Geometry is evaluated at the **control rate**, every 48 output samples (1000 Hz at 48 kHz). Delays
+  are upsampled from control rate to audio rate with cubic (Catmull-Rom) interpolation (they are
+  smooth); gains and filter coefficients are interpolated linearly per sample; nothing is
+  interpolated across a jump.
 
 ## Propagation: delay, Doppler, ITD
 
 **Retarded time.** For reception time `t` and listener position `p(t)`, the propagation delay
-`τ_c(t)` solves `τ = |s(t − τ) − p(t)| / c`. Fixed-point iteration at control rate:
+`τ_c(t)` solves `τ = |s(t − τ) − p(t)| / c`. At control rate, two fixed-point steps, then Newton
+steps until every point has converged to 1 ns (at most 8):
 
 ```
 τ⁽⁰⁾ = |s(t) − p(t)| / c
-τ⁽ᵏ⁺¹⁾ = |s(t − τ⁽ᵏ⁾) − p(t)| / c        (4 iterations)
+τ ← |s(t − τ) − p(t)| / c                                  (2 fixed-point steps)
+f = τ − |s(t − τ) − p(t)| / c,   f' = 1 + u · s'(t − τ) / c,   τ ← τ − f / f'      (Newton)
 ```
 
-The iteration contracts with factor `|v_s| / c`, so 4 iterations leave a relative error of
-`(v_s/c)⁴` (1e-4 at Mach 0.1). Listener motion needs no iteration (`p` is taken at reception
-time).
+`u` is the unit vector from the listener to the retarded source, `s'` the spline velocity, so
+`f' = 1 − v_r / c > 0` for any subsonic motion; the source's piece is chosen by emission time in
+every step. Error below 2 ns up to Mach 0.95 ([E07](../../research/experiments/E07-retarded-time.md)).
+Where no consistent solution exists (residual above 1 µs: the gap after a source teleports away,
+supersonic ambiguity), the source is silent (`audible` false, entered and left with the jump
+crossfade). Listener motion needs no iteration (`p` is taken at reception time).
 
 **Doppler factor and picture sync.** With `k = doppler_factor · source.doppler` and `τ₀ = τ_c` at
-the source's reference time (one-shot: reception of the trigger; loop: its start, or `t_min`):
+the source's reference time (one-shot: reception of the trigger; loop: reception of its start
+frame, or the first frame of the shot when it has none):
 
 ```
 τ_read(t) = τ₀ + k · (τ_c(t) − τ₀)         default
@@ -192,9 +208,10 @@ Realization: four cascaded one-pole low-passes (TPT form) on the emission side. 
 fitted once per render, by least squares on the loss in dB from 100 Hz to 20 kHz where the target
 loss is below 20 dB, on a log-spaced grid of effective distances `A·d` from 5 cm to 20 km
 (continuation from the previous grid point keeps the cutoffs smooth); at control rate the cutoffs
-are interpolated in log distance. Measured error: within about 2 dB of ISO 9613-1 wherever the loss
-is below 20 dB; beyond that the filter keeps attenuating more than 18 dB. Where the loss at 20 kHz
-is below 0.05 dB the stage passes the signal unchanged.
+are interpolated in log distance. Measured error: within 2.5 dB of ISO 9613-1 wherever the loss is
+below 20 dB; beyond that the filter keeps attenuating by more than 17.7 dB
+([E05](../../research/experiments/E05-air-absorption.md)). Where the loss at 20 kHz is below
+0.05 dB the stage passes the signal unchanged.
 
 ## Panning
 
@@ -260,9 +277,9 @@ f_occ = argmin over f_c of Σ_{b = 1k, 4k} (20 log₁₀(g_b / G) + 10 log₁₀
 
 `f_occ` is the one-pole cutoff whose attenuation best matches the upper bands in dB (least squares,
 by bisection on `1/f_c²`; ∞ where nothing is attenuated). Fully occluded, `G = T(250)` and
-`f_occ` = 1524 Hz reproduce `T(f)` exactly. `G` multiplies the source gain; `f_occ` drives a TPT
-one-pole per ear, after the read and before head shadow. Both apply to the direct sound; the reverb
-send gets them only with `occlusion_mode = "occlusion"`.
+`f_occ` = 1528 Hz reproduce `T(f)` within 0.12 dB up to 4 kHz. `G` multiplies the source gain;
+`f_occ` drives a TPT one-pole per ear, after the read and before head shadow. Both apply to the
+direct sound; the reverb send gets them only with `occlusion_mode = "occlusion"`.
 
 All low-passes are one-poles in TPT (zero-delay feedback) form: `g = tan(π f_c / f_e)`,
 `G = g / (1 + g)`, per sample `v = G (x − s)`, `y = v + s`, `s = y + v`. `G` is computed at control
@@ -346,13 +363,14 @@ start of the render (or of a `--frames` sub-range) has its reverberation from th
   oversampled through a Kaiser low-pass with 32 taps per phase, β 8), integrated loudness (LUFS,
   pyloudnorm), loudness range (LU, EBU Tech 3342: 3 s windows every 0.1 s, K-weighted, gated at
   −70 LUFS and 20 LU below the mean, 95th minus 10th percentile).
-- Per source: id, group, sample, active frame intervals, distance min/max (m), delay min/max (ms),
-  playback rate min/max, peak contribution (dBFS), frames with peak above −60 dBFS, and with
-  visibility: its range (mean over bands, per frame) and the frames below 0.5.
+- Per source: id, group, sample, active frame range, distance min/max (m), delay min/max (ms),
+  playback rate min/max, peak contribution (dBFS, with the master gain), frames with peak above
+  −60 dBFS, and with visibility: its range (mean over bands, per frame) and the frames below 0.5.
 - `reverb`: the environment's name; `processing`: normalization gain, limiter's maximum reduction
   and active time.
-- Warnings: rate clamped, source never audible, missing or resampled samples, cuts handled, sound
-  emitted before the baked range.
+- Warnings: those of the bake, then rate clamped, source never audible, sound emitted before the
+  baked range, Phase 4 keys ignored, bake settings given with `--set`, an empty selection
+  ([cli.md](cli.md#report-mixreportjson)).
 
 ## Tuning (Phase 2, #15)
 
@@ -369,9 +387,9 @@ by ear.
 |---|---|---|
 | Sample rate `fs` | 48000 Hz | scene `sample_rate` |
 | Speed of sound `c` | 343.0 m/s | scene `speed_of_sound` |
-| Control rate `f_ctl` | 1000 Hz | engine constant |
+| Control rate `f_ctl` | every 48 output samples (1000 Hz at 48 kHz) | engine constant `CONTROL_STEP` |
 | Near-field softening `r_min` | 0.25 m | engine constant |
-| Retarded-time iterations | 4 | engine constant |
+| Retarded-time solver | 2 fixed-point steps, then Newton to 1 ns (at most 8 steps) | engine constants |
 | Playback-rate clamp | [0.25, 4.0] | engine constant |
 | Teleport speed | 3 × speed of sound | scene `teleport_speed` |
 | Interpolator | `optimal2x` (standard), `sinc` (high) | scene `quality` |

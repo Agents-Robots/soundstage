@@ -11,9 +11,10 @@ sample: from where the source was when it emitted it (retarded by the propagatio
 listener at the sample; moving occluders are where they were when that sound passed them. An
 occluder beyond both endpoints (the ground under both) reflects instead of blocking.
 
-Occluders: oriented bounding boxes of the connected parts (mesh islands) of the mesh objects and
-instances that are rendered, each larger than ``occluder_min_size`` (an object's custom property ``sfx_occluder`` = False excludes it,
-"mesh" uses its real triangles). Meshes whose materials only emit or pass light (fog volumes, light
+Occluders: oriented bounding boxes of the mesh objects and instances that are rendered (of their
+connected parts, the mesh islands, when the largest part fills less than half of the box), each
+larger than ``occluder_min_size``; an object's custom property ``sfx_occluder`` = False excludes it,
+"mesh" uses its real triangles. Meshes whose materials only emit or pass light (fog volumes, light
 beams, holograms), text objects and objects that travel with the listener (the camera's vehicle) do
 not occlude. Static boxes go into one BVH tree; moving ones into a small tree
 rebuilt per sample. A box that contains the listener or the source (an engine inside its car, a
@@ -60,7 +61,7 @@ def _occluder_mode(inst) -> str | None:
     if flag is None and inst.is_instance and inst.parent is not None:
         coll = inst.parent.original.instance_collection
         flag = coll.get("sfx_occluder") if coll is not None else None
-    if flag is False or flag == "off":
+    if flag == "off" or (flag is not None and not isinstance(flag, str) and not flag):  # False, 0
         return None
     return "mesh" if flag == "mesh" else "box"
 
@@ -194,7 +195,7 @@ class Occluders:
             cams.append(np.array(cam.evaluated_get(depsgraph).matrix_world) if cam else None)
         first = snaps[0]
         static, moving, carried = [], [], []
-        for key, (m, local, mode, ob) in first.items():
+        for key, (m, local, _, _) in first.items():
             mats = [s[key][0] if key in s else None for s in snaps]
             if all(x is not None and np.allclose(x, m, atol=1e-4) for x in mats[1:]):
                 static.append(key)
@@ -375,8 +376,8 @@ def _tree(boxes: list, verts: list, tris: list) -> tuple[BVHTree | None, np.ndar
 
 
 def _box_arrays(boxes: list) -> dict | None:
-    """Centres (M, 3), unit axes (M, 3, 3) as rows, half extents (M, 3) of oriented boxes, and their
-    world-axis-aligned bounds ``lo``, ``hi`` (M, 3)."""
+    """Centres ``c`` (M, 3), unit axes ``u`` (M, 3, 3) as rows and half extents ``h`` (M, 3) of
+    oriented boxes."""
     if not boxes:
         return None
     m = np.array([b[0] for b in boxes])  # (M, 4, 4)
@@ -388,13 +389,7 @@ def _box_arrays(boxes: list) -> dict | None:
     c = np.einsum("mij,mj->mi", r, (lo + hi) / 2) + m[:, :3, 3]
     u = np.transpose(r / size[:, None, :], (0, 2, 1))
     h = np.maximum((hi - lo) / 2 * size, 1e-6)
-    extent = np.einsum("mkx,mk->mx", np.abs(u), h)
-    return {"c": c, "u": u, "h": h, "lo": c - extent, "hi": c + extent}
-
-
-def _local(boxes: dict, p: np.ndarray, j: np.ndarray) -> np.ndarray:
-    """Points (R, 3) in the frames of boxes j (R,)."""
-    return np.einsum("rij,rj->ri", boxes["u"][j], p - boxes["c"][j])
+    return {"c": c, "u": u, "h": h}
 
 
 def _inside(boxes: dict, j: int, point: np.ndarray) -> bool:

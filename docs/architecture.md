@@ -6,27 +6,28 @@ decisions behind the structure are in [adr/](adr/README.md).
 ## Pipeline
 
 ```
-┌──────────────────────────── Blender (bpy, headless) ────────────────────────────┐
-│ generator scripts ──▶ tag.add_sound(obj, …) ──▶ obj["sfx"], scene["sfx_settings"] │
-│ hand-made scenes  ──▶ Speaker objects (+ sfx_speaker), tags in instanced assets   │
-│                                                    │                              │
-│ bake.py: collect sources (emitters.py), step frames + sub-frames, record listener │
-│          and sources, visibility per band (occlusion.py), detect cuts             │
-│          ──▶ scene.json + scene.npz                                               │
-└──────────────────────────────────────────────────────┬──────────────────────────┘
+┌──────────────────────────── Blender (bpy, headless) ────────────────────────────────┐
+│ generator scripts ──▶ tag.add_sound(obj, …) ──▶ obj["sfx"], scene["sfx_settings"]   │
+│ hand-made scenes  ──▶ Speaker objects (+ sfx_speaker), tags in instanced assets     │
+│                                                    │                                │
+│ bake.py: collect sources (emitters.py), step frames + sub-frames, record listener   │
+│          and sources, visibility per band (occlusion.py), detect cuts               │
+│          ──▶ scene.json + scene.npz                                                 │
+└──────────────────────────────────────────────────────┬──────────────────────────────┘
                                                        │ files (versioned contract)
-┌──────────────────────────── engine (venv: numpy, scipy, numba) ──────────────────┐
-│ scene.py      load + validate + resolve settings (--set)                          │
-│ signals.py    samples → dry timelines (resample, pitch, loops, one-shots, fades)  │
-│ geometry.py   splines per segment, control-rate listener/source geometry          │
-│ propagation.py retarded time, Doppler/sync/ITD delays, fractional-delay read       │
-│ filters.py    distance gain, cone, air absorption, rear cue, occlusion, head shadow│
-│ panning.py    amplitude / hybrid (binaural later)                                  │
-│ reverb.py     EFX presets → synthetic IR, or IR file; send bus convolution         │
-│ render.py     orchestrates per source and per chunk; group buses, reverb bus       │
-│ mix.py        normalize, true-peak limiter, stems, WAV writing                     │
-│ report.py     metrics per master/group/source, warnings; plot.py debug plot        │
-└──────────────────────────────────────────────────────┬──────────────────────────┘
+┌──────────────────────────── engine (venv: numpy, scipy, numba) ─────────────────────┐
+│ scene.py      load + validate + resolve settings (--set)                            │
+│ signals.py    samples → dry timelines (resample, pitch, loops, one-shots, fades)    │
+│ geometry.py   splines per segment, retarded time, control-rate paths (control.py)   │
+│ propagation.py Doppler/sync/ITD read delays, interpolators, delay line              │
+│ filters.py    distance gain, cone, air absorption, rear cue, occlusion, head shadow │
+│ panning.py    amplitude / hybrid (binaural later); kernels.py numba loops           │
+│ source.py     the processing chain of one source (emission → delay line → ears)     │
+│ reverb.py     EFX presets → synthetic IR, or IR file; send bus convolution          │
+│ render.py     orchestrates per source and per chunk; group buses, reverb bus        │
+│ mix.py        normalize, true-peak limiter, stems, WAV writing                      │
+│ report.py     metrics per master/group/source, warnings; plot.py debug plot         │
+└──────────────────────────────────────────────────────┬──────────────────────────────┘
                                                        ▼
                          mix.wav, stems, report.json, plot.png ──▶ Resolve / agent checks
 ```
@@ -63,14 +64,14 @@ decisions behind the structure are in [adr/](adr/README.md).
 
 | Module | Responsibility |
 |---|---|
-| `scene.py` | Load `scene.json` + `scene.npz`, check format/version, apply `--set` overrides, build `Scene`/`Source`/`Settings` dataclasses; `write_scene` for tests and hand-made scenes. |
+| `scene.py` | Load `scene.json` + `scene.npz`, check format/version, apply `--set` overrides and resolve the settings (a dict), build the `Scene` and `Source` dataclasses; `build_manifest` and `write_scene` for tests and hand-made scenes. |
 | `signals.py` | Decode and cache samples (soundfile), downmix, resample (soxr) to the emission rate, pitch; `DryGenerator` builds each source's dry timeline window by window over emission time: loop tiling with seam crossfade and seeded phase, one-shot placement, fades. |
 | `control.py` | The control grid (1 kHz) and interpolation of control-rate tracks to audio samples (linear for gains and filter parameters, Catmull-Rom for delays), never across a jump. |
 | `geometry.py` | Tracks: positions as cubic splines per piece (split at cuts and detected teleports), listener rotation as `RotationSpline` per segment; retarded-time solver (fixed point + Newton, audibility mask); the per-source `Path` on the control grid; camera-space vectors and derived angles. |
 | `propagation.py` | Read delays per ear (Doppler factor, picture sync, ITD, playback-rate clamp per run between jumps); interpolator registry (`optimal2x`, `sinc`, `hermite4`); the `DelayLine` of emission samples. |
 | `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear). |
 | `panning.py` | Pan-law registry (`sine`, `power`) and panner registry (`amplitude`, `hybrid`): per-ear delays (ITD), per-ear stages and pan gains from the path; later `binaural`. |
-| `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascade, first-order section) with reference implementations; the optimal-2× pre-emphasis design. |
+| `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascades, first-order section, control-rate interpolation, the visibility follower) with reference implementations; the optimal-2× pre-emphasis design. |
 | `source.py` | The processing chain of one source or voice (ADR [0009](adr/0009-processing-chain.md)): emission chain → delay line → per-ear read and stages → gains and pan; held branches crossfaded at jumps; beds. |
 | `reverb.py` | EFX presets (`data/efx_presets.json`, from OpenAL Soft) synthesized into stereo impulse responses (seeded, cached), or IR files; `ReverbBus`: overlap-add convolution of the summed send per chunk; decay-time measurement for tests. |
 | `mix.py` | Loudness normalization, true peak (BS.1770 interpolator), offline true-peak limiter returning a gain curve, stem file names, WAV writing (float or PCM24 with dither). |
@@ -80,9 +81,10 @@ decisions behind the structure are in [adr/](adr/README.md).
 
 ### `soundstage/cli.py`
 
-Argument parsing for `scan`, `bake`, `inspect`, `render`, `presets`, `preview` ([spec/cli.md](spec/cli.md)); `scan` and `bake`
-shell out to Blender. `render` applies normalization and the limiter, writes the master, stems,
-report and plot.
+Argument parsing for `scan`, `bake`, `inspect`, `render`, `presets`, `preview`
+([spec/cli.md](spec/cli.md)); `scan` and `bake` shell out to Blender. `render` checks its arguments
+against the scene, applies normalization and the limiter, writes the master, stems, report and
+plot.
 
 ### `soundstage/preview.py`
 

@@ -15,7 +15,7 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import butter, csd, sosfiltfilt, welch
 
-from common import REPO, RATE, render, rms_db, sample, save, scene, table
+from common import REPO, RATE, render, sample, save, scene, table
 from soundstage.engine import filters
 
 PLAIN = {"panner": "amplitude", "air_absorption": 0.0, "doppler_factor": 0.0}

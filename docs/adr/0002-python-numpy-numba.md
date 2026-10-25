@@ -37,3 +37,9 @@ scripts, render tooling) is Python, and the user and agents work in Python.
   documentation.
 - If a later requirement (hundreds of sources, binaural with long HRIRs) outgrows this, a compiled
   core can replace individual kernels behind the same function signatures.
+
+## Notes
+
+Filter coefficients are computed at the 1 kHz control rate and interpolated linearly per sample in
+the kernels, rather than held per block ([time-varying filters](../../research/models/time-varying-filters.md));
+sources run in a thread pool on `nogil` kernels (ADR [0009](0009-processing-chain.md)).

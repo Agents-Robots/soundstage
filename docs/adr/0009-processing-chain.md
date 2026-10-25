@@ -75,3 +75,10 @@ keeps its state between chunks and is used by one thread at a time.
 - Parameters that depend on reception geometry (rear cue) are applied on the emission side through
   the `t − τ` mapping; where that mapping jumps back at a cut, the first occurrence wins, which
   only matters inside the 10 ms crossfade.
+
+## Notes
+
+Occlusion (Phase 3) runs on the reception side, per ear after the read, not on the emission side
+as anticipated above: the baked visibility already describes the path of the sound heard at each
+reception time, so placing it on emission time would retard it twice
+([processing chain](../../research/models/processing-chain.md#why-two-signal-domains)).

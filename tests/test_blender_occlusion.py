@@ -127,7 +127,7 @@ emitter("Src", [(1, (0, 20, 0)), (60, (0, 20, 0))])
         audio, _ = sf.read(wav)
         level[name] = rms_db(audio[RATE // 2: RATE])
     # 1 kHz behind the wall: -12 dB broadband (250 Hz band) and the one-pole from the upper bands
-    # (cutoff 1524 Hz): -12.12 - 1.55 = -13.67 dB; the "open" transmission is flat within 0.01 dB
+    # (cutoff 1528 Hz): -12.12 - 1.54 = -13.66 dB; the "open" transmission is flat within 0.01 dB
     assert level["occluded"] - level["open"] == pytest.approx(-13.67, abs=0.3)
 
 

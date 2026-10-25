@@ -1,9 +1,9 @@
 # Usage
 
-How to give a Blender animation its sound, for people and for coding agents. Features marked
-*(later)* are specified but not implemented yet; [roadmap.md](roadmap.md) says which phase delivers
-them. For adding sound to an existing animation step by step, see the
-[agent guide](agent-guide.md).
+How to give a Blender animation its sound, for people and for coding agents. Everything here works
+as described; the Phase 4 tag keys (`variants`, `gain_jitter_db`, `pitch_jitter`, `gain_prop`,
+`pitch_prop`) are accepted and stored but ignored with a warning ([roadmap.md](roadmap.md)). For
+adding sound to an existing animation step by step, see the [agent guide](agent-guide.md).
 
 ## Setup (once)
 
@@ -41,7 +41,7 @@ In a scene project (`<project>/`):
   the visual sync is off by that silence.
 - **Mono** for anything placed in space (stereo files are downmixed). Stereo for beds
   (ambience, music) with `spatial=False`.
-- Any sample rate and bit depth; everything is resampled to 48 kHz.
+- Any sample rate and bit depth; everything is resampled to the output rate (48 kHz).
 - Level: normalize samples to a similar peak (e.g. −1 dBFS) and set the balance with `gain_db`
   in the tags, so the mix is controlled in one place.
 
@@ -116,17 +116,18 @@ layer:
    dict of tag keys, e.g. `{"mode": "loop", "group": "engines", "reverb_send_db": -6}` (a loop starts
    at the first strip).
 
-Speakers and tags can be mixed in one scene; `--set read_speakers=false` at bake time
-(`tag.set_scene_settings(read_speakers=False)`) ignores the speakers. The mapping in detail:
+Speakers and tags can be mixed in one scene; `tag.set_scene_settings(read_speakers=False)` (in the
+scene or in a `--run` script) makes the bake ignore the speakers. The mapping in detail:
 [spec/tagging.md](spec/tagging.md#speaker-objects).
 
 ## 2c. Environment: occluders and reverb
 
 **Occlusion** works without setup: every rendered mesh larger than 2 m blocks sound with its
-bounding box (a merged mesh with the boxes of its parts); a source behind it gets quieter and duller, smoothly, with the low
-frequencies bending around edges. Fog and light volumes, light beams and holograms (light-only materials), text objects and the
-vehicle the camera rides on are left out automatically; glass blocks, as it does in reality. Adjust with a
-custom property `sfx_occluder` on an object or on the collection that is instanced:
+bounding box (a merged mesh with the boxes of its parts); a source behind it gets quieter and
+duller, smoothly, with the low frequencies bending around edges. Fog and light volumes, light beams
+and holograms (light-only materials), text objects and the vehicle the camera rides on are left out
+automatically; glass blocks, as it does in reality. Adjust with a custom property `sfx_occluder` on
+an object or on the collection that is instanced:
 
 | Object | `sfx_occluder` |
 |---|---|
@@ -257,8 +258,9 @@ Things that differ from a person's workflow:
 | Source inaudible | `ref_distance` too small for the scene scale, or wrong `scale_length` | Check `distance_m` in the report; raise `ref_distance` |
 | Sudden pitch jump or warble | Bad keyframes, a jump slower than `teleport_speed` (not recognized as a teleport), or sub-frames too coarse for very fast motion | `inspect` for speed spikes; lower `teleport_speed`; raise `--substeps` |
 | "playback rate clamped" warning | Source near or above Mach 1 | Lower `doppler` for that source, or accept the clamp |
-| Clicks at a camera cut | Cut not detected (camera jumps without a camera switch) | Bake detects jumps above a threshold; report a bug with the scene file |
+| "a bake setting, it has no effect on a render" warning | `--set` on a setting the bake uses (`substeps`, `pad_seconds`, `occlusion_rate`, `listener`, …) | Set it in the scene settings or a `--run` script and bake again |
+| Clicks at a camera cut | Cut not detected: the camera jumps without a camera switch, slower than `teleport_speed` | The engine treats a listener jump faster than `teleport_speed` as a cut: lower `teleport_speed`, or switch cameras with markers |
 | Source muffled though it is in view | An open or invisible object blocks it (foliage, a fence, a helper mesh that renders), or a connected part whose box covers open space | `soundstage inspect` lists the objects that block each source; mark them `sfx_occluder=False` (or `"mesh"`) |
 | Muffled through an arch or open structure | Its bounding box closes the opening | `sfx_occluder="mesh"` on that object |
 | Too many or too few engines in instanced traffic | `instance_limit` keeps the 32 closest per tagged object | Raise or lower `instance_limit` in the scene settings |
-| Bake slow with occlusion | Many occluding sources or moving occluders | `occlusion_rate` 5; `occlusion=False` on beds-like or distant sources |
+| Bake slow with occlusion | Many occluding sources or moving occluders | `tag.set_scene_settings(occlusion_rate=5)`; `occlusion=False` on distant sources that are never hidden |

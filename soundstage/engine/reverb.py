@@ -4,8 +4,8 @@
   stereo impulse response is synthesized: sparse early reflections, then a late tail of
   exponentially decaying noise whose decay time follows the preset's low/mid/high decay times over
   frequency (Moorer: decaying noise is a natural late reverberation; high frequencies decay
-  faster), in complementary 1/3-octave bands. Low diffusion gives a sparse ("velvet") tail. Left and right use independent noise (decorrelated).
-  Each section's energy is set by the preset's gains; ``gain_hf``/``gain_lf`` shelve the whole
+  faster), in complementary 1/3-octave bands. Low diffusion gives a sparse ("velvet") tail. Left
+  and right use independent noise (decorrelated). Each section's energy is set by the preset's gains; ``gain_hf``/``gain_lf`` shelve the whole
   response. Seeded from the preset name: renders are reproducible (NFR-2).
 - Files: a WAV/FLAC impulse response, resampled to the output rate, used as recorded.
 - ``ReverbBus``: the sum of all sources' sends is convolved once per chunk (FFT overlap-add); the

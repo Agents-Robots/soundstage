@@ -19,6 +19,7 @@ research/models/mixing-and-loudness.md; spec: docs/spec/signal-model.md#mixing-a
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 
 import numba
@@ -102,7 +103,10 @@ def finish(audio: np.ndarray, stems: dict[str, np.ndarray], rate: int, *, normal
 
 
 def stem_path(output: Path, group: str) -> Path:
-    return output.with_name(f"{output.stem}_stem_{group}{output.suffix}")
+    """``<mix>_stem_<group>.wav`` next to the mix; characters other than letters, digits, ``-``, ``_``
+    and ``.`` in the group name become ``_``."""
+    name = re.sub(r"[^\w.-]", "_", group)
+    return output.with_name(f"{output.stem}_stem_{name}{output.suffix}")
 
 
 def write_wav(path: str | Path, audio: np.ndarray, rate: int, *, pcm24: bool = False) -> Path:

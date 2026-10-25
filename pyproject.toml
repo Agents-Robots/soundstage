@@ -28,6 +28,9 @@ soundstage = "soundstage.cli:main"
 [tool.setuptools.packages.find]
 include = ["soundstage*"]
 
+[tool.setuptools.package-data]
+"soundstage.engine" = ["data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

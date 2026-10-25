@@ -103,7 +103,7 @@ Decisions taken with the user (2026-10-25):
 
 | ID | Requirement | Phase |
 |---|---|---|
-| NFR-1 | **Reproducible from scripts**: the .blend is a build artifact; generator scripts plus samples rebuild the tags, and bake plus render rebuild the audio . | 1 |
+| NFR-1 | **Reproducible from scripts**: the .blend is a build artifact; generator scripts plus samples rebuild the tags, and bake plus render rebuild the audio. | 1 |
 | NFR-2 | **Deterministic**: same scene file, samples and settings give a bit-identical output. All randomness is seeded from source ids. | 1 |
 | NFR-3 | **Performance**: 50 sources over a 5-minute shot render in at most 5 minutes on a current desktop CPU from Phase 2 on (Phase 1 has no target). Bake of a 5-minute shot at 4 sub-frames takes at most a few minutes for scenes that rebuild quickly. | 2 |
 | NFR-4 | **No clicks or zipper noise** from parameter changes, cuts, loop seams, or sources passing through the camera. | 1 |

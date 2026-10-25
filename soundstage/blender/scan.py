@@ -4,13 +4,14 @@ Run headless (or through ``soundstage scan``)::
 
     blender -b shot.blend --factory-startup -y --python-exit-code 1 \
         --python soundstage/blender/scan.py -- --out scan.json [--frames A-B] [--samples N] \
-        [--max-static N] [--run script.py ...]
+        [--max-static N] [--run script.py ...] [--scene NAME]
 
 Samples the shot at evenly spaced frames and writes a JSON summary: frame range and fps, cameras
-and when they are active, objects that move (attached-to-camera ones last; path length, speed, distance range to the camera,
-closest frame, side at the closest frame, keyframes), the static objects closest to the camera
-path, existing sound tags, Speaker objects, and tags that come in through instances. An agent reads
-it to decide which objects get which sounds (docs/agent-guide.md). Distances are in metres.
+and when they are active, objects that move (path length, speed, distance range to the camera,
+closest frame, side at the closest frame, keyframes; those attached to the camera last), the static
+objects closest to the camera path, existing sound tags, Speaker objects, and tags that come in
+through instances. An agent reads it to decide which objects get which sounds
+(docs/agent-guide.md). Distances are in metres.
 """
 
 from __future__ import annotations
@@ -82,7 +83,7 @@ def speaker_info(obj) -> dict:
         "strip_frames": sorted(float(f) for f in frames),
         "muted": spk.muted,
         "volume": spk.volume,
-        "overrides": dict(obj["sfx_speaker"].to_dict()) if "sfx_speaker" in obj else None,
+        "overrides": tag._plain(obj.get("sfx_speaker")),
     }
 
 

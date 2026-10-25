@@ -206,8 +206,11 @@ def bake(args: argparse.Namespace) -> None:
         m = Matrix.LocRotScale(loc * scale, rot, None)
         listener_matrix[k] = np.array(m)
         lookup = emitters.instance_lookup(depsgraph, slow_keys) if slow_keys else None
+        matrices: dict[int, Matrix] = {}  # per emitter: several sources on one object share it
         for j, (em, off, axis) in enumerate(zip(objects, offsets, axes)):
-            mw = em.matrix(depsgraph, lookup)
+            mw = matrices.get(id(em))
+            if mw is None:
+                mw = matrices[id(em)] = em.matrix(depsgraph, lookup)
             src_pos[k, j] = np.array(mw @ off) * scale
             fwd = mw.to_3x3() @ axis
             src_fwd[k, j] = np.array(fwd.normalized() if fwd.length > 1e-12 else axis)
@@ -230,6 +233,13 @@ def bake(args: argparse.Namespace) -> None:
     if vis:
         log(f"visibility: {len(vis)} samples x {len(occluding)} sources in {vis_seconds:.1f} s "
             f"({vis_seconds / len(vis) * 1000:.0f} ms per sample)")
+    gone = [em for em in {id(em): em for em in objects}.values() if em.missing]
+    if gone:
+        worst = max(gone, key=lambda em: em.missing)
+        w = (f"{len(gone)} instance source(s) not generated at some baked samples (up to {worst.missing} of {n}, "
+             f"{worst.label}); their positions are held there")
+        log(f"WARNING {w}")
+        warnings.append(w)
 
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(

@@ -109,6 +109,10 @@ SCENE_SETTINGS: dict[str, Field] = {
 IMPLEMENTED_PHASE = 3
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
 
+BAKE_SETTINGS = ("samples_root", "substeps", "pad_seconds", "listener", "read_speakers", "occlusion_rate",
+                 "occluder_min_size", "instance_limit")
+"""Scene settings used only by the bake; overriding them at render time changes nothing."""
+
 
 def _is_number(v: object) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)

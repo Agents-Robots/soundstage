@@ -20,8 +20,11 @@ ROWS = [("distance_m", "distance (m)"), ("level_db", "level (dB)"), ("pan", "pan
         ("delay_ms", "delay (ms)"), ("rate", "playback rate"), ("visibility", "visibility")]
 
 
-def write_plot(path: str | Path, scene, result) -> Path:
+def write_plot(path: str | Path, scene, result) -> Path | None:
+    """Write the plot; None (and no file) when the render has no spatial source."""
     sources = [s for s in result.sources if s.get("_track") is not None]
+    if not sources:
+        return None
     sources.sort(key=lambda s: -(s["peak_dbfs"] if s["peak_dbfs"] is not None else -999))
     sources = sources[:MAX_SOURCES]
     rows = [r for r in ROWS if any(r[0] in s["_track"] for s in sources)]
@@ -39,6 +42,7 @@ def write_plot(path: str | Path, scene, result) -> Path:
     axes[0].set_title(f"{Path(scene.path).parent.name}: frames {result.frames[0]}–{result.frames[1]} @ "
                       f"{scene.fps:g} fps, {len(sources)} of {len(result.sources)} sources (loudest)")
     axes[-1].set_xlabel("frame")
+    axes[-1].set_xlim(result.frames[0], max(result.frames[1], result.frames[0] + 1))  # the rendered range
     axes[0].legend(fontsize=7, ncol=4, loc="upper right")
     path = Path(path)
     fig.savefig(path, dpi=80)

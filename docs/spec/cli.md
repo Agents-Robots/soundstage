@@ -1,7 +1,6 @@
 # Spec: command-line interface and outputs
 
-One entry point, `soundstage`, with subcommands. Options marked *(later)* are specified but not
-implemented yet; the phase is in [roadmap.md](../roadmap.md). Exit code 0 on success, 1 on errors (bad input,
+One entry point, `soundstage`, with subcommands. Exit code 0 on success, 1 on errors (bad input,
 missing files), 2 on usage errors. Warnings go to stderr and into the report; they never change
 the exit code unless `--strict` is given.
 
@@ -57,8 +56,12 @@ soundstage bake <file.blend> --out <dir>
     [--scene NAME]           default: the file's active scene
 ```
 
-Writes `<dir>/scene.json`, `<dir>/scene.npz`. Prints a one-line summary per source. Invalid tags
-fail the bake with object, entry index and reason.
+Writes `<dir>/scene.json`, `<dir>/scene.npz` (and `<dir>/sounds/` for packed Speaker sounds).
+Prints a one-line summary per source. Invalid tags fail the bake with object, entry index and
+reason. The bake-time scene settings (`samples_root`, `substeps`, `pad_seconds`, `listener`,
+`read_speakers`, `occlusion_rate`, `occluder_min_size`, `instance_limit`) come from
+`scene["sfx_settings"]`, which a `--run` script can set; `--substeps` and `--pad` override two of
+them.
 
 `--scene` (bake and scan) makes the named scene the context scene before the `--run` scripts run,
 so scripts that use `bpy.context.scene` see it too; the manifest records it as `scene`.
@@ -70,21 +73,22 @@ soundstage inspect <scene.json> [--json]
 ```
 
 Table of sources: id, group, sample, mode, frames, distance min/max over the shot, maximum radial
-speed, the playback-rate range it implies (estimated from the baked samples; the render
-report has the exact values), and the baked visibility range (mean of the bands; 1 = in the open).
-Below the table, for each occluded source, the objects that block it most (share of its paths over
-the shot): the objects to look at when a source is muffled although it should not be. Lists cuts and warnings. Reads only the
-scene file and sample headers; renders nothing. `--json` for machine use.
+speed, the playback-rate range it implies (estimated from the baked samples, not across recorded
+cuts; the render report has the exact values; a teleport shows as a huge speed), and the baked
+visibility range (mean of the bands; 1 = in the open). Below the table, for each occluded source,
+the objects that block it most (share of its paths over the shot): the objects to look at when a
+source is muffled although it should not be. Lists cuts and warnings. Reads only the scene file;
+renders nothing. `--json` for machine use.
 
 ## `soundstage render`
 
 ```
 soundstage render <scene.json>
     [-o <mix.wav>]           default: mix.wav next to scene.json
-    [--frames A-B]           sub-range (output sample 0 = frame A)
+    [--frames A-B]           sub-range within the scene's frames (output sample 0 = frame A)
     [--solo ID|GROUP ...]    render only these (globs allowed: "Ship:*", "group:engines")
     [--mute ID|GROUP ...]
-    [--set KEY=VALUE ...]    override scene settings, e.g. --set master_gain_db=-6
+    [--set KEY=VALUE ...]    override scene settings, e.g. --set master_gain_db=-6 (bake settings: warning)
     [--pcm24]                24-bit PCM with TPDF dither instead of 32-bit float
     [--report]               write <mix>.report.json
     [--strict]               warnings become errors (exit 1)
@@ -96,7 +100,9 @@ soundstage render <scene.json>
 ```
 
 Stems sum to the master; `--normalize` and `--limit` apply the same gains to the master and every
-stem, in that order (normalize, then limit). Typical calls:
+stem, in that order (normalize, then limit). In stem file names, characters other than letters,
+digits, `-`, `_` and `.` become `_` (group `engines/left` → `<mix>_stem_engines_left.wav`); a group
+named `reverb` shares its stem with the reverb return (warning). Typical calls:
 
 ```
 soundstage render shot/scene.json -o out/shot.wav --report --plot                  # check
@@ -104,9 +110,10 @@ soundstage render shot/scene.json -o out/shot.wav --stems --set reverb=city     
 soundstage render shot/scene.json -o out/shot.wav --normalize -23 --limit -1       # standalone mix
 ```
 
-The plot (`<mix>.plot.png`) shows, for up to the 12 loudest spatial sources on a frame axis:
-distance, level (gain × distance × cone, dB), pan, delay, playback rate and, with occlusion,
-visibility. Read it as an image to check a render without listening.
+The plot (`<mix>.plot.png`) shows, for up to the 12 loudest spatial sources on a frame axis over
+the rendered range: distance, level (gain × distance × cone × rear × occlusion with the pan law's
+power, dB), pan, delay, playback rate and, with occlusion, visibility. Read it as an image to check
+a render without listening. Without spatial sources no plot is written.
 
 ## `soundstage presets`
 
@@ -288,13 +295,16 @@ Fields:
 - `processing`: `normalize_gain_db`, `limiter_max_reduction_db`, `limiter_active_s` when
   `--normalize` / `--limit` were given.
 - Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its
-  contribution, `audible_frames` (frames whose peak is above −60 dBFS); spatial sources also
+  contribution (with the master gain, before normalization and limiting), `audible_frames` (frames
+  whose peak is above −60 dBFS); spatial sources also
   `distance_m` [min, max] (propagation distance), `delay_ms` [min, max] (propagation delay as read,
   after the Doppler factor), `rate` [min, max] (playback rate: above 1 approaching, below 1
   receding); with baked visibility `visibility` [min, max] (per frame, mean of the bands) and
   `occluded_frames` (frames with visibility below 0.5).
-- Warnings: unimplemented keys, sources never audible, playback rate clamped (near- or supersonic
-  motion), sound emitted before the baked range (padding too short).
+- Warnings: the bake's warnings (from `scene.json`), then the render's: bake settings given with
+  `--set`, Phase 4 keys that are ignored, an empty `--solo`/`--mute` selection, a group named
+  `reverb` sharing the reverb stem, sources never audible, playback rate clamped (near- or
+  supersonic motion), sound emitted before the baked range (padding too short).
 
 ## Exit criteria for agents
 

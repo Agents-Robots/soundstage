@@ -34,10 +34,11 @@ flowchart LR
     E --> F["emission side: cascade of 4 TPT one-poles,<br/>gains interpolated per sample"]
 ```
 
-Four cascaded one-pole low-passes approximate the ISO curve within about 2 dB wherever the loss is
-below 20 dB, and keep attenuating by more than 17.7 dB beyond. Where the loss at 20 kHz is below
-0.05 dB (closer than about 10 cm) the stage passes the signal unchanged. The filter runs on the
-emission side ([processing chain](processing-chain.md)).
+Four cascaded one-pole low-passes approximate the ISO curve within 2.5 dB wherever the loss is
+below 20 dB (within 0.1 dB up to 30 m, 1 to 2.5 dB at 100 m to 3 km), and keep attenuating by more
+than 17.7 dB beyond. Where the loss at 20 kHz is below 0.05 dB (closer than about 10 cm) the stage
+passes the signal unchanged. The filter runs on the emission side
+([processing chain](processing-chain.md)).
 
 ## Choices
 

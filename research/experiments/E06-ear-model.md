@@ -48,7 +48,7 @@ ITD at 90°: 0.656 ms at `itd_scale` 1.
 - The rear shelf is exactly flat at ρ = 0, unlike a low-pass with a cutoff at 20 kHz.
 - With the defaults, a source straight to the right gives: level balance from the pan law, a
   0.328 ms lead in the right channel, and a far-channel treble cut of 3.8 dB at 10 kHz (head shadow
-  at 0.5). These are the *(tune)* values to judge by ear.
+  at 0.5). These values were judged by ear and kept (#15, [spec](../../docs/spec/signal-model.md#tuning-phase-2-15)).
 
 ## Reproduce
 

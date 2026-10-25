@@ -30,7 +30,6 @@ def power_law(lateral: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 PAN_LAWS = {"sine": sine_law, "power": power_law}
-constant_power = sine_law  # Phase 1 name
 
 
 def woodworth_itd(lateral: np.ndarray, head_radius: float, speed_of_sound: float, scale: float) -> np.ndarray:

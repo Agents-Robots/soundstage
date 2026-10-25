@@ -13,8 +13,8 @@ anything (tests build scene files in pure Python without Blender).
 
 ## Versioning
 
-`format` is `"soundstage.scene"`, `version` is an integer. The engine refuses unknown major
-versions. Adding optional keys or arrays does not bump the version; renaming, removing or
+`format` is `"soundstage.scene"`, `version` is an integer (currently 1). The engine refuses any
+other version. Adding optional keys or arrays does not bump the version; renaming, removing or
 changing the meaning of a key does, together with this spec.
 
 ## `scene.json`
@@ -40,26 +40,34 @@ changing the meaning of a key does, together with this spec.
   "units": {"scale_length": 1.0},
 
   "settings": {
+    "samples_root": "//audio/samples/",
     "sample_rate": 48000,
     "speed_of_sound": 343.0,
     "doppler_factor": 1.0,
     "air_absorption": 1.0,
+    "air_temperature_c": 20.0,
+    "air_humidity_pct": 50.0,
+    "teleport_speed": null,
     "panner": "hybrid",
+    "pan_law": "sine",
     "itd_scale": 0.5,
     "head_shadow": 0.5,
     "head_radius": 0.0875,
     "rear_cutoff_hz": 6000.0,
     "rear_gain_db": -2.0,
     "master_gain_db": 0.0,
+    "substeps": 4,
+    "pad_seconds": 3.0,
+    "listener": null,
     "quality": "standard",
     "occlusion_gain_db": -12.0,
     "occlusion_cutoff_hz": 1500.0,
-    "occlusion_rate": 10.0,
-    "occluder_min_size": 2.0,
     "reverb": "city",
     "reverb_send_db": 0.0,
     "reverb_room_rolloff": null,
     "read_speakers": true,
+    "occlusion_rate": 10.0,
+    "occluder_min_size": 2.0,
     "instance_limit": 32
   },
 
@@ -149,7 +157,7 @@ Let `N` = number of time samples = `(frame_end − frame_start + pad_before + pa
 | `frames` | (N,) float64 | Frame number of each time sample (sub-frames fractional), strictly increasing, uniform step `1/substeps`. |
 | `listener_matrix` | (N, 4, 4) float64 | Listener world matrix, scale removed (orthonormal rotation, translation in metres). |
 | `listener_index` | (N,) int16 | Index into `listener.objects` of the active camera. |
-| `cuts` | (C,) float64 | Frames where the listener jumps (camera switch, or a jump detected in the trajectory). A cut lies between two time samples; its value is the first sample after it. |
+| `cuts` | (C,) float64 | Frames where the active camera switches. A cut lies between two time samples; its value is the first sample after it. (Listener jumps without a camera switch are detected by the engine from the trajectory, faster than `teleport_speed`.) |
 | `src_pos` | (N, S, 3) float64 | Emitter world position (object matrix applied to `offset`), metres. |
 | `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space (absent = omnidirectional). |
 | `vis_frames` | (M,) float64 | Frames of the visibility samples (every `round(fps · substeps / occlusion_rate)`-th time sample). |
@@ -165,6 +173,8 @@ Conventions:
 - The listener is the camera's world matrix; its local axes are +X right, +Y up, −Z view
   direction (Blender camera convention). See [signal-model](signal-model.md#coordinate-frames).
 - Values outside the baked range are held constant (first/last sample).
+- The engine checks on load that `frames` is strictly increasing and covers `frame_start` to
+  `frame_end`, and that the other arrays have the shapes above; otherwise it refuses the file.
 
 ## Producing scene files without Blender
 

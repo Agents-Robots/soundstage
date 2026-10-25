@@ -5,7 +5,8 @@ One file per decision: `NNNN-short-title.md`, numbered in order. Copy
 
 Write an ADR when a choice is hard to reverse, affects how other parts are built, or rejected a
 plausible alternative that someone might propose again. Don't edit an accepted ADR's decision.
-Supersede it with a new one and set the old one's status to `Superseded by NNNN`.
+Supersede it with a new one and set the old one's status to `Superseded by NNNN`. Later findings
+that refine the implementation without changing the decision go in a `Notes` section at the end.
 
 | ADR | Title | Status |
 |---|---|---|

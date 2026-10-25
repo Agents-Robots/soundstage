@@ -6,14 +6,16 @@
   distance model picks the distance law. An optional ``sfx_speaker`` custom property (a dict of tag
   keys) overrides the mapping, e.g. ``{"mode": "loop", "group": "engines"}``.
 - Tags inside instances (FR-9): collection instances and geometry-nodes instances found through the
-  depsgraph, one source per instance; at most ``instance_limit`` per tagged object, keeping those
-  that come closest to the camera.
+  depsgraph at the scene's current frame, one source per instance; at most ``instance_limit`` per
+  tagged object, keeping those that come closest to the camera. A geometry-nodes instance that is
+  not generated at some later sample keeps its last position there (the bake warns).
 
 Runs inside Blender (bpy, Blender's numpy). Model and choices: research/models/blender-integration.md.
 """
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +46,8 @@ class Emitter:
     pid: tuple | None = None  # persistent id (geometry-nodes instances)
     fast: bool = True  # collection-instance empty: matrix by formula; otherwise from the depsgraph lookup
     entries: list = field(default_factory=list)  # (index, entry) of its tags
+    last: Matrix | None = None  # latest matrix from the lookup, held where the instance is missing
+    missing: int = 0  # lookups that did not find the instance (it is not generated at that frame)
 
     def matrix(self, depsgraph, lookup: dict | None) -> Matrix:
         if self.instancer is None:
@@ -52,7 +56,12 @@ class Emitter:
             coll = self.instancer.instance_collection
             inner = Matrix.Translation(-coll.instance_offset) @ self.obj.matrix_world
             return self.instancer.evaluated_get(depsgraph).matrix_world @ inner
-        return lookup[(self.instancer.name, self.pid)]
+        found = lookup.get((self.instancer.name, self.pid))
+        if found is None:  # geometry nodes no longer generate this instance (e.g. fewer points now)
+            self.missing += 1
+            return self.last
+        self.last = found
+        return found
 
 
 def view_layer_objects(scene) -> list:
@@ -124,11 +133,18 @@ def speaker_entry(obj, scene, sound_dir: Path) -> tuple[dict | None, list[str]]:
         warnings.append(f"speaker {obj.name}: linear distance model without a maximum distance; inverse used")
     if spk.volume_min > 0 or spk.volume_max < 1:
         warnings.append(f"speaker {obj.name}: volume_min/volume_max are not used")
-    overrides = obj.get("sfx_speaker")
-    if overrides is not None:
-        entry.update(overrides.to_dict() if hasattr(overrides, "to_dict") else dict(overrides))
+    overrides = tag._plain(obj.get("sfx_speaker"))
+    if isinstance(overrides, str):  # a JSON string, as accepted for obj["sfx"]
+        try:
+            overrides = json.loads(overrides)
+        except ValueError:
+            pass
+    if isinstance(overrides, dict):
+        entry.update(overrides)
         if entry.get("mode") == "loop" and isinstance(entry.get("frame"), list):
             entry["frame"] = entry["frame"][0]  # a loop starts at the first strip
+    elif overrides is not None:
+        warnings.append(f"speaker {obj.name}: sfx_speaker must be a dict of tag keys, ignored")
     return entry, warnings
 
 
@@ -170,7 +186,8 @@ def instances(scene, limit: int, sample_frames: list[float], scale: float) -> tu
         fast = top_level and parent.instance_type == "COLLECTION" and parent.instance_collection is not None and \
             orig.name in parent.instance_collection.all_objects
         label = f"{parent.name}/{orig.name}" + ("" if fast else "#" + ".".join(str(i) for i in pid if i != NO_ID))
-        found.setdefault(orig.name, []).append(Emitter(label, orig, parent, pid, fast, entries))
+        found.setdefault(orig.name, []).append(Emitter(label, orig, parent, pid, fast, entries,
+                                                       last=None if fast else inst.matrix_world.copy()))
     warnings = []
     chosen = []
     for name, ems in sorted(found.items()):
@@ -181,6 +198,8 @@ def instances(scene, limit: int, sample_frames: list[float], scale: float) -> tu
                             "(scene setting instance_limit)")
             ems = [ems[i] for i in keep]
         chosen += sorted(ems, key=lambda e: e.label)
+    for e in chosen:
+        e.missing = 0  # count only the bake's own lookups
     return chosen, warnings
 
 

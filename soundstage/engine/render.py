@@ -84,8 +84,12 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
         warnings.append(f"setting {key!r} is not implemented yet, ignored")
 
     active = select(scene.sources, list(solo), list(mute))
+    if scene.sources and not active:
+        warnings.append("no source selected (--solo/--mute): the render is silent")
     interp = propagation.interpolator_for(s["quality"])
     env = reverb.environment(s["reverb"], rate, s["reverb_room_rolloff"]) if s["reverb"] else None
+    if env is not None and stems and any(src.group == "reverb" for src in active):
+        warnings.append("group 'reverb' shares its stem with the reverb return")
     # reverb pre-roll: render the sends for up to one impulse-response length before the first output
     # sample (within the baked padding), so sound already playing at the start has its reverberation
     pre = 0 if env is None else max(0, min(len(env.ir), n0 - scene.sample_of(float(scene.frames[0]))))
@@ -174,7 +178,7 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     fb_ok = np.array(frame_blocks[1:]) > np.array(frame_blocks[:-1])
     threshold = float(filters.db_to_gain(AUDIBLE_DBFS))
     for i, src in enumerate(active):
-        bp = block_peak[i]
+        bp = block_peak[i] * master_gain  # the source's peaks as they are in the output
         frame_peak = np.maximum.reduceat(bp, fb_lo) if len(bp) else np.zeros(0)
         audible = int(np.sum((frame_peak > threshold) & fb_ok)) if len(bp) else 0
         st = {

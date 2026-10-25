@@ -18,16 +18,17 @@ too: Blender's own Speaker objects are read as sources.
 scene script ──▶ Blender (tags sounds) ──▶ bake (camera + object paths) ──▶ render ──▶ stereo WAV ──▶ Resolve
 ```
 
-**Status:** Phase 3 (environment and mixing). Working end to end: loudness by distance, sound
-travelling at 343 m/s (distant events are heard late), Doppler from source and camera motion,
-left/right placement with a small interaural delay and head shadow, air absorption, a cue for
-sources behind the camera, directivity cones, clean camera cuts, loops and one-shots; occlusion
-behind buildings and vehicles (quieter, duller, low frequencies bending around edges); reverb from
-113 named environments (hangar, city street, forest, space station …); Speaker objects and tags in
-instanced assets; stems per group for Fairlight, a loudness report, optional normalization and
-true-peak limiting, a debug plot; an MP4 preview for checking sync. 50 sources over 5 minutes
-render in about a minute. Next, by need: binaural and ambisonic output, animated parameters (see
-the [roadmap](docs/roadmap.md)).
+**Status:** Phases 0 to 3 are implemented (baseline, MVP, physics, environment and mixing).
+Working end to end: loudness by distance, sound travelling at 343 m/s (distant events are heard
+late), Doppler from source and camera motion, left/right placement with a small interaural delay
+and head shadow, air absorption, a cue for sources behind the camera, directivity cones, clean
+camera cuts, loops and one-shots; occlusion behind buildings and vehicles (quieter, duller, low
+frequencies bending around edges); reverb from 113 named environments (hangar, city street,
+forest, space station …); Speaker objects and tags in instanced assets; stems per group for
+Fairlight, a loudness report, optional normalization and true-peak limiting, a debug plot; an MP4
+preview for checking sync. 50 sources over 5 minutes render in about a minute. Phase 4 is not
+implemented: binaural and ambisonic output, animated parameters and random variation follow by
+need (see the [roadmap](docs/roadmap.md)).
 
 ## Try it
 

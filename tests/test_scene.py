@@ -48,3 +48,21 @@ def test_frame_120_at_30fps_is_sample_190400(make_scene, sine):
 def test_output_length(make_scene, sine, fps, fps_base, frames, seconds):
     scene = make_scene([{"sample": sine}], frame_end=frames, fps=fps, fps_base=fps_base)
     assert scene.length_samples() == round(seconds * 48000)
+
+
+@pytest.mark.parametrize("change, fragment", [
+    (lambda a: a.pop("listener_matrix"), "'listener_matrix' missing"),
+    (lambda a: a.update(listener_matrix=a["listener_matrix"][:-1]), "'listener_matrix' has shape"),
+    (lambda a: a.update(src_pos=a["src_pos"][:, :, :2]), "'src_pos' has shape"),
+    (lambda a: a.update(frames=a["frames"][::-1].copy()), "strictly increasing"),
+    (lambda a: a.update(vis_frames=np.arange(3.0)), "go together"),
+])
+def test_malformed_arrays_are_refused(make_scene, sine, change, fragment):
+    scene = make_scene([{"sample": sine}], [[0, 10, 0]])
+    npz = scene.path.parent / "scene.npz"
+    with np.load(npz) as a:
+        arrays = {k: a[k] for k in a.files}
+    change(arrays)
+    np.savez(npz, **arrays)
+    with pytest.raises(SceneError, match=fragment):
+        load_scene(scene.path)

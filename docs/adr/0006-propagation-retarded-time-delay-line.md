@@ -47,3 +47,13 @@ Formulas and defaults: [spec/signal-model.md](../spec/signal-model.md#propagatio
 - The dry signal must exist before the shot start (pre-roll) and trajectories must be baked with
   padding of at least the longest delay.
 - Camera cuts need special handling (segment-wise geometry, crossfade), since the delay jumps.
+
+## Notes
+
+Later findings that refine the implementation, not the decision (Phase 2):
+
+- The standard read is Niemitalo's 6-point optimal-2× polynomial on a 2× oversampled,
+  pre-emphasized signal; cubic Hermite stays as a test reference only
+  ([fractional delay](../../research/models/fractional-delay.md), E03, E04).
+- The retarded-time solver adds Newton steps after two fixed-point steps; fixed-point iteration
+  alone was 1.8 % off in pitch at Mach 0.5 ([retarded time](../../research/models/retarded-time.md), E07).

@@ -42,3 +42,9 @@ sync to picture, loop phase, occlusion settings, later animated parameters).
   unknown-key check.
 - Storage of lists of dicts as ID properties must be confirmed in Blender 5.2 (Phase 0); fallback
   is a JSON string in the same property, which the bake accepts too.
+
+## Notes
+
+Lists of dicts as ID properties survive save and reload in Blender 5.2, with `None` values and
+booleans (checked in Phase 1, [E01](../../research/experiments/E01-blender-speaker-baseline.md)); the
+JSON-string fallback is still accepted.

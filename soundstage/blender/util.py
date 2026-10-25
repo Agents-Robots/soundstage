@@ -43,10 +43,17 @@ def activate_scene(name: str | None):
 
 
 def parse_frames(text: str | None, scene) -> tuple[int, int]:
+    """``--frames A-B`` (or ``A``), default the scene's frame range."""
     if not text:
         return scene.frame_start, scene.frame_end
     a, _, b = text.partition("-")
-    return int(a), int(b or a)
+    try:
+        first, last = int(a), int(b or a)
+    except ValueError:
+        raise SystemExit(f"--frames expects A-B, got {text!r}") from None
+    if last < first:
+        raise SystemExit(f"--frames {text}: the last frame is before the first")
+    return first, last
 
 
 def fps(scene) -> float:

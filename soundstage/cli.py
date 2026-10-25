@@ -1,10 +1,13 @@
-"""Command-line entry point ``soundstage`` with the subcommands scan, bake, inspect, render, preview.
+"""Command-line entry point ``soundstage`` with the subcommands scan, bake, inspect, render, presets,
+preview.
 
 - ``scan``: runs ``blender/scan.py`` headless and prints the cameras, moving objects and static
   objects near the camera path (sound-source candidates); ``--out`` keeps the full JSON.
 - ``bake``: runs ``blender/bake.py`` headless and writes scene.json + scene.npz.
-- ``inspect``: summarizes a scene file (sources, distance ranges, cuts, warnings).
-- ``render``: renders a scene file to a WAV, optionally with a JSON report.
+- ``inspect``: summarizes a scene file (sources, distance ranges, visibility, blockers, cuts,
+  warnings).
+- ``render``: renders a scene file to a WAV, optionally with stems, a JSON report and a debug plot.
+- ``presets``: lists the reverb presets.
 - ``preview``: muxes a mix with the shot's frames or a video into an MP4 (ffmpeg), for a sync check.
 
 Arguments, exit codes and report format: docs/spec/cli.md.
@@ -140,6 +143,7 @@ def cmd_inspect(a: argparse.Namespace) -> int:
     q = geometry.camera_space(scene.listener_matrix[inside], scene.src_pos[inside])
     dist = np.linalg.norm(q, axis=2)
     dt = np.diff(scene.seconds(scene.frames[inside]))
+    same_camera = np.diff(scene.listener_index[inside]) == 0  # steps across a recorded cut are not motion
     vis = None
     if scene.src_visibility is not None and scene.vis_frames is not None and len(scene.vis_frames):
         shot = (scene.vis_frames >= scene.frame_start) & (scene.vis_frames <= scene.frame_end)
@@ -152,7 +156,7 @@ def cmd_inspect(a: argparse.Namespace) -> int:
         if s.spatial and dist.size:
             d = dist[:, s.track]
             row["distance_m"] = [round(float(d.min()), 2), round(float(d.max()), 2)]
-            vr = np.diff(d) / dt if len(dt) else np.zeros(1)  # > 0 receding
+            vr = np.diff(d)[same_camera] / dt[same_camera] if same_camera.any() else np.zeros(1)  # > 0 receding
             c = scene.settings["speed_of_sound"]
             row["max_radial_speed_m_s"] = round(float(np.abs(vr).max()), 2)
             # Doppler factor of a moving source: c / (c + v_r), approximate for a moving camera
@@ -186,7 +190,23 @@ def cmd_inspect(a: argparse.Namespace) -> int:
     return 0
 
 
+def render_frames(text: str | None, scene) -> tuple[int, int] | None:
+    """``--frames A-B`` (or ``A``) checked against the scene's frame range; None for the whole shot."""
+    if not text:
+        return None
+    x, _, y = text.partition("-")
+    try:
+        first, last = int(x), int(y or x)
+    except ValueError:
+        raise ValueError(f"--frames expects A-B, got {text!r}") from None
+    if not scene.frame_start <= first <= last <= scene.frame_end:
+        raise ValueError(f"--frames {text}: must lie within the scene's frames {scene.frame_start}-{scene.frame_end}, "
+                         "first before last")
+    return first, last
+
+
 def cmd_render(a: argparse.Namespace) -> int:
+    from soundstage.blender import schema
     from soundstage.engine import mix, report, render
     from soundstage.engine.scene import SceneError, load_scene, parse_overrides
 
@@ -195,13 +215,17 @@ def cmd_render(a: argparse.Namespace) -> int:
         if a.quality:
             overrides["quality"] = a.quality
         scene = load_scene(a.scene, overrides)
-    except SceneError as e:
+        frames = render_frames(a.frames, scene)
+    except (SceneError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    frames = None
-    if a.frames:
-        x, _, y = a.frames.partition("-")
-        frames = (int(x), int(y or x))
+    plot = None
+    if a.plot:
+        try:
+            from soundstage.engine import plot
+        except ImportError as e:
+            print(f"error: --plot needs matplotlib (pip install 'soundstage[plot]'): {e}", file=sys.stderr)
+            return 1
     out = Path(a.output) if a.output else scene.path.parent / "mix.wav"
     try:
         # group buses also for the report's per-group metrics; written as files only with --stems
@@ -209,21 +233,21 @@ def cmd_render(a: argparse.Namespace) -> int:
     except (OSError, RuntimeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    result.warnings[:0] = [f"--set {k}: a bake setting, it has no effect on a render (bake again)"
+                           for k in overrides if k in schema.BAKE_SETTINGS]
     processing = mix.finish(result.audio, result.stems, result.rate, normalize=a.normalize, limit=a.limit)
-    mix.write_wav(out, result.audio, result.rate, pcm24=a.pcm24)
-    for group, audio in result.stems.items() if a.stems else ():
-        mix.write_wav(mix.stem_path(out, group), audio, result.rate, pcm24=a.pcm24)
     rep = report.build_report(scene, result, out, overrides)
     rep["processing"] = processing
-    if a.plot:
-        try:
-            from soundstage.engine import plot
-        except ImportError as e:
-            print(f"error: --plot needs matplotlib (pip install 'soundstage[plot]'): {e}", file=sys.stderr)
-            return 1
-        plot.write_plot(out.with_suffix(".plot.png"), scene, result)
-    if a.report:
-        report.write_report(out.with_suffix(".report.json"), rep)
+    try:
+        mix.write_wav(out, result.audio, result.rate, pcm24=a.pcm24)
+        for group, audio in result.stems.items() if a.stems else ():
+            mix.write_wav(mix.stem_path(out, group), audio, result.rate, pcm24=a.pcm24)
+        plotted = plot.write_plot(out.with_suffix(".plot.png"), scene, result) if plot else None
+        if a.report:
+            report.write_report(out.with_suffix(".report.json"), rep)
+    except (OSError, RuntimeError) as e:  # soundfile reports unwritable files as RuntimeError
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     m = rep["master"]
     print(f"wrote {out}: {len(result.audio) / result.rate:.2f} s, frames {result.frames[0]}-{result.frames[1]}, "
           f"peak {m['peak_dbfs']} dBFS, {m['lufs_integrated']} LUFS")
@@ -236,7 +260,7 @@ def cmd_render(a: argparse.Namespace) -> int:
     if processing:
         print("processing: " + ", ".join(f"{k} {v}" for k, v in processing.items()))
     if a.plot:
-        print(f"plot: {out.with_suffix('.plot.png')}")
+        print(f"plot: {plotted}" if plotted else "plot: no spatial source rendered, nothing to plot")
     if a.report:
         print(f"report: {out.with_suffix('.report.json')}")
     return 1 if (a.strict and result.warnings) else 0

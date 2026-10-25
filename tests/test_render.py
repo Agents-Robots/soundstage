@@ -7,7 +7,7 @@ import soundfile as sf
 from soundstage.engine import mix, render
 from soundstage.engine.report import metrics
 
-from conftest import RATE, onset, peak_index, rms_db
+from conftest import RATE, peak_index, rms_db
 
 
 PLAIN = {"panner": "amplitude", "air_absorption": 0.0}  # distance gain and pan only

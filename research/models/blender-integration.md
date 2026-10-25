@@ -82,6 +82,9 @@ Found while building the bake; they matter for anything that walks a large scene
   `inst.object` is read once, when the sources and occluders are set up.
 - **Instance structs are only valid during the iteration**: copy matrices and names out while
   iterating; touching an instance afterwards raises `ReferenceError`.
+- **Geometry-nodes instances come and go with the frame** (a point deleted, a count animated): the
+  bake finds instances at the scene's current frame and looks them up by persistent id at every
+  sample; one that is missing at a sample keeps its last position there.
 - **An object whose geometry nodes output several geometry types** (for example mesh plus curves) is
   listed once as itself and again as an instance of itself (`inst.parent.original == inst.object.original`);
   the bake skips such self-instances, or a tagged object would give two sources.
@@ -98,7 +101,9 @@ Found while building the bake; they matter for anything that walks a large scene
   10) renders the same level (within 0.01 dB) as a tagged empty with the equivalent tag; a tagged
   object inside three collection instances and two geometry-nodes instances gives five sources at
   the right positions (instance offset included); `instance_limit = 2` keeps the two nearest; an
-  object whose geometry nodes add a curve is not counted again as an instance of itself.
+  object whose geometry nodes add a curve is not counted again as an instance of itself; an instance
+  that geometry nodes stop generating halfway through the shot keeps its last position, with a
+  warning.
 - `tests/test_blender_occlusion.py`: occluder rules (own box, small objects, moving objects and
   instances, ground and barriers).
 

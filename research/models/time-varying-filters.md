@@ -9,6 +9,7 @@ away gets duller continuously). Done naively, parameter updates cause zipper noi
 |---|---|---|
 | Air absorption (4 poles), rear cue | TPT one-pole low-pass | cutoff → `g = tan(π f_c / f_s)` → `G = g / (1 + g)` at control rate; `G` interpolated linearly per sample |
 | Head shadow | First-order section with fixed pole | `α` → `b0, b1` at control rate; interpolated linearly per sample; `a1` constant |
+| Occlusion low-pass (per ear) | TPT one-pole low-pass | fitted cutoff → `G` at control rate; `G` interpolated linearly per sample |
 
 **TPT one-pole** (Zavalishin's topology-preserving transform, zero-delay feedback): per sample
 
@@ -32,7 +33,7 @@ state, not a past output that was computed with other coefficients.
 | Bypass | `G = 1` when the cutoff is at or above 0.49 `f_s` (or infinite) | Leaving a pole near Nyquist: still colours the top octave. |
 
 All per-sample loops are numba kernels (`kernels.onepole_cascade_track`, `kernels.rear_shelf_track`,
-`kernels.first_order`) with state arrays updated in place, so chunked processing equals one long
+`kernels.onepole_cascade`, `kernels.first_order`) with state arrays updated in place, so chunked processing equals one long
 run; each has a plain Python reference implementation in the tests.
 
 ## Verification

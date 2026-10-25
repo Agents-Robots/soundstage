@@ -1,6 +1,7 @@
 """Load, validate and represent a scene file (scene.json + scene.npz).
 
-- Check ``format`` and ``version``; refuse unknown versions (ADR 0004).
+- Check ``format`` and ``version``; refuse unknown versions (ADR 0004). Check the arrays' shapes,
+  so a hand-made scene file fails with a message instead of deep inside a render.
 - Apply ``--set`` overrides to the scene settings and validate them with ``blender.schema``.
 - ``Scene`` and ``Source`` dataclasses with time-base helpers (frame -> seconds -> samples with
   ``fps / fps_base``, exact for 29.97).
@@ -110,6 +111,38 @@ def parse_overrides(pairs: list[str]) -> dict:
     return out
 
 
+def check_arrays(arrays: dict[str, np.ndarray], manifest: dict, where: Path) -> None:
+    """Shapes and consistency of the scene.npz arrays (docs/spec/scene-format.md#scenenpz)."""
+    for key in ("frames", "listener_matrix", "src_pos"):
+        if key not in arrays:
+            raise SceneError(f"{where}: array {key!r} missing")
+    frames = arrays["frames"]
+    n = len(frames)
+    if frames.ndim != 1 or n < 1 or np.any(np.diff(frames) <= 0):
+        raise SceneError(f"{where}: 'frames' must be a non-empty, strictly increasing 1-D array")
+    t = manifest.get("time", {})
+    if n and not (frames[0] <= t.get("frame_start", frames[0]) and t.get("frame_end", frames[-1]) <= frames[-1]):
+        raise SceneError(f"{where}: 'frames' ({frames[0]:g}..{frames[-1]:g}) do not cover the shot "
+                         f"{t.get('frame_start')}-{t.get('frame_end')}")
+    shapes = {"listener_matrix": (n, 4, 4), "listener_index": (n,)}
+    for key, shape in shapes.items():
+        if key in arrays and arrays[key].shape != shape:
+            raise SceneError(f"{where}: {key!r} has shape {arrays[key].shape}, expected {shape}")
+    pos = arrays["src_pos"]
+    if pos.shape[0] != n or (pos.size and (pos.ndim != 3 or pos.shape[2] != 3)):
+        raise SceneError(f"{where}: 'src_pos' has shape {pos.shape}, expected ({n}, tracks, 3)")
+    if "src_fwd" in arrays and arrays["src_fwd"].shape != pos.shape:
+        raise SceneError(f"{where}: 'src_fwd' has shape {arrays['src_fwd'].shape}, expected {pos.shape}")
+    if ("vis_frames" in arrays) != ("src_visibility" in arrays):
+        raise SceneError(f"{where}: 'vis_frames' and 'src_visibility' go together")
+    if "src_visibility" in arrays:
+        vis, m = arrays["src_visibility"], len(arrays["vis_frames"])
+        bands = len((manifest.get("occlusion") or {}).get("bands_hz", [250.0, 1000.0, 4000.0]))
+        tracks = pos.shape[1] if pos.ndim == 3 else 0
+        if vis.shape != (m, tracks, bands):
+            raise SceneError(f"{where}: 'src_visibility' has shape {vis.shape}, expected ({m}, {tracks}, {bands})")
+
+
 def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
     path = Path(path)
     try:
@@ -140,8 +173,9 @@ def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
     try:
         with np.load(arrays_path) as a:
             arrays = {k: a[k] for k in a.files}
-    except OSError as e:
+    except (OSError, ValueError) as e:
         raise SceneError(f"cannot read {arrays_path}: {e}") from None
+    check_arrays(arrays, manifest, arrays_path)
 
     n_tracks = arrays["src_pos"].shape[1] if arrays["src_pos"].ndim == 3 else 0
     for s in sources:

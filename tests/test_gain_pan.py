@@ -26,7 +26,7 @@ def test_exponential_and_none():
 
 def test_constant_power_pan():
     lat = np.linspace(-1, 1, 101)
-    gl, gr = panning.constant_power(lat)
+    gl, gr = panning.sine_law(lat)
     assert np.allclose(gl ** 2 + gr ** 2, 1.0)
     assert gl[0] == pytest.approx(1.0) and gr[-1] == pytest.approx(1.0)
     assert gl[50] == pytest.approx(gr[50]) == pytest.approx(np.sqrt(0.5))
