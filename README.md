@@ -17,9 +17,12 @@ the same scripts that build the scene, so everything stays reproducible.
 scene script ──▶ Blender (tags sounds) ──▶ bake (camera + object paths) ──▶ render ──▶ stereo WAV ──▶ Resolve
 ```
 
-**Status:** Phase 1, the minimum requirements. Loudness by distance, left/right placement, loops
-and one-shots work end to end, with an MP4 preview on the rendered frames for checking sync.
-Doppler, travel delay, filtering, occlusion and reverb are next (see the [roadmap](docs/roadmap.md)).
+**Status:** Phase 2 (physics). Working end to end: loudness by distance, sound travelling at
+343 m/s (distant events are heard late), Doppler from source and camera motion, left/right
+placement with a small interaural delay and head shadow, air absorption, a cue for sources behind
+the camera, directivity cones, clean camera cuts, loops and one-shots, and an MP4 preview for
+checking sync. 50 sources over 5 minutes render in under a minute. Next: occlusion, reverb and
+stems (see the [roadmap](docs/roadmap.md)).
 
 ## Try it
 
@@ -34,8 +37,8 @@ blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blen
 .venv/bin/soundstage preview out/flyby/mix.wav --frames <rendered frames dir>   # optional: MP4 with sound (ffmpeg)
 ```
 
-`out/flyby/mix.wav` is 8 seconds of a ship passing from left to right, a beacon beeping on the
-left and a crate hitting the ground on the right.
+`out/flyby/mix.wav` is 8 seconds of a ship passing from left to right (its engine drops in pitch
+as it passes), a beacon beeping on the left and a crate hitting the ground on the right.
 
 To add sound to your own animation, follow the [agent guide](docs/agent-guide.md) (written for
 coding agents, readable for people).
