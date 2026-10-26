@@ -56,6 +56,7 @@ flowchart LR
 | [E12](experiments/E12-reverb.md) | Synthetic EFX reverb | Decay per octave band within 0.8 % (median) of the curve over all 113 presets; DRR −6.02 dB per doubling |
 | [E13](experiments/E13-occlusion.md) | Occlusion response | Hidden: −12.1 dB and the transmission low-pass within 0.15 dB; attack/release 136/330 ms; low band bends around an edge |
 | [E14](experiments/E14-loudness-and-limiter.md) | Loudness report and limiter | LUFS, LRA and true peak equal to ffmpeg's meter; limiter holds −1 dBTP (−0.99 ideal) |
+| [E15](experiments/E15-option-costs.md) | Execution time per option and source count | Render ≈ 3.7 s + 190 ms per source, bake ≈ 7.3 s + 380 ms (60 s shot); `doppler_factor` ≠ 1 2.5×, `occlusion_rate` linear in the per-source bake cost, `frame_set` 35 ms at 16 000 objects |
 
 ## Conventions
 
@@ -66,7 +67,7 @@ flowchart LR
 - **Experiments are reproducible**: every number in an experiment page comes from a script in
   [experiments/scripts/](experiments/scripts/), run from the repository root in the venv
   (`.venv/bin/python research/experiments/scripts/eNN_*.py`); scripts print the tables and write
-  figures to [figures/](figures/). E01, E09, E11 and E13 need Blender on `PATH`, E14 needs ffmpeg.
+  figures to [figures/](figures/). E01, E09, E11, E13 and E15 need Blender on `PATH`, E14 needs ffmpeg.
 - **Corrections stay visible**: when a measurement turns out wrong, the page says what was wrong and
   shows the corrected result, instead of silently replacing it.
 - **Papers**: [papers/](papers/README.md) lists every source with what it is used for;

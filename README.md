@@ -53,6 +53,50 @@ coding agents, readable for people), or place Speaker objects in Blender and bak
 ([usage](docs/usage.md#2b-or-place-speaker-objects-by-hand)). Scripts that build scenes: the
 [scene-builder guide](docs/scene-builder-guide.md).
 
+## How long it takes
+
+Measured on a 16-core desktop CPU (AMD Ryzen 9 3950X), for a 60-second shot in a city of 200
+buildings with default settings ([E15](research/experiments/E15-option-costs.md)). Both steps take
+a fixed time plus a time per source:
+
+| step | fixed | per source | 10 sources | 100 sources | 1000 sources |
+|---|---|---|---|---|---|
+| bake | 7 s | 0.38 s | 11 s | 45 s | 6.5 min |
+| render | 4 s | 0.19 s | 5 s | 23 s | 3.4 min |
+
+The per-source time is proportional to the shot length: a 120 s shot takes about twice as long.
+Render memory is about 4 GB at 100 sources and 28 GB at 1000. Below 30 sources the render is
+dominated by its fixed time, so the fixed costs in the tables below matter more than the factors.
+
+**Render options**, most expensive first (effect relative to the defaults, at 100 sources):
+
+| change | effect |
+|---|---|
+| `doppler_factor` ≠ 1 (scene or source) or `sync_to_picture` on a one-shot with several triggers | every trigger renders as a separate source over the whole shot: 2.5× in a mix with 20 % one-shots of 10–20 triggers each |
+| `--stems` or `--report` (either or both) | about 1.5 s per group (+6 s with four groups), nearly independent of the number of sources |
+| `--set reverb=<name>` | +10 %; long reverbs (hangar, 10 s) add 2 s more |
+| `--limit` | +1.2 s |
+| `--plot` | +0.6 s |
+| `panner=amplitude` instead of the default hybrid | −11 % |
+| sources not occluded (no visibility baked) | −12 % |
+| `head_shadow=0` | −8 % |
+| `air_absorption=0`, `itd_scale=0`, pan law, `--normalize`, `--pcm24` | 0–4 % |
+| `--quality high` | −18 % (−26 % at 1000 sources); slightly slower below 30 sources |
+
+**Bake settings**:
+
+| change | effect |
+|---|---|
+| objects in the scene, animated or not | Blender's frame step costs 0.7 ms at 1000 objects, 9 ms at 4000 and 35 ms at 16 000, and the bake steps about 8000 times for a 60 s shot: 16 000 objects add 4.5 minutes, even with one source |
+| `occlusion_rate` (default 10 Hz) | per-source time ≈ 0.1 s + 0.03 s per Hz: 0 Hz is 0.35×, 40 Hz is 2.9× |
+| `substeps` (default 4) | 1 is 0.7×, 8 is 1.4×, 16 is 2.3× |
+| `pad_seconds` (default 3) | proportional to the baked length: 10 s is 1.24× |
+| sources instanced by geometry nodes | +7 s |
+| `occluder_min_size`, sources in collection instances | no measurable effect |
+
+To estimate a combination, add the fixed costs and multiply the per-source factors. In the tests
+this was within 17 % of the measured time.
+
 ## Documentation
 
 - [Agent guide](docs/agent-guide.md): add sound to an existing animation, step by step
