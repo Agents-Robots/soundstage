@@ -49,9 +49,10 @@ def listener_at(positions: np.ndarray) -> np.ndarray:
 
 
 def scene(sources: list[dict], positions, *, frame_end: int = 60, fps: int = 30, listener=None, cuts=(),
-          settings: dict | None = None, directory: Path | None = None, visibility=None):
+          settings: dict | None = None, directory: Path | None = None, visibility=None, frame=None):
     """A loaded synthetic scene; ``positions`` (S, 3) static or (N, S, 3) per baked frame;
-    ``visibility`` is (frames (M,), values (M, S, bands 250/1000/4000 Hz)) for occlusion."""
+    ``visibility`` is (frames (M,), values (M, S, bands 250/1000/4000 Hz)) for occlusion; ``frame``
+    the listener's frame edges (x / -z of left and right), constant (2,) or per baked frame (N, 2)."""
     directory = directory or Path(tempfile.mkdtemp(prefix="soundstage_exp_"))
     manifest = build_manifest(sources=sources, frame_end=frame_end, fps=fps, settings=settings)
     frames = np.arange(1, frame_end + 2, dtype=float)
@@ -62,6 +63,8 @@ def scene(sources: list[dict], positions, *, frame_end: int = 60, fps: int = 30,
         index[frames >= c] += 1
     arrays = {"frames": frames, "listener_matrix": listener_at(np.zeros((len(frames), 3))) if listener is None
               else listener, "listener_index": index, "cuts": np.asarray(cuts, float), "src_pos": pos}
+    if frame is not None:
+        arrays["listener_frame"] = np.broadcast_to(np.asarray(frame, dtype=float), (len(frames), 2)).copy()
     if visibility is not None:
         arrays["vis_frames"] = np.asarray(visibility[0], dtype=np.float64)
         arrays["src_visibility"] = np.asarray(visibility[1], dtype=np.float32)

@@ -246,6 +246,29 @@ are interpolated per sample between control points, which is exact and always st
 **`binaural`** (Phase 4): replaces pan, ITD and head shadow with HRIR convolution from a SOFA set,
 interpolated between measured directions.
 
+**Screen-relative panning** (`pan_reference = "screen"`, the default; `camera` skips it). The lateral
+sine that pan law, ITD and head shadow use is remapped so that a source in the frame is heard where
+the viewer sees it ([E17](../../research/experiments/E17-lens-and-pan.md)). With the azimuth
+`θ = atan2(x, −z)`, the baked frame edges `t_L, t_R` (`listener_frame`, interpolated to control
+rate), `S = screen_edge_deg` and the loudspeaker angle 30°:
+
+```
+in the frame (θ_L ≤ θ ≤ θ_R, θ_L,R = atan t_L,R):
+    u = (tan θ − (t_R + t_L)/2) / ((t_R − t_L)/2)                   image coordinate −1 … 1
+    λ_h = law⁻¹(u · tan S / tan 30°)                                tangent law: heard at atan(u tan S)
+right of the frame (θ_R < θ ≤ 90°):  λ_h = λ_S + (1 − λ_S) · (θ − θ_R) / (90° − θ_R)
+left of the frame (−90° ≤ θ < θ_L):  mirrored
+behind (|θ| > 90°) or no frame:      λ_h = sin θ                     (as in camera mode)
+λ = λ_h · sqrt(x² + z²) / r_e
+```
+
+`law⁻¹` inverts the pan law's ratio `(g_R − g_L)/(g_R + g_L)` (tabulated), `λ_S = law⁻¹(tan S /
+tan 30°)`. The last line keeps elevation and the near-field softening of camera mode. Continuous at
+the frame edges and at ±90°, monotonic across the front. Distance, delay, Doppler, occlusion and
+the rear cue keep the physical geometry: a zoom changes the picture, not where the camera is.
+The mapping is calibrated for amplitude panning on loudspeakers at ±30° (the `hybrid` panner's ITD
+and head shadow use the same remapped direction).
+
 ## Rear cue
 
 Stereo cannot place a source behind the camera, so behind is marked spectrally and by level
@@ -451,6 +474,7 @@ by ear.
 | Teleport speed | 3 × speed of sound | scene `teleport_speed` |
 | Interpolator | `optimal2x` (standard), `sinc` (high) | scene `quality` |
 | Pan law | `sine` (tuned) | scene `pan_law` |
+| Pan reference | `screen`, with the screen edge at 16.5° (16:9 at 3 picture heights) | scene `pan_reference`, `screen_edge_deg` |
 | Air temperature / humidity | 20 °C / 50 % | scene `air_temperature_c`, `air_humidity_pct` |
 | Head radius `a` | 0.0875 m | scene `head_radius` |
 | ITD scale (hybrid) | 0.5 (tuned) | scene `itd_scale` |

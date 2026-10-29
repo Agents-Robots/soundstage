@@ -59,7 +59,7 @@ flowchart LR
 | [E14](experiments/E14-loudness-and-limiter.md) | Loudness report and limiter | LUFS, LRA and true peak equal to ffmpeg's meter; limiter holds −1 dBTP (−0.99 ideal) |
 | [E15](experiments/E15-option-costs.md) | Execution time per option and source count | Render ≈ 3.7 s + 190 ms per source, bake ≈ 7.3 s + 380 ms (60 s shot); `doppler_factor` ≠ 1 2.5×, `occlusion_rate` linear in the per-source bake cost, `frame_set` 35 ms at 16 000 objects |
 | [E16](experiments/E16-culling.md) | Culling against budget and source count | Default −40 dB: render 4–9 % and bake 3–6 % faster, error of the shot 4–10 dB below the budget; −20 dB: 1.3–1.7×; `doppler_factor` 0.5: 1.9–2.0×. Distant sources that fill an area carry a similar power share per octave of distance, so few can be skipped; memory (27 MB per source) is not reduced |
-| [E17](experiments/E17-lens-and-pan.md) | Where a source at the frame edge is heard, against the lens | Pan ignores the lens: frame edge heard at 9° with 50 mm (HD screen edge 16.5°), 2.3° with 200 mm; 24 mm matches an HD screen |
+| [E17](experiments/E17-lens-and-pan.md) | Where a source at the frame edge is heard, against the lens | Camera mode ignores the lens: frame edge heard at 9° with 50 mm (HD screen edge 16.5°), 2.3° with 200 mm; `pan_reference = screen`: 16.5° for every lens |
 
 ## Conventions
 

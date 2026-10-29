@@ -65,6 +65,7 @@ Decisions taken with the user (2026-10-25):
 | FR-28 | Bake reports tagging errors (missing sample file, unknown parameter, bad value) with object name and stops, unless told to skip. | 1 |
 | FR-29 | A scan lists the shot's cameras, moving objects (distance range to the camera, closest frame, side, speed, keyframes) and static objects near the camera, so an agent can choose sound sources for an existing animation. | 1 |
 | FR-30 | Tags can be applied at bake time by a script, without modifying the .blend. | 1 |
+| FR-31 | Bake records the camera's frame edges (lens, sensor fit, aspect, shift) per time sample, for screen-relative panning (FR-55). | 4 |
 
 ### Render: from the scene file to audio
 
@@ -85,6 +86,7 @@ Decisions taken with the user (2026-10-25):
 | FR-52 | Optional binaural output from a SOFA HRTF set, for headphone versions. | 4 |
 | FR-53 | Optional first-order (or higher) AmbiX ambisonic output for 360 video or re-panning in Fairlight. | 4 |
 | FR-54 | Random variation of one-shots (gain, pitch, choice among several samples), seeded. | 4 |
+| FR-55 | Screen-relative panning: sources in the frame are heard where the viewer sees them on the screen, through the camera lens (zooms and lens shift included); on by default, the direction relative to the camera as the alternative. | 4 |
 
 ### Output and mixing
 

@@ -8,6 +8,7 @@ import soundfile as sf
 
 from soundstage.engine import mix, render
 from soundstage.engine.report import metrics
+from soundstage.engine.scene import load_scene
 
 from conftest import RATE, peak_index, rms_db
 
@@ -97,3 +98,20 @@ def test_metrics_of_a_full_scale_sine():
     m = metrics(np.stack([x, x], axis=1), RATE)
     assert m["peak_dbfs"] == pytest.approx(0.0, abs=0.01)
     assert m["lufs_integrated"] == pytest.approx(0.0, abs=0.5)  # BS.1770: stereo 0 dBFS sine ~ 0 LUFS
+
+
+def test_zoom_moves_a_source_in_the_stereo_image(make_scene, sine):
+    # a static source 5 degrees right; the lens zooms from 24 mm to 200 mm (36 mm sensor)
+    n = 61
+    half = 18.0 / np.linspace(24.0, 200.0, n)
+    a = np.radians(5.0)
+    settings = {"panner": "amplitude", "pan_reference": "screen", "air_absorption": 0.0}
+    sc = make_scene([{"sample": sine, "mode": "loop"}], [[20 * np.sin(a), 20 * np.cos(a), 0]], settings=settings,
+                    frame=np.stack([-half, half], axis=1))
+    out = render.render(sc).audio
+    first, last = out[4800:14400], out[-14400:-4800]
+    balance = [rms_db(x[:, 1]) - rms_db(x[:, 0]) for x in (first, last)]
+    assert 1.0 < balance[0] < balance[1]  # nearer the frame edge at 200 mm: further right
+    camera = render.render(load_scene(sc.path, {"pan_reference": "camera"})).audio
+    assert rms_db(camera[4800:14400, 1]) - rms_db(camera[4800:14400, 0]) == pytest.approx(
+        rms_db(camera[-14400:-4800, 1]) - rms_db(camera[-14400:-4800, 0]), abs=0.05)

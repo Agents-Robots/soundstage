@@ -65,6 +65,8 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `teleport_speed` | null | Speed (m/s) between two baked samples above which a source or the listener counts as teleported (no Doppler glide across the jump); null = 3 × `speed_of_sound`. |
 | `panner` | `"hybrid"` | `amplitude`, `hybrid`; `binaural` in Phase 4. |
 | `pan_law` | `"sine"` | `sine` (φ = (λ+1)π/4) or `power` (g² = (1 ± λ)/2, softer at the sides, as Blender's speakers). |
+| `pan_reference` | `"screen"` | `screen`: sources in the frame are panned to where a viewer sees them on the screen, through the lens (zooms move them); off-screen directions are stretched to the sides; distance, delay, Doppler and occlusion are unchanged ([signal-model.md](signal-model.md#panning)); needs a scene baked with format version 2, otherwise panning follows the camera with a warning. `camera`: direction relative to the camera, independent of the lens (as in games and Blender's speakers). |
+| `screen_edge_deg` | 16.5 | With `pan_reference = "screen"`: the angle from the centre at which the viewer sees the left and right screen edges; the frame edge is panned to be heard there on loudspeakers at ±30°. 16.5° is a 16:9 screen at 3 picture heights (HD); about 25 for a large TV or close viewing, 29 at most. |
 | `itd_scale` | 0.5 | Fraction of the physical interaural time difference used by `hybrid`. |
 | `head_shadow` | 0.5 | Strength of the head-shadow filter in `hybrid` (0 = off, 1 = full spherical-head model). |
 | `head_radius` | 0.0875 m | Listener head radius. |

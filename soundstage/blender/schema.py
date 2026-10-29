@@ -36,6 +36,7 @@ PANNERS = ("amplitude", "hybrid")
 PAN_LAWS = ("sine", "power")
 QUALITIES = ("standard", "high")
 OCCLUSION_MODES = ("obstruction", "occlusion")
+PAN_REFERENCES = ("camera", "screen")
 
 SOURCE_KEYS: dict[str, Field] = {
     "sample": Field("str", REQUIRED),
@@ -85,6 +86,8 @@ SCENE_SETTINGS: dict[str, Field] = {
     "teleport_speed": Field("float", None, min=1.0, nullable=True, phase=2),  # None: 3 x speed_of_sound
     "panner": Field("choice", "hybrid", choices=PANNERS),
     "pan_law": Field("choice", "sine", choices=PAN_LAWS, phase=2),
+    "pan_reference": Field("choice", "screen", choices=PAN_REFERENCES, phase=4),  # camera: ignore the lens
+    "screen_edge_deg": Field("float", 16.5, min=1.0, max=29.0, phase=4),  # viewer's angle to the screen edge
     "itd_scale": Field("float", 0.5, min=0.0, max=1.0, phase=2),
     "head_shadow": Field("float", 0.5, min=0.0, max=1.0, phase=2),
     "head_radius": Field("float", 0.0875, min=0.01, max=1.0, phase=2),
@@ -110,7 +113,7 @@ SCENE_SETTINGS: dict[str, Field] = {
 IMPLEMENTED_PHASE = 3
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
 
-IMPLEMENTED_LATER = frozenset({"cull_db"})
+IMPLEMENTED_LATER = frozenset({"cull_db", "pan_reference", "screen_edge_deg"})
 """Phase 4 keys that are implemented (Phase 4 items are picked by need, in any order)."""
 
 BAKE_SETTINGS = ("samples_root", "substeps", "pad_seconds", "listener", "read_speakers", "occlusion_rate",

@@ -10,7 +10,9 @@
 - Retarded delay: ``tau = |s(t - tau) - p(t)| / c``, two fixed-point steps then Newton steps
   (``f'(tau) = 1 + u.v / c``), with the source piece chosen by emission time. Points that do not
   converge (the gap after a source teleports away, supersonic ambiguity) are marked inaudible.
-- ``Path``: everything the models need for one source on the control grid (ADR 0009).
+- ``Path``: everything the models need for one source on the control grid (ADR 0009). With
+  ``pan_reference = "screen"`` its lateral sine follows the frame through the lens
+  (``panning.screen_lateral``, from the baked frame edges).
 
 Blender camera axes: +X right, +Y up, -Z forward.
 Spec: docs/spec/signal-model.md#coordinate-frames, #trajectories-and-control-rate,
@@ -25,6 +27,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, RotationSpline
 
+from soundstage.engine import panning
 from soundstage.engine.control import CONTROL_STEP, ControlGrid  # noqa: F401  (CONTROL_STEP re-exported)
 
 R_MIN = 0.25
@@ -228,6 +231,10 @@ class SceneGeometry:
                                       piece_starts(self.times, lpos, self.max_speed, cut_times))
         self.t = grid.times
         self.p, self.rot, self.segment = self.listener.pose(self.t)
+        self.frame = None  # (tan left, tan right) of the frame edges per control point, for screen panning
+        frame = getattr(scene, "listener_frame", None)
+        if s["pan_reference"] == "screen" and frame is not None:
+            self.frame = tuple(np.interp(self.t, self.times, frame[:, i]) for i in (0, 1))
         self._tracks: dict[int, tuple[Track, Track | None]] = {}
 
     def tracks(self, track: int) -> tuple[Track, Track | None]:
@@ -267,6 +274,10 @@ class SceneGeometry:
         rel = s - self.p
         q = np.einsum("nji,nj->ni", self.rot, rel)
         d = derived(q)
+        if self.frame is not None:
+            s = self.scene.settings
+            d["lateral"] = panning.screen_lateral(q, *self.frame, s["screen_edge_deg"],
+                                                  panning.PAN_LAWS[s["pan_law"]], R_MIN)
         _, fwd = self.tracks(track)
         if fwd is not None:
             f = fwd(self.t - tau, piece)

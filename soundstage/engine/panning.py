@@ -6,6 +6,10 @@
   (pan law, Woodworth ITD scaled by ``itd_scale``, Brown-Duda head shadow per ear scaled by
   ``head_shadow``, rear cue). A panner supplies per-ear delays, per-ear stages and gains from the
   path (ADR 0009); ``binaural`` follows in Phase 4.
+- Screen-relative panning (setting ``pan_reference = "screen"``, the default): the lateral sine is remapped so
+  that a source in the frame is heard, on loudspeakers at +-30 deg, where a viewer sees it on a
+  screen whose edges are ``screen_edge_deg`` from the centre (tangent law); off-screen directions
+  are stretched to +-90 deg, directions behind the camera are kept.
 
 Spec: docs/spec/signal-model.md#panning; decision: ADR 0007.
 """
@@ -30,6 +34,46 @@ def power_law(lateral: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 PAN_LAWS = {"sine": sine_law, "power": power_law}
+
+SPEAKER_DEG = 30.0
+"""Loudspeaker angle the screen mapping is calibrated for (ITU-R BS.775 stereo)."""
+
+
+def _law_inverse(law, ratio: np.ndarray) -> np.ndarray:
+    """Lateral sine at which ``law`` gives the channel ratio (g_R - g_L) / (g_R + g_L)."""
+    lam = np.linspace(-1.0, 1.0, 4097)
+    gl, gr = law(lam)
+    return np.interp(ratio, (gr - gl) / (gr + gl), lam)
+
+
+def screen_lateral(q: np.ndarray, tan_left: np.ndarray, tan_right: np.ndarray, edge_deg: float, law,
+                   r_min: float) -> np.ndarray:
+    """Lateral sine (n,) for camera-space vectors q (n, 3), panning through the lens.
+
+    ``tan_left``/``tan_right`` (n,) are x / -z of the frame edges (NaN: no perspective camera, the
+    direction relative to the camera is used). In the frame, the image coordinate
+    u = (tan(azimuth) - centre) / half width is heard at atan(u * tan(edge_deg)) by the tangent law;
+    between the frame edges and +-90 deg the lateral sine runs linearly in azimuth to +-1.
+    """
+    x, z = q[:, 0], q[:, 2]
+    horizontal = np.hypot(x, z)
+    r_e = np.sqrt(np.einsum("ni,ni->n", q, q) + r_min * r_min)
+    theta = np.arctan2(x, -z)  # azimuth, 0 ahead, positive right
+    lam = np.sin(theta)  # camera mode, also behind the camera and without a frame
+    ok = np.isfinite(tan_left) & np.isfinite(tan_right) & (tan_right > tan_left)
+    tl, tr = np.where(ok, tan_left, -1.0), np.where(ok, tan_right, 1.0)
+    th_l, th_r = np.arctan(tl), np.arctan(tr)
+    k = np.tan(np.radians(edge_deg)) / np.tan(np.radians(SPEAKER_DEG))
+    edge = _law_inverse(law, np.array([-k, k]))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        u = (np.tan(theta) - 0.5 * (tr + tl)) / (0.5 * (tr - tl))
+        inside = _law_inverse(law, np.clip(u, -1.0, 1.0) * k)
+        right = edge[1] + (1.0 - edge[1]) * (theta - th_r) / (np.pi / 2 - th_r)
+        left = edge[0] - (1.0 + edge[0]) * (th_l - theta) / (th_l + np.pi / 2)
+    front = np.abs(theta) <= np.pi / 2
+    mapped = np.where(theta > th_r, right, np.where(theta < th_l, left, inside))
+    lam = np.where(ok & front, mapped, lam)
+    return lam * horizontal / r_e
 
 
 def woodworth_itd(lateral: np.ndarray, head_radius: float, speed_of_sound: float, scale: float) -> np.ndarray:

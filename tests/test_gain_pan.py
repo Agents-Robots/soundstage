@@ -94,3 +94,53 @@ def test_kinks_split_interpolation_but_smooth_fast_curves_do_not():
     w = np.sqrt(88.0 / 36.0)  # 9 g circle of radius 36 m (56 m/s)
     circle = np.stack([36 * np.cos(w * t), 36 * np.sin(w * t), 0 * t], axis=1)
     assert len(geometry.kinks(t, circle)) == 0
+
+
+def _heard_deg(lateral: np.ndarray, law=panning.sine_law) -> np.ndarray:
+    """Phantom image angle on loudspeakers at +-30 deg (tangent law) for lateral sines."""
+    gl, gr = law(lateral)
+    return np.degrees(np.arctan(np.tan(np.radians(30)) * (gr - gl) / (gr + gl)))
+
+
+def _directions(azimuth_deg: np.ndarray, distance: float = 50.0) -> np.ndarray:
+    a = np.radians(azimuth_deg)
+    return np.stack([distance * np.sin(a), np.zeros_like(a), -distance * np.cos(a)], axis=1)
+
+
+@pytest.mark.parametrize("law", [panning.sine_law, panning.power_law])
+@pytest.mark.parametrize("focal_mm", [24.0, 50.0, 200.0])
+def test_screen_panning_places_the_frame_on_the_screen(law, focal_mm):
+    half = 18.0 / focal_mm  # 36 mm sensor
+    edge = np.degrees(np.arctan(half))
+    quarter = np.degrees(np.arctan(half / 2))
+    az = np.array([0.0, quarter, edge, -edge])
+    n = len(az)
+    lat = panning.screen_lateral(_directions(az), np.full(n, -half), np.full(n, half), 16.5, law, geometry.R_MIN)
+    heard = _heard_deg(lat, law)
+    target = np.degrees(np.arctan(np.array([0.0, 0.5, 1.0, -1.0]) * np.tan(np.radians(16.5))))
+    assert heard == pytest.approx(target, abs=0.05)
+
+
+def test_screen_panning_follows_lens_shift():
+    # frame shifted right: its centre is heard in the middle, a source straight ahead to the left
+    lat = panning.screen_lateral(_directions(np.array([np.degrees(np.arctan(0.25)), 0.0])), np.full(2, -0.25),
+                                 np.full(2, 0.75), 16.5, panning.sine_law, geometry.R_MIN)
+    assert lat[0] == pytest.approx(0.0, abs=1e-3) and lat[1] < -0.1
+
+
+def test_screen_panning_is_continuous_and_keeps_the_back():
+    az = np.linspace(-179.0, 179.0, 3581)
+    n = len(az)
+    q = _directions(az)
+    lat = panning.screen_lateral(q, np.full(n, -0.36), np.full(n, 0.36), 16.5, panning.sine_law, geometry.R_MIN)
+    assert np.abs(np.diff(lat)).max() < 0.01
+    ahead = np.abs(az) <= 90
+    assert np.all(np.diff(lat[ahead]) > 0)  # monotonic across the front
+    behind = np.abs(az) > 90
+    assert lat[behind] == pytest.approx(geometry.derived(q)["lateral"][behind])
+
+
+def test_screen_panning_without_a_frame_follows_the_camera():
+    q = _directions(np.array([-60.0, 10.0, 45.0]))
+    lat = panning.screen_lateral(q, np.full(3, np.nan), np.full(3, np.nan), 16.5, panning.sine_law, geometry.R_MIN)
+    assert lat == pytest.approx(geometry.derived(q)["lateral"])

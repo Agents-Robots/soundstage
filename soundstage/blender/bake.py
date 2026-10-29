@@ -8,8 +8,8 @@ Run headless (or through ``soundstage bake``)::
 
 Steps: run tagging scripts (``--run``, not saved to the .blend), validate tags and resolve their
 defaults and sample paths, step through frames and sub-frames over the shot plus padding, record
-the listener (active camera per frame) and every emitter's world position in metres, record camera
-switches as cuts, sample each source's visibility (occlusion.py) at ``occlusion_rate`` (only for
+the listener (active camera per frame) with its frame edges and every emitter's world position in
+metres, record camera switches as cuts, sample each source's visibility (occlusion.py) at ``occlusion_rate`` (only for
 sources that may be heard, cull.py), write the scene file (docs/spec/scene-format.md).
 
 Uses bpy, stdlib and Blender's bundled numpy only.
@@ -36,7 +36,7 @@ from soundstage.blender import cull, emitters, occlusion, schema, tag, util  # n
 from soundstage.blender.util import log  # noqa: E402
 
 FORMAT = "soundstage.scene"
-VERSION = 1
+VERSION = 2
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -56,6 +56,17 @@ AXIS_VECTORS = {
     "Y": Vector((0, 1, 0)), "-Y": Vector((0, -1, 0)),
     "Z": Vector((0, 0, 1)), "-Z": Vector((0, 0, -1)),
 }
+
+
+def frame_edges(listener, scene) -> tuple[float, float]:
+    """x / -z of the left and right frame edges of an evaluated perspective camera (lens, sensor fit,
+    render aspect and shift included); NaN for other listeners."""
+    data = getattr(listener, "data", None)
+    if listener.type != "CAMERA" or data.type != "PERSP":
+        return math.nan, math.nan
+    corners = data.view_frame(scene=scene)
+    xs, z = [c.x for c in corners], corners[0].z
+    return min(xs) / -z, max(xs) / -z
 
 
 def padding_warnings(spatial: list[dict], listener_matrix, src_pos, speed_of_sound: float,
@@ -165,6 +176,7 @@ def bake(args: argparse.Namespace) -> None:
     frames = first + np.arange(n) / substeps
     listener_matrix = np.zeros((n, 4, 4))
     listener_index = np.zeros(n, dtype=np.int16)
+    listener_frame = np.full((n, 2), np.nan)  # x / -z of the frame's left and right edges
     src_pos = np.zeros((n, len(spatial), 3))
     src_fwd = np.zeros((n, len(spatial), 3), dtype=np.float32)
     listener_names: list[str] = []
@@ -213,6 +225,7 @@ def bake(args: argparse.Namespace) -> None:
         loc, rot, _ = listener.evaluated_get(depsgraph).matrix_world.decompose()
         m = Matrix.LocRotScale(loc * scale, rot, None)
         listener_matrix[k] = np.array(m)
+        listener_frame[k] = frame_edges(listener.evaluated_get(depsgraph), scene)
         lookup = emitters.instance_lookup(depsgraph, slow_keys) if slow_keys else None
         matrices: dict[int, Matrix] = {}  # per emitter: several sources on one object share it
         for j, (em, off, axis) in enumerate(zip(objects, offsets, axes)):
@@ -265,6 +278,7 @@ def bake(args: argparse.Namespace) -> None:
         frames=frames,
         listener_matrix=listener_matrix,
         listener_index=listener_index,
+        listener_frame=listener_frame,
         cuts=np.array(cuts, dtype=np.float64),
         src_pos=src_pos,
         src_fwd=src_fwd,

@@ -210,6 +210,17 @@ for a preview (an error 20 dB below the mix); `--set cull_db=null` renders every
 reference or to check that culling is not the cause of something you hear. The bake reads the same
 setting from the scene settings to skip visibility rays of sources far below the budget.
 
+**Panning and the lens.** What is in the frame is panned to its place on the screen, through the
+camera lens, as a film mix would: a source at the frame edge is heard at the screen edge whatever
+the focal length, and zooms move sounds with the picture. `screen_edge_deg` (16.5° by default, a TV
+at three picture heights; about 25 for a large TV) sets how wide the screen is heard. This needs a
+scene baked with scene format 2, which records the camera's frame edges; older bakes pan by the
+direction from the camera, with a warning. `--set pan_reference=camera` does that on purpose, as
+games do: the lens then plays no part, so with a 50 mm lens a source at the frame edge is heard
+about half way to where the viewer sees it, and with a long lens nearly in the centre
+([E17](../research/experiments/E17-lens-and-pan.md)). Distance, delay, Doppler and occlusion are the
+same in both modes.
+
 ## 5. Check sync, then go to Resolve
 
 A quick preview without Resolve (needs ffmpeg; first frame and fps come from the mix's

@@ -30,8 +30,10 @@ preview for checking sync. 50 sources over 5 minutes render in about a minute. F
 culling is implemented: voices that do not matter (silent, or far below the rest of their group)
 are skipped within an error budget, which saves a few percent at the default and halves renders
 with many silent voices; shots with thousands of sources still need about 27 MB of memory per source
-([E16](research/experiments/E16-culling.md)). Binaural and ambisonic output, animated parameters and random
-variation follow by need (see the [roadmap](docs/roadmap.md)).
+([E16](research/experiments/E16-culling.md)). Panning follows the picture: what is in the frame
+is heard at its place on the screen, through the camera lens and its zooms
+([E17](research/experiments/E17-lens-and-pan.md)). Binaural and ambisonic output, animated
+parameters and random variation follow by need (see the [roadmap](docs/roadmap.md)).
 
 ## Try it
 

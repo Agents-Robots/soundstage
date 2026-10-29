@@ -5,6 +5,7 @@ import json
 import numpy as np
 import pytest
 
+from soundstage.engine import render
 from soundstage.engine.scene import SceneError, load_scene, parse_overrides
 
 
@@ -22,6 +23,22 @@ def test_unknown_version_is_rejected(make_scene, sine):
     scene.path.write_text(json.dumps(manifest))
     with pytest.raises(SceneError, match="unsupported version"):
         load_scene(scene.path)
+
+
+def test_version_1_files_still_load_and_screen_panning_warns(make_scene, sine):
+    scene = make_scene([{"sample": sine}], [[0, 10, 0]], settings={"pan_reference": "screen"})
+    manifest = json.loads(scene.path.read_text())
+    manifest["version"] = 1
+    scene.path.write_text(json.dumps(manifest))
+    old = load_scene(scene.path)
+    assert old.listener_frame is None
+    out = render.render(old, frames=(1, 5))
+    assert any("no frame edges" in w for w in out.warnings)
+
+
+def test_listener_frame_shape_is_checked(make_scene, sine):
+    with pytest.raises(SceneError, match="listener_frame"):
+        make_scene([{"sample": sine}], frame=np.zeros((3, 2)))
 
 
 def test_overrides_are_typed_and_validated(make_scene, sine):

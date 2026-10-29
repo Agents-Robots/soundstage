@@ -13,8 +13,10 @@ anything (tests build scene files in pure Python without Blender).
 
 ## Versioning
 
-`format` is `"soundstage.scene"`, `version` is an integer (currently 1). The engine refuses any
-other version. Adding optional keys or arrays does not bump the version; renaming, removing or
+`format` is `"soundstage.scene"`, `version` is an integer (currently 2). The engine refuses any
+other version, except version 1 files, which it still reads (they lack `listener_frame`, so
+`pan_reference = "screen"`, the default, falls back to the camera with a warning). Version 2 added
+`listener_frame`. Adding optional keys or arrays does not bump the version; renaming, removing or
 changing the meaning of a key does, together with this spec.
 
 ## `scene.json`
@@ -22,7 +24,7 @@ changing the meaning of a key does, together with this spec.
 ```json
 {
   "format": "soundstage.scene",
-  "version": 1,
+  "version": 2,
   "created": "2026-10-25T14:03:11Z",
   "generator": {"tool": "soundstage.blender.bake", "blender_version": "5.2.2"},
   "blend_file": "/projects/demo/shot.blend",
@@ -160,6 +162,7 @@ Let `N` = number of time samples = `(frame_end − frame_start + pad_before + pa
 | `frames` | (N,) float64 | Frame number of each time sample (sub-frames fractional), strictly increasing, uniform step `1/substeps`. |
 | `listener_matrix` | (N, 4, 4) float64 | Listener world matrix, scale removed (orthonormal rotation, translation in metres). |
 | `listener_index` | (N,) int16 | Index into `listener.objects` of the active camera. |
+| `listener_frame` | (N, 2) float64 | The frame's left and right edges as `x / −z` in camera space (the tangents of their azimuths), from the evaluated camera's `view_frame`: lens, sensor fit, render aspect and shift included, so a zoom is a change over time. NaN where the listener is not a perspective camera. Used by `pan_reference = "screen"`. Optional (absent in version 1). |
 | `cuts` | (C,) float64 | Frames where the active camera switches. A cut lies between two time samples; its value is the first sample after it. (Listener jumps without a camera switch are detected by the engine from the trajectory, faster than `teleport_speed`.) |
 | `src_pos` | (N, S, 3) float64 | Emitter world position (object matrix applied to `offset`), metres. |
 | `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space (absent = omnidirectional). |

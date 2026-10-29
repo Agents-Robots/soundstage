@@ -85,6 +85,14 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     warnings = list(scene.warnings)
     for key in schema.unimplemented(scene.manifest.get("settings", {}), schema.SCENE_SETTINGS):
         warnings.append(f"setting {key!r} is not implemented yet, ignored")
+    if s["pan_reference"] == "screen":
+        frame = scene.listener_frame
+        if frame is None:
+            warnings.append("pan_reference 'screen': the scene file has no frame edges (baked before scene "
+                            "format 2, or made without a camera), panning follows the camera")
+        elif not np.isfinite(frame).all():
+            warnings.append("pan_reference 'screen': the listener is not a perspective camera at some baked "
+                            "samples, panning follows the camera there")
 
     selected = select(scene.sources, list(solo), list(mute))
     if scene.sources and not selected:

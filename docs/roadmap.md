@@ -89,6 +89,7 @@ Picked when a shot needs them, in any order:
 - Random variation of one-shots (FR-54).
 - Animated parameters via keyframed custom properties (FR-10).
 - Culling (FR-68) and grouping for shots with hundreds of sources (traffic, fleets).
+- Screen-relative panning through the camera lens (FR-55, FR-31).
 - BWF timecode in the output for automatic placement in Resolve.
 
 Each item gets its own acceptance criteria in its ticket when picked.

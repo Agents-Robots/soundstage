@@ -1,6 +1,7 @@
 """Load, validate and represent a scene file (scene.json + scene.npz).
 
-- Check ``format`` and ``version``; refuse unknown versions (ADR 0004). Check the arrays' shapes,
+- Check ``format`` and ``version``; refuse unknown versions (ADR 0004). Version 1 files (without
+  the listener's frame edges) still load. Check the arrays' shapes,
   so a hand-made scene file fails with a message instead of deep inside a render.
 - Apply ``--set`` overrides to the scene settings and validate them with ``blender.schema``.
 - ``Scene`` and ``Source`` dataclasses with time-base helpers (frame -> seconds -> samples with
@@ -21,7 +22,8 @@ import numpy as np
 from soundstage.blender import schema
 
 FORMAT = "soundstage.scene"
-VERSION = 1
+VERSION = 2
+READABLE_VERSIONS = (1, 2)
 
 
 class SceneError(Exception):
@@ -56,6 +58,7 @@ class Scene:
     src_pos: np.ndarray  # (N, S, 3)
     src_fwd: np.ndarray | None = None  # (N, S, 3) emitter forward vectors (absent: omnidirectional)
     src_cuts: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))  # (K, 2) (track, frame)
+    listener_frame: np.ndarray | None = None  # (N, 2) x / -z of the left and right frame edges (NaN: none)
     vis_frames: np.ndarray | None = None  # (M,) frames of the visibility samples
     src_visibility: np.ndarray | None = None  # (M, S, bands) open share of each band
     warnings: list[str] = field(default_factory=list)
@@ -124,7 +127,7 @@ def check_arrays(arrays: dict[str, np.ndarray], manifest: dict, where: Path) -> 
     if n and not (frames[0] <= t.get("frame_start", frames[0]) and t.get("frame_end", frames[-1]) <= frames[-1]):
         raise SceneError(f"{where}: 'frames' ({frames[0]:g}..{frames[-1]:g}) do not cover the shot "
                          f"{t.get('frame_start')}-{t.get('frame_end')}")
-    shapes = {"listener_matrix": (n, 4, 4), "listener_index": (n,)}
+    shapes = {"listener_matrix": (n, 4, 4), "listener_index": (n,), "listener_frame": (n, 2)}
     for key, shape in shapes.items():
         if key in arrays and arrays[key].shape != shape:
             raise SceneError(f"{where}: {key!r} has shape {arrays[key].shape}, expected {shape}")
@@ -151,8 +154,9 @@ def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
         raise SceneError(f"cannot read {path}: {e}") from None
     if manifest.get("format") != FORMAT:
         raise SceneError(f"{path}: not a {FORMAT} file")
-    if manifest.get("version") != VERSION:
-        raise SceneError(f"{path}: unsupported version {manifest.get('version')} (supported: {VERSION})")
+    if manifest.get("version") not in READABLE_VERSIONS:
+        raise SceneError(f"{path}: unsupported version {manifest.get('version')} "
+                         f"(supported: {', '.join(map(str, READABLE_VERSIONS))})")
 
     settings = {**manifest.get("settings", {}), **(overrides or {})}
     errors = schema.validate_settings(settings)
@@ -189,6 +193,7 @@ def load_scene(path: str | Path, overrides: dict | None = None) -> Scene:
         frames=arrays["frames"].astype(np.float64),
         listener_matrix=arrays["listener_matrix"].astype(np.float64),
         listener_index=arrays.get("listener_index", np.zeros(len(arrays["frames"]), np.int16)),
+        listener_frame=arrays["listener_frame"].astype(np.float64) if "listener_frame" in arrays else None,
         cuts=arrays.get("cuts", np.zeros(0)),
         src_pos=arrays["src_pos"].astype(np.float64).reshape(len(arrays["frames"]), n_tracks, 3),
         src_fwd=(arrays["src_fwd"].astype(np.float64).reshape(len(arrays["frames"]), n_tracks, 3)

@@ -67,8 +67,8 @@ For soundstage ([E17](experiments/E17-lens-and-pan.md)): with the default 50 mm 
 the frame edge is heard at 9° on ±30° loudspeakers, where an HD viewer at 3 picture heights sees
 the edge at 16.5°; with a 200 mm lens at 2.3°. Ears at the camera are right for distance, delay,
 Doppler and occlusion (a zoom does not move the camera). The professional answer for the direction
-is the picture: film mixers and MPEG-H pan on-screen sources to their position on the screen. A
-lens-aware pan would need the camera's field of view in the bake.
+is the picture: film mixers and MPEG-H pan on-screen sources to their position on the screen. This is now
+available as `pan_reference = "screen"`, with the frame edges baked per sample (scene format 2).
 
 ## Libraries
 

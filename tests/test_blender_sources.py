@@ -206,3 +206,28 @@ tag.add_sound(e, {sine!r})
     assert main(["bake", str(blend), "--run", str(tags), "--out", str(out), "--substeps", "1", "--pad", "0"]) == 0
     ids = [s["id"] for s in json.loads((out / "scene.json").read_text())["sources"]]
     assert ids == ["snd_horn:0"]
+
+
+def test_bake_records_the_frame_edges_of_a_zoom(tmp_path, sine):
+    blend = blender(CAMERA + f"""
+s.render.resolution_x, s.render.resolution_y = 1920, 1080
+cam.data.sensor_width, cam.data.shift_x = 36.0, 0.1
+cam.data.lens = 50.0
+cam.data.keyframe_insert("lens", frame=1)
+cam.data.lens = 200.0
+cam.data.keyframe_insert("lens", frame=60)
+e = bpy.data.objects.new("Horn", None)
+s.collection.objects.link(e)
+e.location = (0, 10, 0)
+e["sfx"] = [{{"sample": {sine!r}}}]
+bpy.ops.wm.save_as_mainfile(filepath={str(tmp_path / 'zoom.blend')!r})
+""", tmp_path, "zoom")
+    out = tmp_path / "bake"
+    assert main(["bake", str(blend), "--out", str(out), "--substeps", "1", "--pad", "0"]) == 0
+    assert json.loads((out / "scene.json").read_text())["version"] == 2
+    arrays = np.load(out / "scene.npz")
+    frames, edges = arrays["frames"], arrays["listener_frame"]
+    for frame, lens in ((1, 50.0), (60, 200.0)):
+        left, right = edges[np.searchsorted(frames, frame)]
+        assert (right - left) / 2 == pytest.approx(18.0 / lens, rel=1e-4)  # half width
+        assert (right + left) / 2 == pytest.approx(2 * 0.1 * 18.0 / lens, rel=1e-4)  # shift in frame widths

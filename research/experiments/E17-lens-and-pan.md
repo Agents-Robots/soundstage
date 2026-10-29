@@ -1,9 +1,10 @@
 # E17: where a source at the frame edge is heard, against the lens
 
-**Question.** The engine pans from the direction of a source relative to the camera ("ears at the
-camera") and ignores the lens. Where does a source at the edge of the frame end up in the stereo
-image for different focal lengths, and how does that compare with where the viewer sees the edge of
-the frame on a screen?
+**Question.** With `pan_reference = "camera"` (the only mode before this experiment) the engine pans from the direction of a
+source relative to the camera ("ears at the camera") and ignores the lens. Where does a source at
+the edge of the frame end up in the stereo image for different focal lengths, and how does that
+compare with where the viewer sees the edge of the frame on a screen? And does the screen-relative
+mode fix it?
 
 ## Setup
 
@@ -46,6 +47,30 @@ themselves, which the engine reaches only for sources at 90°.
   on a large screen, or with long lenses and sources at the frame edge, they are not.
 - Distance, delay, Doppler and occlusion do not depend on the lens: a zoom changes the picture,
   not where the camera is. Only the direction used for panning is in question.
+
+## Screen-relative panning
+
+The answer from film mixing and MPEG-H ([survey](../survey.md#camera-lens-and-sound-direction)) is
+implemented as `pan_reference = "screen"`, now the default ([spec](../../docs/spec/signal-model.md#panning)): the
+bake records the frame edges, and the lateral sine is remapped so that the image coordinate `u` of
+a source is heard at `atan(u · tan screen_edge_deg)`. The same renders with the default
+`screen_edge_deg` of 16.5°, for a source at the frame edge, half way to it (`u = 0.5`, target
+8.4°) and off-screen at 60°:
+
+| lens | frame edge heard at | half way heard at | 60° (off-screen) heard at | 60°, camera mode |
+|---|---|---|---|---|
+| 14 mm | 16.5° | 8.4° | 19.0° | 25.0° |
+| 24 mm | 16.5° | 8.4° | 22.0° | 25.0° |
+| 35 mm | 16.5° | 8.4° | 23.1° | 25.0° |
+| 50 mm | 16.5° | 8.4° | 23.8° | 25.0° |
+| 85 mm | 16.5° | 8.4° | 24.4° | 25.0° |
+| 135 mm | 16.5° | 8.4° | 24.7° | 25.0° |
+| 200 mm | 16.5° | 8.4° | 24.8° | 25.0° |
+| 400 mm | 16.5° | 8.4° | 25.0° | 25.0° |
+
+The frame is heard at the same width whatever the lens; off-screen sources keep about the place
+they have in camera mode, compressed a little with wide lenses, where the frame takes more of the
+front.
 
 ## Reproduce
 

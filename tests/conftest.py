@@ -43,11 +43,12 @@ def make_scene(tmp_path):
     Baked samples run from ``frame_start`` to ``frame_end + 1`` with ``substeps`` per frame.
     ``listener`` (N, 4, 4) replaces the static listener at the origin; ``cuts`` are frames where
     the listener changes (camera switches); ``src_fwd`` (N, S, 3) gives emitter forward vectors;
-    ``visibility`` is (frames (M,), values (M, S, bands)) for occlusion (bands 250, 1000, 4000 Hz).
+    ``visibility`` is (frames (M,), values (M, S, bands)) for occlusion (bands 250, 1000, 4000 Hz);
+    ``frame`` gives the listener's frame edges (x / -z left, right), constant (2,) or per sample (N, 2).
     """
 
     def make(sources, positions=None, *, frame_start=1, frame_end=60, fps=30, fps_base=1.0, settings=None,
-             substeps=1, listener=None, cuts=(), src_fwd=None, visibility=None):
+             substeps=1, listener=None, cuts=(), src_fwd=None, visibility=None, frame=None):
         manifest = build_manifest(sources=sources, frame_start=frame_start, frame_end=frame_end,
                                   fps=fps, fps_base=fps_base, substeps=substeps, settings=settings)
         frames = frame_start + np.arange((frame_end + 1 - frame_start) * substeps + 1) / substeps
@@ -63,6 +64,9 @@ def make_scene(tmp_path):
                   "listener_index": index, "cuts": np.asarray(cuts, dtype=np.float64), "src_pos": pos}
         if src_fwd is not None:
             arrays["src_fwd"] = np.asarray(src_fwd, dtype=np.float64)
+        if frame is not None:
+            frame = np.asarray(frame, dtype=np.float64)
+            arrays["listener_frame"] = frame if frame.ndim == 2 else np.tile(frame, (len(frames), 1))
         if visibility is not None:
             arrays["vis_frames"] = np.asarray(visibility[0], dtype=np.float64)
             arrays["src_visibility"] = np.asarray(visibility[1], dtype=np.float32)
