@@ -44,6 +44,7 @@ the side is fully in one channel. The `sine` law reaches far-channel levels of �
 | Input | Lateral sine of the retarded direction | Azimuth only: wraps at the back and does not distinguish front from back anyway (stereo cannot); the lateral sine is smooth everywhere. |
 | Law | Both `sine` and `power` selectable; default `sine` (standard; confirmed by listening) | Tangent law with a loudspeaker angle: defined only inside the base; extending it to ±90° needs a choice of mapping that is again a listening question. |
 | Constant power | Yes | Constant amplitude (−6 dB centre): a source crossing the centre dips in loudness. |
+| Lens | Ignored: the direction is relative to the camera's orientation, as in games and Blender's speakers | Panning to the position in the frame (film mixing, MPEG-H screen-related remapping) would follow the picture: with the default 50 mm lens a source at the frame edge is heard at 9° on ±30° loudspeakers, where an HD viewer sees the edge at 16.5°; with 200 mm at 2.3° ([E17](../experiments/E17-lens-and-pan.md), [survey](../survey.md#camera-lens-and-sound-direction)). Needs the field of view in the bake |
 
 **Decided (#15):** both laws sounded right by ear, on headphones and loudspeakers, on the flyby and a
 115-source real shot. `sine` stays the default as the widely used constant-power sin/cos law

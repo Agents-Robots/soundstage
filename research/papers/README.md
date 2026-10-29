@@ -46,6 +46,11 @@ Without an open copy (cited by reference only):
 | V. Välimäki, J. Parker, L. Savioja, J. O. Smith, J. Abel, "Fifty Years of Artificial Reverberation", IEEE TASLP 20(5):1421–1448, 2012 | Survey of reverberation algorithms ([reverb](../models/reverb.md)) |
 | A. W. Bronkhorst, T. Houtgast, "Auditory distance perception in rooms", Nature 397:517–520, 1999 | Direct-to-reverberant ratio and distance ([reverb](../models/reverb.md)) |
 | N. Tsingos, E. Gallo, G. Drettakis, "Perceptual Audio Rendering of Complex Virtual Environments", ACM Trans. Graphics 23(3):249–258, 2004 (SIGGRAPH) | Culling and clustering of many sources by masking, the alternative to the energy budget ([culling](../models/culling.md)) |
+| H. Moeck, N. Bonneel, N. Tsingos, G. Drettakis, I. Viaud-Delmon, D. Alloza, "Progressive Perceptual Audio Rendering of Complex Scenes", Proc. ACM I3D 2007 | Hierarchical clustering and progressive pre-mixing for thousands of sources; more clusters for visible sources ([survey](../survey.md#many-sources)) |
+| M. Wand, W. Straßer, "Multi-Resolution Sound Rendering", Proc. Eurographics Symposium on Point-Based Graphics 2004 | Importance sampling of sources (stadium crowd) ([survey](../survey.md#many-sources)) |
+| J. Breebaart, G. Cengarle, L. Lu, T. Mateos, H. Purnhagen, N. Tsingos, "Spatial Coding of Complex Object-Based Program Material", JAES 67(7/8):486–497, 2019 | Dolby Atmos object clustering for delivery ([survey](../survey.md#many-sources)) |
+| R. Schultz-Amling et al. (Fraunhofer IIS), "Acoustical Zooming Based on a Parametric Sound Field Representation", AES 128th Convention, London, 2010, paper 8120 | Spatial audio following the visual zoom ([survey](../survey.md#camera-lens-and-sound-direction)) |
+| ISO/IEC 23008-3, MPEG-H 3D Audio | Screen-related remapping of objects to the playback screen ([survey](../survey.md#camera-lens-and-sound-direction)) |
 | Z. Maekawa, "Noise reduction by screens", Applied Acoustics 1(3):157–173, 1968 | Barrier attenuation from the Fresnel number, an alternative for occlusion ([occlusion](../models/occlusion.md)) |
 | OpenAL Soft, `include/AL/efx-presets.h` (LGPL) | The 113 EFX reverb presets, converted by `tools/efx_presets.py` into `soundstage/engine/data/efx_presets.json` ([reverb](../models/reverb.md)) |
 
