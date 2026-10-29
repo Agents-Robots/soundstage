@@ -357,6 +357,60 @@ start of the render (or of a `--frames` sub-range) has its reverberation from th
   The same gains are applied to the stems.
 - Output: WAV via libsndfile, `FLOAT` (32-bit float, default) or `PCM_24` with TPDF dither.
 
+## Culling
+
+Shots with many sources skip what does not matter, within an error budget `cull_db` (−40 dB; null
+turns culling off and the render is the full one, bit for bit). The rule
+([model](../../research/models/culling.md), measured in
+[E16](../../research/experiments/E16-culling.md)), per group and per decision block:
+
+```
+E_i            estimated energy of entry i in the block
+skip the quietest entries while   Σ_skipped E_i  ≤  10^(cull_db / 10) · Σ_group E_i
+```
+
+The budget bounds the summed error of everything skipped, however many quiet sources add up (a
+per-source threshold does not). Each group has its own budget, so a stem played alone keeps its
+accuracy; beds count towards their group's total and are never skipped. Ties go by source order, so
+renders stay deterministic (NFR-2).
+
+**Render.** Decision blocks are 0.4 s (the momentary-loudness window); the render works in 4 s
+chunks, and a voice skips a chunk when every block of it allows that.
+
+1. Before setup, an upper bound per source and block from the baked positions: the straight-line
+   distance at every baked sample, mapped to its reception time `t + d/c`;
+   `E ≤ 10^(gain_db/10) · g_dist(d)² · max(1, g_rear²) · ms_peak · T`, plus the reverb send with the
+   room rolloff, where `ms_peak` is the sample's highest 10 ms mean square and `T` the block length
+   (one-shots only while they sound). Cone, occlusion, pan and filters only lower it. Group totals
+   use the sample's mean square instead. Sources skipped in every block 20 dB below the budget
+   (`BOUND_MARGIN_DB`) are not set up at all.
+2. After setup, per voice (one-shots with one renderer per trigger count per trigger): the gains on
+   the control grid, the share of the sample's power each path's filters pass, and the dry signal's
+   mean square around the emission time, per control point and widened by one control point:
+
+   ```
+   P = (g_L² F_L + g_R² F_R + g_send² F_send) · ms_dry(t − τ)
+   F_x = Σ_b w_b · Π_stages |H(p · f_b)|²
+   ```
+
+   `w_b` and `f_b` are the power shares and power-weighted centre frequencies of the sample's
+   1/3-octave bands (mono downmix, at its own rate), `p` the pitch; the product runs over the
+   path's filters (air absorption and rear cue on the emission side, then occlusion low-pass and
+   head shadow per ear; the send's occlusion low-pass) with their parameters at that control
+   point, evaluated every 16 control points and interpolated in between. `ms_dry` comes from 1 ms
+   block sums of the sample or loop cycle before the interpolator's prefilter.
+3. A skipped chunk is not rendered. Leaving a rendered chunk, the voice renders the first 10 ms of
+   the skipped one with a raised-cosine fade-out; before a rendered chunk, the last 10 ms with a
+   fade-in. A voice that resumes rebuilds its delay line and clears its filter states 50 ms before
+   that (warm-up), so the rendered chunks match the full render (to 1e-9 in the tests).
+
+**Bake.** At every visibility sample, the same estimate from the distance of the sound heard then
+(retarded positions), the gain, distance law and the sample's level (read with Blender's `aud`),
+one-shots while they sound (±0.5 s); the rule skips the visibility rays of the quietest occluding
+sources 20 dB below `cull_db`. Skipped samples get the visibility interpolated from the source's
+computed samples (open where none was computed); the manifest records the skipped share
+(`occlusion.culled_share`).
+
 ## Report metrics
 
 - Master and each group (stem): sample peak (dBFS), true peak (dBTP, ITU-R BS.1770-4: 4×
@@ -365,12 +419,15 @@ start of the render (or of a `--frames` sub-range) has its reverberation from th
   −70 LUFS and 20 LU below the mean, 95th minus 10th percentile).
 - Per source: id, group, sample, active frame range, distance min/max (m), delay min/max (ms),
   playback rate min/max, peak contribution (dBFS, with the master gain), frames with peak above
-  −60 dBFS, and with visibility: its range (mean over bands, per frame) and the frames below 0.5.
+  −60 dBFS, and with visibility: its range (mean over bands, per frame) and the frames below 0.5;
+  with culling, the seconds during which the source was skipped (`culled_s`).
+- `culling`: the budget, sources, sources skipped before setup and skipped entirely, and the share
+  of voice time rendered.
 - `reverb`: the environment's name; `processing`: normalization gain, limiter's maximum reduction
   and active time.
-- Warnings: those of the bake, then rate clamped, source never audible, sound emitted before the
-  baked range, Phase 4 keys ignored, bake settings given with `--set`, an empty selection
-  ([cli.md](cli.md#report-mixreportjson)).
+- Warnings: those of the bake, then rate clamped, source never audible (except sources culling
+  skipped entirely), sound emitted before the baked range, Phase 4 keys ignored, bake settings
+  given with `--set`, an empty selection ([cli.md](cli.md#report-mixreportjson)).
 
 ## Tuning (Phase 2, #15)
 
@@ -410,6 +467,7 @@ by ear.
 | Instances per tagged object | 32 closest | scene `instance_limit` |
 | Cut crossfade | 10 ms | engine constant |
 | Loop seam crossfade | 50 ms, correlation-adaptive | source `loop_crossfade` |
+| Culling | budget −40 dB per group; 0.4 s decision blocks, 4 s chunks; upper bounds 20 dB below; fades 10 ms, warm-up 50 ms | scene `cull_db`; engine constants `cull.BLOCK_S`, `render.CHUNK_BLOCKS`, `levels.BOUND_MARGIN_DB`, `render.CULL_FADE_S`, `source.WARMUP_S` |
 
 ## References
 

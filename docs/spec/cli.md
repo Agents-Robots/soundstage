@@ -108,7 +108,12 @@ named `reverb` shares its stem with the reverb return (warning). Typical calls:
 soundstage render shot/scene.json -o out/shot.wav --report --plot                  # check
 soundstage render shot/scene.json -o out/shot.wav --stems --set reverb=city        # for Fairlight
 soundstage render shot/scene.json -o out/shot.wav --normalize -23 --limit -1       # standalone mix
+soundstage render shot/scene.json -o out/preview.wav --set cull_db=-20             # faster, less exact
 ```
+
+The render prints a culling line (flyby example: `culling (-40 dB): 0 of 5 sources skipped entirely
+(0 before setup), 90 % of voice time rendered`); `--set cull_db=null` renders every source
+everywhere (reference).
 
 The plot (`<mix>.plot.png`) shows, for up to the 12 loudest spatial sources on a frame axis over
 the rendered range: distance, level (gain × distance × cone × rear × occlusion with the pan law's
@@ -211,7 +216,8 @@ two of its groups):
         240
       ],
       "peak_dbfs": -18.0,
-      "audible_frames": 240
+      "audible_frames": 240,
+      "culled_s": 0.0
     },
     {
       "id": "Crate:0",
@@ -225,6 +231,7 @@ two of its groups):
       ],
       "peak_dbfs": -7.77,
       "audible_frames": 41,
+      "culled_s": 4.0,
       "distance_m": [
         9.02,
         16.69
@@ -255,6 +262,7 @@ two of its groups):
       ],
       "peak_dbfs": -11.14,
       "audible_frames": 240,
+      "culled_s": 0.0,
       "distance_m": [
         24.99,
         123.71
@@ -276,10 +284,18 @@ two of its groups):
   ],
   "cuts": [],
   "warnings": [],
+  "culling": {
+    "cull_db": -40.0,
+    "sources": 5,
+    "skipped_before_setup": 0,
+    "skipped_entirely": 0,
+    "rendered_share": 0.9
+  },
   "timing_s": {
-    "load": 1.175,
-    "dsp": 0.199,
-    "workers": 5
+    "load": 1.186,
+    "dsp": 0.175,
+    "workers": 5,
+    "cull": 0.038
   },
   "processing": {}
 }
@@ -294,17 +310,23 @@ Fields:
 - `reverb`: the environment (preset name or file), null without reverb.
 - `processing`: `normalize_gain_db`, `limiter_max_reduction_db`, `limiter_active_s` when
   `--normalize` / `--limit` were given.
+- `culling` (null with `cull_db` null): the budget, the selected sources, those skipped before
+  setup and those skipped for the whole render, and the share of voice time rendered (voices ×
+  4 s chunks). In the example, the crate's one-shot is silent in the first chunk and skipped there.
 - Per source: `active_frames` [first, last] within the rendered range, `peak_dbfs` of its
   contribution (with the master gain, before normalization and limiting), `audible_frames` (frames
   whose peak is above −60 dBFS); spatial sources also
   `distance_m` [min, max] (propagation distance), `delay_ms` [min, max] (propagation delay as read,
   after the Doppler factor), `rate` [min, max] (playback rate: above 1 approaching, below 1
   receding); with baked visibility `visibility` [min, max] (per frame, mean of the bands) and
-  `occluded_frames` (frames with visibility below 0.5).
+  `occluded_frames` (frames with visibility below 0.5); with culling `culled_s`, the seconds of the
+  rendered range in which the source was skipped. Sources skipped before setup have no distance,
+  delay, rate or visibility fields.
 - Warnings: the bake's warnings (from `scene.json`), then the render's: bake settings given with
   `--set`, Phase 4 keys that are ignored, an empty `--solo`/`--mute` selection, a group named
-  `reverb` sharing the reverb stem, sources never audible, playback rate clamped (near- or
-  supersonic motion), sound emitted before the baked range (padding too short).
+  `reverb` sharing the reverb stem, sources never audible (not listed for sources culling skipped
+  entirely; they count in `culling`), playback rate clamped (near- or supersonic motion), sound
+  emitted before the baked range (padding too short).
 
 ## Exit criteria for agents
 

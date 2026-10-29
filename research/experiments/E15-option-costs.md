@@ -22,7 +22,9 @@ option × option × N grid:
 - **Plackett–Burman screening** (12 runs, 11 two-level render options, N = 100) to check whether
   the one-factor effects add up when options are combined.
 
-Bake: 147 cases × 2 repetitions. Render: 132 cases × 3 repetitions, plus 12 × 2 screening runs.
+Bake: 161 cases × 2 repetitions. Render: 152 cases × 3 repetitions, plus 12 × 2 screening runs.
+Culling (`cull_db`, default −40 dB) is off in every case except its own rows, so that the other
+options are measured on the full render and stay comparable with each other.
 The order is shuffled per repetition. Each render stage starts with a warm-up run that is not
 recorded. Tables show medians. Machine: one AMD Ryzen 9 3950X compute node per stage (16 cores /
 32 threads), with no other work running.
@@ -43,7 +45,8 @@ memory grows from 0.7 GB (N = 1) to 4.2 GB (100), 9.5 GB (300) and 27.7 GB (1000
 | option | fixed cost a | per-source cost b | at N = 100 | cause |
 |---|---|---|---|---|
 | baseline | 3.7 s | 192 ms | 23.2 s | |
-| `doppler_factor` 0 or 0.5 | 3.5 s | 540 ms | 2.5× | one-shots with several triggers are split into one renderer per trigger (`_voices` in `source.py`) when k ≠ 1 or `sync_to_picture` is set. Each renderer covers the whole shot, so a one-shot with 10–20 triggers costs 10–20 sources. The step appears at N = 10, where the first one-shots enter the mix |
+| `doppler_factor` 0 or 0.5 | 3.5 s | 540 ms | 2.5× | one-shots with several triggers are split into one renderer per trigger (`_voices` in `source.py`) when k ≠ 1 or `sync_to_picture` is set. Each renderer covers the whole shot, so a one-shot with 10–20 triggers costs 10–20 sources. The step appears at N = 10, where the first one-shots enter the mix. With the default culling, each voice is skipped where it is silent, which halves this cost ([E16](E16-culling.md)) |
+| `cull_db` −40 (the default) / −20 | 3.8 / 4.1 s | 177 / 120 ms | 0.94× / 0.70× (0.91× / 0.59× at N = 1000) | skips the quietest voices of each group per 0.4 s within the budget. At −40 dB it mostly skips one-shots between their triggers; in this city the distant sources together still carry a few percent of the power, so few of them can go ([E16](E16-culling.md)) |
 | `quality` high | 4.2 s | 145 ms | 0.82× (0.74× at N = 1000) | sinc at 1× emission rate replaces optimal2x, which runs the emission filters at 96 kHz. Slightly slower below N ≈ 30 |
 | `stems` or `report` | +3.5 s | +38 ms | 1.3× | both compute the per-group metrics (true peak at 4× oversampling, LUFS, LRA): about 1.5–1.7 s per group (+1.7 s at N = 1 with one group, +5 s at N = 3, +6.7 to +7.4 s from N = 10 with all four groups), nearly independent of N. The fit's a and b split this constant badly, because N = 1 and 3 have fewer groups. `stems` alone also builds the report data |
 | reverb hangar (10 s) | +2.1 s | +28 ms | 1.21× | impulse-response synthesis is fixed. Room and city add about 10 % |
@@ -93,6 +96,7 @@ large N (285 of 389 s at N = 1000). Peak memory: 0.4 GB at N = 1, 1.2 GB at N = 
 | `occluder_min_size` 0.5 / 8 m | | | 1.00× | no measurable effect |
 | sources in collection instances | 7.5 s | 397 ms | 1.04× | |
 | sources instanced by geometry nodes | 14.2 s | 368 ms | 1.12× | +7 s fixed for evaluating the node tree at every sub-frame |
+| `cull_db` −40 (the default) / −20 | 7.4 / 7.5 s | 358 / 354 ms | 0.95× / 0.94× (0.94× / 0.91× at N = 1000) | skips the visibility rays of sources 20 dB below the budget: visibility pass 261 / 251 s instead of 285 s at N = 1000 ([E16](E16-culling.md)) |
 
 With instances, `instance_limit` (32 per tagged object, ten tagged assets) caps the baked sources at
 320. The N = 1000 cells for collection instances and for geometry nodes with the limit (marked †)
@@ -124,6 +128,9 @@ slower than `frame_set` (measured once on a workstation, not part of the script)
   output cost almost nothing.
 - Bake time is set by the occlusion rate (per source) and by the scene's object count (fixed, via
   `frame_set`), not by the number of occluders kept (`occluder_min_size`).
+- Culling at its default (−40 dB) saves 6–9 % of render time and 5–6 % of bake time in this city, and
+  41 % of the render at −20 dB with 1000 sources. [E16](E16-culling.md) explains why the saving is small when
+  the sources fill the area around the camera.
 - Combined render options are predicted within 17 % by adding the fixed costs and multiplying the
   per-source ratios, once the doppler and stems/report interactions are accounted for.
 

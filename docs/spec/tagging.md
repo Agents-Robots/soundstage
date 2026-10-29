@@ -84,6 +84,7 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `reverb_room_rolloff` | null | Distance rolloff of the send; null = the preset's room rolloff (0 for nearly all presets: constant reverberant level). |
 | `read_speakers` | true | Read Blender Speaker objects as sources (bake). |
 | `instance_limit` | 32 | Per tagged object inside instances: keep at most this many instances, those that come closest to the camera; 0 = all (bake). |
+| `cull_db` | −40.0 | Culling budget: per group, sources whose summed energy stays this far below the group's are skipped where they do not matter (render: per 4 s chunk, judged on 0.4 s blocks; bake: their visibility rays, 20 dB further below). Lower (−60) is more exact, higher (−20) faster for previews; null = off. Read by the bake and the render ([signal-model.md](signal-model.md#culling)). |
 
 Settings marked *(bake)* are used only by the bake; `render --set` on them changes nothing and
 warns. Ranges and the full signal meaning: [signal-model.md](signal-model.md).

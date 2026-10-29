@@ -104,10 +104,14 @@ SCENE_SETTINGS: dict[str, Field] = {
     "occlusion_rate": Field("float", 10.0, min=0.0, phase=3),  # visibility samples per second; 0: none
     "occluder_min_size": Field("float", 2.0, min=0.0, phase=3),  # m: smaller objects do not occlude
     "instance_limit": Field("int", 32, min=0, phase=3),
+    "cull_db": Field("float", -40.0, max=-1.0, nullable=True, phase=4),  # culling budget per group; None: off
 }
 
 IMPLEMENTED_PHASE = 3
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
+
+IMPLEMENTED_LATER = frozenset({"cull_db"})
+"""Phase 4 keys that are implemented (Phase 4 items are picked by need, in any order)."""
 
 BAKE_SETTINGS = ("samples_root", "substeps", "pad_seconds", "listener", "read_speakers", "occlusion_rate",
                  "occluder_min_size", "instance_limit")
@@ -217,7 +221,8 @@ def unimplemented(entry: dict, fields: dict[str, Field]) -> list[str]:
     return [
         key
         for key, field in fields.items()
-        if field.phase > IMPLEMENTED_PHASE and key in entry and entry[key] != field.default
+        if field.phase > IMPLEMENTED_PHASE and key not in IMPLEMENTED_LATER
+        and key in entry and entry[key] != field.default
         and not (isinstance(field.default, tuple) and list(field.default) == entry[key])
     ]
 

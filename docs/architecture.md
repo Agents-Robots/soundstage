@@ -59,17 +59,23 @@ decisions behind the structure are in [adr/](adr/README.md).
 | `scan.py` | Script run like `bake.py`: samples the shot at evenly spaced frames and writes a JSON list of cameras, moving objects and static objects near the camera, so an agent can choose sound sources. |
 | `util.py` | Shared helpers for `bake.py` and `scan.py`: argument handling, running `--run` scripts, frame stepping, output prefix for the CLI. |
 | `schema.py` | The tag and settings schema (keys, types, defaults, ranges) as plain data, shared by `tag.py`, `bake.py` and the engine, so defaults exist in one place (NFR-8). Stdlib only. |
+| `cull.py` | Culling in the bake: per visibility sample, which occluding sources may be heard (level estimate from distance, gain and the sample's level read with `aud`); fills the skipped visibility samples by interpolation. |
+
+### `soundstage/levels.py`
+
+Shared by both halves (numpy only): the distance models and the culling rule `skip_mask` (per
+group, skip the quietest entries while their summed energy stays within the budget).
 
 ### `soundstage/engine/`
 
 | Module | Responsibility |
 |---|---|
 | `scene.py` | Load `scene.json` + `scene.npz`, check format/version, apply `--set` overrides and resolve the settings (a dict), build the `Scene` and `Source` dataclasses; `build_manifest` and `write_scene` for tests and hand-made scenes. |
-| `signals.py` | Decode and cache samples (soundfile), downmix, resample (soxr) to the emission rate, pitch; `DryGenerator` builds each source's dry timeline window by window over emission time: loop tiling with seam crossfade and seeded phase, one-shot placement, fades. |
+| `signals.py` | Decode and cache samples (soundfile), downmix, resample (soxr) to the emission rate, pitch; `DryGenerator` builds each source's dry timeline window by window over emission time: loop tiling with seam crossfade and seeded phase, one-shot placement, fades; sample levels, band spectra and the dry signal's energy over intervals, for culling. |
 | `control.py` | The control grid (1 kHz) and interpolation of control-rate tracks to audio samples (linear for gains and filter parameters, Catmull-Rom for delays), never across a jump. |
 | `geometry.py` | Tracks: positions as cubic splines per piece (split at cuts and detected teleports), listener rotation as `RotationSpline` per segment; retarded-time solver (fixed point + Newton, audibility mask); the per-source `Path` on the control grid; camera-space vectors and derived angles. |
 | `propagation.py` | Read delays per ear (Doppler factor, picture sync, ITD, playback-rate clamp per run between jumps); interpolator registry (`optimal2x`, `sinc`, `hermite4`); the `DelayLine` of emission samples. |
-| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear). |
+| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear), each with its power response at control points for the culling estimate. |
 | `panning.py` | Pan-law registry (`sine`, `power`) and panner registry (`amplitude`, `hybrid`): per-ear delays (ITD), per-ear stages and pan gains from the path; later `binaural`. |
 | `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascades, first-order section, control-rate interpolation, the visibility follower) with reference implementations; the optimal-2× pre-emphasis design. |
 | `source.py` | The processing chain of one source or voice (ADR [0009](adr/0009-processing-chain.md)): emission chain → delay line → per-ear read and stages → gains and pan; held branches crossfaded at jumps; beds. |
@@ -77,7 +83,8 @@ decisions behind the structure are in [adr/](adr/README.md).
 | `mix.py` | Loudness normalization, true peak (BS.1770 interpolator), offline true-peak limiter returning a gain curve, stem file names, WAV writing (float or PCM24 with dither). |
 | `report.py` | Peak, true peak, loudness and loudness range for the master and each group, per-source statistics (including visibility), warnings. |
 | `plot.py` | Debug plot: distance, level, pan, delay, playback rate and visibility per source over frames (matplotlib, optional). |
-| `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, renderers per source, chunked rendering with sources in a thread pool, summed in source order into group buses (deterministic), reverb bus per chunk, statistics. |
+| `cull.py` | Culling in the render: the upper bound per source before setup (from the baked positions), the per-voice energy per decision block after setup, and the plan of which voice renders in which chunk. |
+| `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, culling, renderers per source, chunked rendering with sources in a thread pool, summed in source order into group buses (deterministic), reverb bus per chunk, statistics. |
 
 ### `soundstage/cli.py`
 
@@ -95,11 +102,14 @@ number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in
 
 1. **Load**: manifest and arrays, resolved settings; samples decoded and resampled to the emission
    rate (2× the output rate for the standard interpolator).
-2. **Geometry pass** (per source, control rate 1 kHz, whole render range): retarded delay,
+2. **Culling, before setup** (`cull_db`): an upper bound per source and 0.4 s block from the
+   baked positions; sources far below the budget everywhere are left out from here on.
+3. **Geometry pass** (per source, control rate 1 kHz, whole render range): retarded delay,
    distance, direction, emitter angle, jumps (`Path`); from it the read delays per ear, gains, pan
    gains and filter parameters as control-rate arrays. This also yields report statistics
-   (distance, delay and rate ranges).
-3. **Audio pass**, in chunks of 4 s of output: per source, the delay line is extended by the
+   (distance, delay and rate ranges). Culling then estimates each voice's energy per block from
+   the gains and the dry signal's level and plans which voice renders in which chunk.
+4. **Audio pass**, in chunks of 4 s of output: per source, the delay line is extended by the
    emission chain (dry timeline → pre-emphasis → air absorption → rear cue) as far as the reads need,
    then read per ear at fractional positions, filtered per ear (occlusion, head shadow), multiplied
    by gains and pan gains; at jumps a held branch is crossfaded out. A centre read gives the mono
@@ -107,10 +117,12 @@ number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in
    group buses and the master, their sends into one signal that the reverb bus convolves (tail
    carried to the next chunk). With a reverb, chunks of one impulse-response length before the
    first output sample run first and feed only the reverb bus (pre-roll). All filter states carry
-   across chunks.
-4. **Mix**: master gain, trim to the shot; optional normalization and true-peak limiting with the
+   across chunks; a voice culled for a chunk fades out and in inside the skipped chunk and restarts
+   its delay line and filters with a 50 ms warm-up.
+5. **Mix**: master gain, trim to the shot; optional normalization and true-peak limiting with the
    same gains on master and stems; write the WAVs.
-5. **Report**: metrics for master and groups, per-source statistics, warnings; optional plot.
+6. **Report**: metrics for master and groups, per-source statistics, culling summary, warnings;
+   optional plot.
 
 Chunking keeps memory bounded (a 5-minute stereo float64 bus is ~230 MB; 50 sources at once would
 not fit comfortably) and makes partial renders (`--frames`) cheap. The delay line keeps every
@@ -128,6 +140,10 @@ sources ([E10](../research/experiments/E10-performance.md)).
 Bake cost: a sample costs one depsgraph evaluation for the frame plus, every `occlusion_rate`-th
 of a second, 25 ray casts per occluding source against the box BVH and a rebuild of the moving
 boxes ([E11](../research/experiments/E11-blender-raycast.md)).
+
+Cost per option and against the number of sources: [E15](../research/experiments/E15-option-costs.md).
+With culling, render and bake time follow the number of sources that matter at a time rather than
+the total ([E16](../research/experiments/E16-culling.md)).
 
 ## Testing strategy
 

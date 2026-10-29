@@ -11,6 +11,8 @@ from environment variables, so one script serves every benchmark case:
     E15_SECONDS     shot length in seconds at 30 fps (default 60)
     E15_SETTINGS    JSON object of scene settings (``sfx_settings``), e.g. {"substeps": 8}
     E15_TAG         JSON object of tag keys added to every source, e.g. {"occlusion": false}
+    E15_SPREAD      half-width in metres of the band the sources are placed in across the street
+                    (default 120); beyond 120 m the band also extends past both ends of the path
 
 Source mix (seeded, the same for a given N): 60 % moving loops at 5-40 m/s, 20 % static loops,
 20 % one-shots with a trigger every 3-6 s (half of them moving). Four groups. Samples from
@@ -40,6 +42,7 @@ BUILDINGS = int(os.environ.get("E15_BUILDINGS", 200))
 SECONDS = float(os.environ.get("E15_SECONDS", 60))
 SETTINGS = json.loads(os.environ.get("E15_SETTINGS", "{}"))
 TAG = json.loads(os.environ.get("E15_TAG", "{}"))
+SPREAD = float(os.environ.get("E15_SPREAD", 120))
 FPS = 30
 SAMPLES = REPO / "samples"
 LOOPS = ["engine_hum.wav", "noise_pink.wav", "sine_1k.wav"]
@@ -113,9 +116,10 @@ for i in range(N):
 
 
 def place(i: int) -> tuple[tuple, tuple]:
-    """Start and velocity of source i: near the camera's path so that sources pass it."""
-    y = rng.uniform(-half - 50, -half - 50 + 15 * SECONDS + 100)
-    x = street_x + rng.choice([-1, 1]) * rng.uniform(0, 120)
+    """Start and velocity of source i: within SPREAD of the camera's path (sources pass it)."""
+    extra = max(0.0, SPREAD - 120)
+    y = rng.uniform(-half - 50 - extra, -half - 50 + 15 * SECONDS + 100 + extra)
+    x = street_x + rng.choice([-1, 1]) * rng.uniform(0, SPREAD)
     z = rng.uniform(0.5, 20)
     speed = rng.uniform(5, 40)
     a = rng.uniform(0, 2 * math.pi)
@@ -211,5 +215,6 @@ else:
 
 tag.set_scene_settings(scene, **SETTINGS)
 scene.frame_set(1)
-log(f"e15 built {N} sources ({KIND}), {BUILDINGS} buildings, {SECONDS:g} s in {time.time() - t0:.2f} s")
+log(f"e15 built {N} sources ({KIND}, spread {SPREAD:g} m), {BUILDINGS} buildings, {SECONDS:g} s "
+    f"in {time.time() - t0:.2f} s")
 log(f"e15 built_at {time.time():.3f}")

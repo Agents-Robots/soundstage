@@ -88,7 +88,7 @@ Picked when a shot needs them, in any order:
 - AmbiX ambisonic output (FR-53), after testing Fairlight's import conventions.
 - Random variation of one-shots (FR-54).
 - Animated parameters via keyframed custom properties (FR-10).
-- Culling and grouping for shots with hundreds of sources (traffic, fleets).
+- Culling (FR-68) and grouping for shots with hundreds of sources (traffic, fleets).
 - BWF timecode in the output for automatic placement in Resolve.
 
 Each item gets its own acceptance criteria in its ticket when picked.

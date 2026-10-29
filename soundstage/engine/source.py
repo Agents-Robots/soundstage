@@ -6,7 +6,9 @@ delays, fractional-delay read, ear stages, gains and pan). At jumps (cuts, telep
 with every parameter held at its value before the jump is read as well and crossfaded out over
 10 ms. ``BedRenderer``: non-spatial sources, gain and fades only. Both render output samples
 ``[a, b)`` chunk by chunk, keep their state in between, and return the stereo contribution and the
-mono reverb send (None without a reverb or for beds without ``reverb_send_db``).
+mono reverb send (None without a reverb or for beds without ``reverb_send_db``). A spatial renderer
+asked to continue after a gap (a chunk skipped by culling) restarts its delay line and filters with
+a warm-up; ``power`` estimates the output power per control point for culling.
 
 ``make_renderers`` turns a source into one renderer, or one per trigger for one-shots whose
 triggers need their own reference delay (``sync_to_picture`` or a Doppler factor other than 1).
@@ -29,6 +31,8 @@ from soundstage.engine.scene import Scene, Source
 CROSSFADE_S = 0.010
 PRODUCE_BLOCK_S = 0.5
 WARMUP_S = 0.05
+FILTER_STEP = 16
+"""Control points between evaluations of the filter responses in ``SpatialRenderer.power``."""
 
 
 @dataclass
@@ -56,7 +60,7 @@ class BedRenderer:
         start = None if p["frame"] is None else (
             [scene.sample_of(f) for f in p["frame"]] if isinstance(p["frame"], list) else scene.sample_of(p["frame"]))
         end = scene.sample_of(p["end_frame"]) if p["end_frame"] is not None else None
-        self.source = source
+        self.source, self.grid = source, ctx.grid
         self.dry = signals.DryGenerator(sample, p, rate, start, end, source.id)
         self.gain = float(filters.db_to_gain(p["gain_db"]))
         self.send = None
@@ -67,6 +71,12 @@ class BedRenderer:
     def render(self, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
         dry = self.dry.window(a, b)
         return dry * self.gain, (dry.mean(axis=1) * self.send if self.send is not None else None)
+
+    def power(self) -> np.ndarray:
+        """Estimated output power per control point (both channels and the send), for culling."""
+        g = self.grid
+        a = g.samples - g.step // 2
+        return (self.gain ** 2 + (self.send or 0.0) ** 2) * self.dry.energy(a, a + g.step) / g.step
 
 
 class _Branch:
@@ -176,6 +186,7 @@ class SpatialRenderer:
         self.line = propagation.DelayLine(self._produce, first, int(PRODUCE_BLOCK_S * self.fe))
         self.jump_starts = {int(grid.samples[j - 1]): int(j - 1) for j in path.jumps if j >= 1}
         self.branches: list[_Branch] = []
+        self.next: int | None = None  # output sample where the state continues (None: fresh)
         self.info = self._info(scene)
 
     def _emission_index(self, frame: float, scene: Scene) -> int:
@@ -218,7 +229,54 @@ class SpatialRenderer:
             send = yc * g.linear(self.send, a, b, jumps)
         return out, send
 
+    def power(self) -> np.ndarray:
+        """Estimated output power per control point (both ears and the reverb send), for culling:
+        the gains times the share of the sample's power each path's filters pass (its band
+        spectrum, shifted by the pitch, weighted by their responses every ``FILTER_STEP`` control
+        points) times the dry signal's mean square around the emission time; widened by one control
+        point (ITD, interpolator support)."""
+        te = (self.grid.times - self.delays.centre) * self.fe
+        width = np.maximum(np.abs(np.gradient(te)), 1.0) if len(te) > 1 else np.ones(len(te))
+        a = np.floor(te - width / 2).astype(np.int64)
+        b = a + np.maximum(np.ceil(width).astype(np.int64), 1)
+        n = len(te)
+        idx = np.unique(np.append(np.arange(0, n, FILTER_STEP), n - 1))
+        f, w = signals.sample_bands(self.params["sample"])
+        f = f * self.params["pitch"]
+        common = np.ones((len(idx), len(f)))
+        for st in self.emission_stages:
+            common *= st.power_response(f, idx)
+
+        def passed(stages) -> np.ndarray:
+            r = common.copy()
+            for st in stages:
+                r *= st.power_response(f, idx)
+            return np.interp(np.arange(n), idx, r @ w)
+
+        g2 = self.gain_l ** 2 * passed(self.ear_l) + self.gain_r ** 2 * passed(self.ear_r)
+        if self.send is not None:
+            g2 = g2 + self.send ** 2 * passed(self.send_stages)
+        p = g2 * self.dry.energy(a, b) / (b - a)
+        if len(p) > 2:
+            p = np.maximum(p, np.maximum(np.concatenate([p[1:], p[-1:]]), np.concatenate([p[:1], p[:-1]])))
+        return p
+
+    def _restart(self, a: int) -> None:
+        """Continue at output sample ``a`` after a gap (culling): a new delay line and cleared filter
+        states, warmed up over ``WARMUP_S`` of output before ``a``."""
+        s = max(a - int(WARMUP_S * self.rate), self.grid.start)
+        first = int(math.floor(self.keep[self.grid.index_of(s)])) - self.interp.halfwidth - int(WARMUP_S * self.fe)
+        self.line = propagation.DelayLine(self._produce, first, int(PRODUCE_BLOCK_S * self.fe))
+        for st in (*self.emission_stages, *self.ear_l, *self.ear_r, *self.send_stages):
+            st.state[:] = 0.0
+        self.branches = []
+        self.next = s
+        if s < a:
+            self.render(s, a)
+
     def render(self, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
+        if a != self.next and (self.next is not None or a - self.grid.start > int(WARMUP_S * self.rate)):
+            self._restart(a)
         out = np.empty((b - a, 2))
         send_out = np.empty(b - a) if self.send is not None else None
         cuts = sorted(n for n in self.jump_starts if a < n < b)
@@ -244,6 +302,7 @@ class SpatialRenderer:
         for br in self.branches:
             keep = min(keep, br.position(self, b))
         self.line.trim(int(math.floor(keep)) - self.interp.halfwidth - 2)
+        self.next = b
         return out, send_out
 
     def _info(self, scene: Scene) -> dict:

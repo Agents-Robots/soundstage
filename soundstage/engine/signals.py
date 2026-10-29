@@ -6,6 +6,8 @@
 - Build each source's dry signal over an output sample window: loops tiled with a correlation-adaptive
   seam crossfade and a seeded start phase, one-shots placed at their trigger sample,
   raised-cosine fades.
+- Levels for culling: a sample's mean and peak mean square (``sample_stats``), a dry signal's
+  energy over sample intervals (``DryGenerator.energy``).
 
 Spatial sources are built at the emission rate (2x the output rate for the ``optimal2x``
 interpolator) over emission time; beds at the output rate over reception time.
@@ -21,6 +23,13 @@ from functools import lru_cache
 import numpy as np
 import soundfile as sf
 import soxr
+
+ENERGY_BLOCK_S = 0.001
+"""Block length of the dry-signal energy table used for culling."""
+STATS_BLOCK_S = 0.010
+"""Block length of the peak mean square in ``sample_stats``."""
+BANDS_PER_OCTAVE = 3
+"""Resolution of ``sample_bands``, the spectrum the culling estimate weights filter responses with."""
 
 
 @lru_cache(maxsize=64)
@@ -47,6 +56,46 @@ def load_sample(path: str, rate: int, *, pitch: float = 1.0, stereo: bool = Fals
     if abs(target - src_rate) > 1e-9:
         data = soxr.resample(data, src_rate, target, quality="VHQ")
     return np.ascontiguousarray(data, dtype=np.float64)
+
+
+@lru_cache(maxsize=256)
+def _stats(path: str, mtime: float) -> tuple[float, float, float]:
+    data, rate = _decode(path, mtime)
+    x = data.mean(axis=1)
+    sq = x * x
+    if not len(sq):
+        return 0.0, 0.0, 0.0
+    block = max(1, int(round(STATS_BLOCK_S * rate)))
+    blocks = np.add.reduceat(sq, np.arange(0, len(sq), block)) / block
+    return float(sq.mean()), float(blocks.max()), len(sq) / rate
+
+
+def sample_stats(path: str) -> tuple[float, float, float]:
+    """Mean square, highest mean square in ``STATS_BLOCK_S`` blocks, and length in seconds of a
+    sample's mono downmix at its own rate (pitch not applied). For culling before setup."""
+    return _stats(path, os.path.getmtime(path))
+
+
+@lru_cache(maxsize=256)
+def _bands(path: str, mtime: float) -> tuple[np.ndarray, np.ndarray]:
+    data, rate = _decode(path, mtime)
+    x = data.mean(axis=1)
+    if not np.any(x):
+        return np.array([1000.0]), np.array([1.0])
+    p = np.abs(np.fft.rfft(x)) ** 2
+    f = np.fft.rfftfreq(len(x), 1.0 / rate)
+    edges = 20.0 * 2.0 ** (np.arange(1, int(np.log2(rate / 40.0) * BANDS_PER_OCTAVE) + 1) / BANDS_PER_OCTAVE)
+    band = np.searchsorted(edges, f)  # below 20 * 2^(1/3) Hz: the lowest band; above the last edge: the top one
+    e = np.bincount(band, p, len(edges) + 1)
+    ef = np.bincount(band, p * f, len(edges) + 1)
+    ok = e > 0
+    return ef[ok] / e[ok], e[ok] / e.sum()
+
+
+def sample_bands(path: str) -> tuple[np.ndarray, np.ndarray]:
+    """Power-weighted centre frequencies (Hz) and power shares of a sample's mono downmix in
+    1/``BANDS_PER_OCTAVE``-octave bands at its own rate (pitch not applied)."""
+    return _bands(path, os.path.getmtime(path))
 
 
 def seed_for(source_id: str) -> int:
@@ -121,11 +170,13 @@ class DryGenerator:
         self.fade_in = int(round(params["fade_in"] * rate))
         self.fade_out = int(round(params["fade_out"] * rate))
         self.once = params["mode"] == "once"
+        self.plain = sample  # before the prefilter, which the interpolator undoes: what ``energy`` measures
         if self.once and prefilter is not None:
             self.sample = np.convolve(sample, prefilter)  # full: starts len // 2 before the trigger
             self.lead = len(prefilter) // 2
         if not self.once:
             self.cycle = loop_cycle(sample, int(round(params["loop_crossfade"] * rate)))
+            self.plain = self.cycle
             if prefilter is not None:
                 m = len(prefilter) // 2
                 wrapped = np.concatenate([self.cycle[-m:], self.cycle, self.cycle[:m]]) if m else self.cycle
@@ -155,6 +206,49 @@ class DryGenerator:
         out = self.cycle[(np.arange(n0, n1) - origin + self.phase) % len(self.cycle)]
         env = _envelope(n0, n1, self.start, self.fade_in, self.end, self.fade_out)
         return out * (env[:, None] if out.ndim == 2 else env)
+
+    def energy(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """Energy (sum of squares over the channels) in the sample intervals [a, b), for culling.
+
+        Resolved to ``ENERGY_BLOCK_S`` blocks (linear within a block); fades are not applied, so
+        it is an upper bound where they act. Measured before the interpolator's prefilter.
+        """
+        a, b = np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64)
+        signal = self.plain
+        if not hasattr(self, "_prefix"):
+            sq = signal * signal if signal.ndim == 1 else (signal * signal).sum(axis=1)
+            self._block = max(1, int(round(ENERGY_BLOCK_S * self.rate)))
+            nb = -(-len(sq) // self._block)
+            per_block = np.add.reduceat(sq, np.arange(0, len(sq), self._block)) if len(sq) else np.zeros(0)
+            self._prefix = np.concatenate([[0.0], np.cumsum(per_block)])
+            self._block_len = np.minimum(self._block, len(sq) - np.arange(nb) * self._block)
+        n = len(signal)
+
+        def cum(x):  # energy of samples [0, x), x in [0, n]
+            if not n:
+                return np.zeros(x.shape)
+            k = np.minimum(x // self._block, len(self._block_len) - 1)
+            frac = (x - k * self._block) / self._block_len[k]
+            return self._prefix[k] + frac * (self._prefix[k + 1] - self._prefix[k])
+
+        if self.once:
+            out = np.zeros(a.shape)
+            for start in (self.start if isinstance(self.start, list) else [self.start]):
+                out += cum(np.clip(b - start, 0, n)) - cum(np.clip(a - start, 0, n))
+            return out
+        lo, hi = a, b
+        if self.start is not None:
+            lo, hi = np.maximum(lo, self.start), np.maximum(hi, self.start)
+        if self.end is not None:
+            stop = self.end + self.fade_out
+            lo, hi = np.minimum(lo, stop), np.minimum(hi, stop)
+        shift = self.phase - (self.start if self.start is not None else 0)
+
+        def periodic(x):
+            x = x + shift
+            return (x // n) * self._prefix[-1] + cum(x % n)
+
+        return periodic(hi) - periodic(lo)
 
 
 def dry_timeline(sample: np.ndarray, params: dict, rate: int, start: int | None, end: int | None,

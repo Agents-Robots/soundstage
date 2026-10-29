@@ -154,13 +154,19 @@ to the master). Do not normalize or limit unless the user asks for a finished fi
 To check one source or group in isolation: `--solo 'Ship:*'`, `--solo group:engines`; to drop one:
 `--mute 'Beacon:0'`; a part of the shot: `--frames 100-180`.
 
+Culling is on by default (`cull_db` −40): per group, sources that add less than −40 dB to the group
+are skipped where they do not matter, which keeps shots with hundreds or thousands of sources fast.
+`--set cull_db=-20` for a quicker preview; `--set cull_db=null` for a reference render.
+
 ## 7. Verify (you cannot listen)
 
 Read `<shot>.report.json` and check:
 
 - exit code 0, and no `warnings` you cannot explain;
 - every source has `audible_frames > 0`; a source that should be prominent has a `peak_dbfs`
-  between about −30 and −3;
+  between about −30 and −3. A source with `culled_s` equal to the shot length was skipped by
+  culling: it is more than 40 dB below its group; if it matters, give it its own group or raise
+  its gain;
 - `master.peak_dbfs` below 0 and `lufs_integrated` roughly −30 to −16 for an effects mix;
 - `distance_m` ranges match what the scan said; `delay_ms` ≈ `distance_m` / 0.343 (2.9 ms per metre);
 - `rate` (playback rate) of moving sources: above 1 while approaching, below 1 while receding,

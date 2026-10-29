@@ -68,7 +68,8 @@ changing the meaning of a key does, together with this spec.
     "read_speakers": true,
     "occlusion_rate": 10.0,
     "occluder_min_size": 2.0,
-    "instance_limit": 32
+    "instance_limit": 32,
+    "cull_db": -40.0
   },
 
   "listener": {"objects": ["Camera", "Camera.002"]},
@@ -115,6 +116,7 @@ changing the meaning of a key does, together with this spec.
     "samples": 2010,
     "occluders": {"static": 111180, "moving": 7002, "carried": 9},
     "geometry": "boxes",
+    "culled_share": 0.31,
     "blockers": {"Ship.001:0": [["Hangar", 0.42], ["Crane", 0.05]]}
   },
 
@@ -144,8 +146,9 @@ Rules:
 - `occlusion` describes the baked visibility: frequency bands of `src_visibility`, number of
   visibility samples, occluder counts (static and moving boxes, objects left out because they
   travel with the listener), and per source up to three objects that block it most, with the share
-  of all its paths over the shot they block (`"<instancer>/<object>"` for instances). `null` when no
-  source occludes or `occlusion_rate` is 0.
+  of all its paths over the shot they block (`"<instancer>/<object>"` for instances); `culled_share`:
+  the share of (source, sample) visibility values culling skipped (null with `cull_db` null). `null`
+  when no source occludes or `occlusion_rate` is 0.
 
 ## `scene.npz`
 
@@ -161,7 +164,7 @@ Let `N` = number of time samples = `(frame_end − frame_start + pad_before + pa
 | `src_pos` | (N, S, 3) float64 | Emitter world position (object matrix applied to `offset`), metres. |
 | `src_fwd` | (N, S, 3) float32 | Unit vector of the emitter's `forward_axis` in world space (absent = omnidirectional). |
 | `vis_frames` | (M,) float64 | Frames of the visibility samples (every `round(fps · substeps / occlusion_rate)`-th time sample). |
-| `src_visibility` | (M, S, B) float32 | Visibility 0…1 per band (`occlusion.bands_hz`, B = 3): the open share of the first Fresnel zone of the path heard at that frame, from the source's retarded position to the listener ([model](../../research/models/occlusion.md)). Absent: fully visible. Sources with `occlusion: false` have 1. |
+| `src_visibility` | (M, S, B) float32 | Visibility 0…1 per band (`occlusion.bands_hz`, B = 3): the open share of the first Fresnel zone of the path heard at that frame, from the source's retarded position to the listener ([model](../../research/models/occlusion.md)). Absent: fully visible. Sources with `occlusion: false` have 1. Samples culling skipped (sources far below the budget, [signal-model.md](signal-model.md#culling)) hold the value interpolated from the source's computed samples, 1 where none was computed. |
 | `src_cuts` | (K, 2) float64 | `(track, frame)` pairs where a source teleports. Optional: the bake writes it empty, because the engine detects teleports itself from `src_pos` (speed above `teleport_speed`); other tools may fill it. |
 | `prop_<name>` | (N, S) float32 | Sampled animated property values (`gain_prop`, `pitch_prop`). *(Phase 4)* |
 

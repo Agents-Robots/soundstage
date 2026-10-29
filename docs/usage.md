@@ -198,6 +198,18 @@ Iterate quickly on one part:
     --solo group:engines --set doppler_factor=2
 ```
 
+**Many sources.** Culling (`cull_db`, −40 dB by default) skips, per group, the sources that add
+less than that to the group where they do not matter: a car 800 m away while a ship passes the
+camera, a one-shot between its triggers. At the default this saves 4–9 % of the render and 3–6 %
+of the bake, and about half the render when many voices are silent (`doppler_factor` ≠ 1). Distant
+sources that fill the area around the camera still add up, so render time and memory (about 27 MB
+per source for a 60 s shot) keep growing with the total number of sources
+([E16](../research/experiments/E16-culling.md)). The render
+prints how much it skipped; the report has `culled_s` per source. `--set cull_db=-20` renders faster
+for a preview (an error 20 dB below the mix); `--set cull_db=null` renders everything, for a
+reference or to check that culling is not the cause of something you hear. The bake reads the same
+setting from the scene settings to skip visibility rays of sources far below the budget.
+
 ## 5. Check sync, then go to Resolve
 
 A quick preview without Resolve (needs ffmpeg; first frame and fps come from the mix's
@@ -259,6 +271,7 @@ Things that differ from a person's workflow:
 | Sudden pitch jump or warble | Bad keyframes, a jump slower than `teleport_speed` (not recognized as a teleport), or sub-frames too coarse for very fast motion | `inspect` for speed spikes; lower `teleport_speed`; raise `--substeps` |
 | "playback rate clamped" warning | Source near or above Mach 1 | Lower `doppler` for that source, or accept the clamp |
 | "a bake setting, it has no effect on a render" warning | `--set` on a setting the bake uses (`substeps`, `pad_seconds`, `occlusion_rate`, `listener`, …) | Set it in the scene settings or a `--run` script and bake again |
+| A quiet source is missing (`culled_s` in the report) | Culling skipped it: it adds less than `cull_db` to its group at that time | Put it in its own group (each group has its own budget), or lower `cull_db` (−60) or set it to null |
 | Clicks at a camera cut | Cut not detected: the camera jumps without a camera switch, slower than `teleport_speed` | The engine treats a listener jump faster than `teleport_speed` as a cut: lower `teleport_speed`, or switch cameras with markers |
 | Source muffled though it is in view | An open or invisible object blocks it (foliage, a fence, a helper mesh that renders), or a connected part whose box covers open space | `soundstage inspect` lists the objects that block each source; mark them `sfx_occluder=False` (or `"mesh"`) |
 | Muffled through an arch or open structure | Its bounding box closes the opening | `sfx_occluder="mesh"` on that object |

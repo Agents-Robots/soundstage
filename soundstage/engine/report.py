@@ -84,6 +84,7 @@ def build_report(scene: Scene, result: RenderResult, output: Path, settings_over
         "sources": [{k: v for k, v in s.items() if not k.startswith("_")} for s in result.sources],
         "cuts": [float(c) for c in scene.cuts],
         "warnings": result.warnings,
+        "culling": result.culling,
         "timing_s": result.timing_s,
     }
 

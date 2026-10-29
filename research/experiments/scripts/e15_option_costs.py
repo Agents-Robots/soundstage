@@ -39,7 +39,8 @@ EMPTY = OUT / "empty.blend"
 SOURCES = [1, 3, 10, 30, 100, 300, 1000]
 
 # --- bake cases: (factor, level, environment overrides) around the baseline ---
-BAKE_BASE = {"kind": "objects", "buildings": 200, "seconds": 60, "settings": {}}
+# culling off unless the cull_db factor sets it: the cases measure the engine as it was before culling (E16)
+BAKE_BASE = {"kind": "objects", "buildings": 200, "seconds": 60, "settings": {"cull_db": None}}
 BAKE_FACTORS: list[tuple[str, str, dict]] = [
     ("base", "baseline", {}),
     ("substeps", "1", {"settings": {"substeps": 1}}),
@@ -64,9 +65,11 @@ BAKE_FACTORS: list[tuple[str, str, dict]] = [
     ("kind", "nodes, limit 32", {"kind": "nodes"}),
     ("seconds", "30", {"seconds": 30}),
     ("seconds", "120", {"seconds": 120}),
+    ("cull_db", "-40", {"settings": {"cull_db": -40}}),
+    ("cull_db", "-20", {"settings": {"cull_db": -20}}),
 ]
 BAKE_DEFAULTS = {"substeps": "4", "occlusion_rate": "10", "occluder_min_size": "2", "pad_seconds": "3",
-                 "buildings": "200", "kind": "objects", "seconds": "60"}
+                 "buildings": "200", "kind": "objects", "seconds": "60", "cull_db": "off in these runs"}
 # render cases use these baked scenes (kept on disk); the rest of the bake output is deleted
 KEEP_SCENES = {("base", "baseline"): "base", ("occlusion_rate", "0"): "noocc", ("seconds", "30"): "s30",
                ("seconds", "120"): "s120"}
@@ -96,11 +99,14 @@ RENDER_FACTORS: list[tuple[str, str, str, list[str]]] = [
     ("seconds", "120", "s120", []),
     ("delivery", "stems+report+plot+city+normalize+limit", "base",
      ["--stems", "--report", "--plot", "--set", "reverb=city", "--normalize", "-23", "--limit", "-1"]),
+    ("cull_db", "-40", "base", ["--set", "cull_db=-40"]),
+    ("cull_db", "-20", "base", ["--set", "cull_db=-20"]),
 ]
+CULL_OFF = ["--set", "cull_db=null"]  # every other render case: culling off (scenes baked before it existed)
 RENDER_DEFAULTS = {"visibility": "baked (10 Hz)", "quality": "standard", "panner": "hybrid", "pan_law": "sine",
                    "head_shadow": "0.5", "itd_scale": "0.5", "air_absorption": "1", "doppler_factor": "1",
                    "reverb": "none", "stems": "off", "report": "off", "normalize": "off", "limit": "off",
-                   "plot": "off", "pcm24": "off", "seconds": "60", "delivery": "off"}
+                   "plot": "off", "pcm24": "off", "seconds": "60", "delivery": "off", "cull_db": "off in these runs"}
 
 # --- Plackett-Burman: 12 runs, 11 two-level render factors, at N = PB_SOURCES ---
 PB_SOURCES = 100
@@ -126,7 +132,7 @@ def bake_cases(only: list[str] | None, max_sources: int) -> list[dict]:
         if only and factor not in only and not (factor == "occlusion_rate" and level == "0" and "noocc" in only):
             continue
         for n in SOURCES:
-            if n > max_sources or (n == 1000 and factor not in ("base", "kind", "occlusion_rate")):
+            if n > max_sources or (n == 1000 and factor not in ("base", "kind", "occlusion_rate", "cull_db")):
                 continue
             cfg = {**BAKE_BASE, **over, "settings": {**BAKE_BASE["settings"], **over.get("settings", {})}}
             out.append({"stage": "bake", "factor": factor, "level": level, "n": n, "config": cfg,
@@ -140,7 +146,7 @@ def render_cases(only: list[str] | None, max_sources: int) -> list[dict]:
         if only and factor not in only:
             continue
         for n in SOURCES:
-            if n > max_sources or (n == 1000 and factor not in ("base", "quality", "reverb", "delivery")):
+            if n > max_sources or (n == 1000 and factor not in ("base", "quality", "reverb", "delivery", "cull_db")):
                 continue
             out.append({"stage": "render", "factor": factor, "level": level, "n": n, "scene": scene, "args": args,
                         "key": f"render|{factor}|{level}|{n}"})
@@ -234,7 +240,8 @@ def run_render(case: dict, rep: int) -> dict:
     work.mkdir(parents=True)
     env = {**os.environ, "PYTHONPATH": f"{REPO}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"}
     py = os.environ.get("E15_PYTHON", sys.executable)
-    r = timed([py, "-c", RENDER_WRAPPER, "render", str(scene), "-o", str(work / "mix.wav"), *case["args"]], env=env)
+    args = case["args"] if any(a.startswith("cull_db=") for a in case["args"]) else CULL_OFF + case["args"]
+    r = timed([py, "-c", RENDER_WRAPPER, "render", str(scene), "-o", str(work / "mix.wav"), *args], env=env)
     for line in r["output"].splitlines():
         if line.startswith("[e15] timing"):
             t = json.loads(line.split("timing ", 1)[1])

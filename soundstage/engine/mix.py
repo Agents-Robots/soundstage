@@ -31,6 +31,7 @@ from scipy.signal import firwin, resample_poly
 
 OVERSAMPLE = 4  # true-peak meter (BS.1770-4)
 LIMITER_OVERSAMPLE = 8  # the limiter's own check: 4x meters may read up to 0.5 dB low near 20 kHz
+SFC_SET_ADD_PEAK_CHUNK = 0x1050  # libsndfile command (sndfile.h)
 
 
 def normalize_gain(audio: np.ndarray, rate: int, target_lufs: float) -> float:
@@ -119,5 +120,8 @@ def write_wav(path: str | Path, audio: np.ndarray, rate: int, *, pcm24: bool = F
         data = np.clip(audio + dither, -1.0, 1.0 - lsb)
         sf.write(path, data, rate, subtype="PCM_24")
     else:
-        sf.write(path, audio.astype(np.float32), rate, subtype="FLOAT")
+        with sf.SoundFile(path, "w", rate, audio.shape[1] if audio.ndim == 2 else 1, subtype="FLOAT") as f:
+            # no PEAK chunk: libsndfile stamps it with the time of writing, so files would differ (NFR-2)
+            sf._snd.sf_command(f._file, SFC_SET_ADD_PEAK_CHUNK, sf._ffi.NULL, 0)
+            f.write(audio.astype(np.float32))
     return path

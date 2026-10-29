@@ -19,7 +19,8 @@ The dry signal of a source: what it emits, in emission time, before any propagat
   early, the FIR's half length) or circularly to the loop cycle (exactly periodic).
 - **Voices**: a one-shot with several triggers is rendered as one voice per trigger when each needs
   its own reference delay (`sync_to_picture`, or a Doppler factor ≠ 1); see
-  [Doppler and delay](doppler-and-delay.md).
+  [Doppler and delay](doppler-and-delay.md). Each voice covers the whole shot, but
+  [culling](culling.md) skips the chunks in which it is silent.
 
 ## Choices
 

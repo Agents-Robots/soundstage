@@ -9,8 +9,8 @@ Run headless (or through ``soundstage bake``)::
 Steps: run tagging scripts (``--run``, not saved to the .blend), validate tags and resolve their
 defaults and sample paths, step through frames and sub-frames over the shot plus padding, record
 the listener (active camera per frame) and every emitter's world position in metres, record camera
-switches as cuts, sample each source's visibility (occlusion.py) at ``occlusion_rate``, write the
-scene file (docs/spec/scene-format.md).
+switches as cuts, sample each source's visibility (occlusion.py) at ``occlusion_rate`` (only for
+sources that may be heard, cull.py), write the scene file (docs/spec/scene-format.md).
 
 Uses bpy, stdlib and Blender's bundled numpy only.
 """
@@ -32,7 +32,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
-from soundstage.blender import emitters, occlusion, schema, tag, util  # noqa: E402
+from soundstage.blender import cull, emitters, occlusion, schema, tag, util  # noqa: E402
 from soundstage.blender.util import log  # noqa: E402
 
 FORMAT = "soundstage.scene"
@@ -182,6 +182,14 @@ def bake(args: argparse.Namespace) -> None:
             f"{occluders.counts['carried']} travelling with the listener ({time.perf_counter() - t0:.1f} s); "
             f"visibility every {vis_step} samples")
     radii = [spatial[j]["occlusion_radius"] for j in occluding]
+    culler = None
+    if occluders is not None and settings["cull_db"] is not None:
+        try:
+            culler = cull.Culler(spatial, occluding, settings, fps)
+        except Exception as e:  # a sample aud cannot decode: compute every source's visibility
+            w = f"culling off in the bake: sample levels not readable ({e})"
+            log(f"WARNING {w}")
+            warnings.append(w)
 
     original_frame = scene.frame_current
     log(f"baking frames {first}..{last} x{substeps} ({n} samples), {len(spatial)} spatial sources")
@@ -221,18 +229,28 @@ def bake(args: argparse.Namespace) -> None:
             emitted = occlusion.retarded_positions(frames[:k + 1] / fps, src_pos[:k + 1, occluding],
                                                    np.array(loc) * scale, settings["speed_of_sound"])
             v = np.ones((len(spatial), len(occlusion.BANDS_HZ)), dtype=np.float32)
-            counts = [Counter() for _ in occluding]
-            v[occluding] = occlusion.visibility(occluders, np.array(loc), emitted / scale, radii, scale,
-                                                settings["speed_of_sound"], counts)
-            for j, c in zip(occluding, counts):
+            todo = np.arange(len(occluding))
+            if culler is not None:
+                todo = culler.keep(frames[k] / fps, np.array(loc) * scale, emitted, src_pos[k])
+                v[np.setdiff1d(occluding, np.asarray(occluding)[todo])] = np.nan  # filled in after the loop
+            sel = [occluding[i] for i in todo]
+            counts = [Counter() for _ in sel]
+            if sel:
+                v[sel] = occlusion.visibility(occluders, np.array(loc), emitted[todo] / scale,
+                                              [radii[i] for i in todo], scale, settings["speed_of_sound"], counts)
+            for j, c in zip(sel, counts):
                 blockers[j].update(c)
             vis_frames.append(float(f))
             vis.append(v)
             vis_seconds += time.perf_counter() - t_vis
     scene.frame_set(original_frame)
+    culled_share = None
     if vis:
         log(f"visibility: {len(vis)} samples x {len(occluding)} sources in {vis_seconds:.1f} s "
             f"({vis_seconds / len(vis) * 1000:.0f} ms per sample)")
+        if culler is not None:
+            culled_share = round(culler.report(), 4)
+            vis = list(cull.fill(np.array(vis, dtype=np.float32)))
     gone = [em for em in {id(em): em for em in objects}.values() if em.missing]
     if gone:
         worst = max(gone, key=lambda em: em.missing)
@@ -276,7 +294,7 @@ def bake(args: argparse.Namespace) -> None:
         "settings": settings,
         "listener": {"objects": listener_names},
         "occlusion": ({"bands_hz": list(occlusion.BANDS_HZ), "samples": len(vis_frames),
-                       "occluders": occluders.counts, "geometry": "boxes",
+                       "occluders": occluders.counts, "geometry": "boxes", "culled_share": culled_share,
                        "blockers": {s["id"]: [[name, round(n / (len(vis_frames) * occlusion.PATHS), 3)]
                                               for name, n in blockers[j].most_common(3)]
                                     for j, s in enumerate(spatial) if blockers[j]}} if vis else None),

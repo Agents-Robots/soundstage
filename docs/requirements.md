@@ -98,6 +98,7 @@ Decisions taken with the user (2026-10-25):
 | FR-65 | Debug plot (`.plot.png`) of distance, gain, pan, delay and pitch per source over a frame axis. | 3 |
 | FR-66 | Preview: mux the mix with the rendered frame sequence (or a video) into an MP4 for a quick sync check without Resolve. | 1 |
 | FR-67 | Partial renders: a frame sub-range, solo/mute of sources or groups, for fast iteration. | 1 |
+| FR-68 | Culling for shots with many sources: sources and voices whose summed contribution stays below a budget relative to their group (`cull_db`) are skipped where they do not matter, in the render and in the bake's visibility pass; the error stays within the budget; `cull_db = null` turns it off. | 4 |
 
 ## Non-functional requirements
 

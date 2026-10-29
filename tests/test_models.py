@@ -13,5 +13,5 @@ def test_schema_choices_match_registries():
 
 
 def test_only_phase4_keys_are_unimplemented():
-    later = {k for k, f in {**schema.SOURCE_KEYS, **schema.SCENE_SETTINGS}.items() if f.phase > schema.IMPLEMENTED_PHASE}
+    later = {k for k, f in {**schema.SOURCE_KEYS, **schema.SCENE_SETTINGS}.items() if f.phase > schema.IMPLEMENTED_PHASE and k not in schema.IMPLEMENTED_LATER}
     assert later == {"variants", "gain_jitter_db", "pitch_jitter", "gain_prop", "pitch_prop"}

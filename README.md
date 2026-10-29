@@ -26,9 +26,12 @@ camera cuts, loops and one-shots; occlusion behind buildings and vehicles (quiet
 frequencies bending around edges); reverb from 113 named environments (hangar, city street,
 forest, space station …); Speaker objects and tags in instanced assets; stems per group for
 Fairlight, a loudness report, optional normalization and true-peak limiting, a debug plot; an MP4
-preview for checking sync. 50 sources over 5 minutes render in about a minute. Phase 4 is not
-implemented: binaural and ambisonic output, animated parameters and random variation follow by
-need (see the [roadmap](docs/roadmap.md)).
+preview for checking sync. 50 sources over 5 minutes render in about a minute. From Phase 4,
+culling is implemented: voices that do not matter (silent, or far below the rest of their group)
+are skipped within an error budget, which saves a few percent at the default and halves renders
+with many silent voices; shots with thousands of sources still need about 27 MB of memory per source
+([E16](research/experiments/E16-culling.md)). Binaural and ambisonic output, animated parameters and random
+variation follow by need (see the [roadmap](docs/roadmap.md)).
 
 ## Try it
 
@@ -56,7 +59,7 @@ coding agents, readable for people), or place Speaker objects in Blender and bak
 ## How long it takes
 
 Measured on a 16-core desktop CPU (AMD Ryzen 9 3950X), for a 60-second shot in a city of 200
-buildings with default settings ([E15](research/experiments/E15-option-costs.md)). Both steps take
+buildings with default settings and culling off ([E15](research/experiments/E15-option-costs.md)). Both steps take
 a fixed time plus a time per source:
 
 | step | fixed | per source | 10 sources | 100 sources | 1000 sources |
@@ -67,14 +70,17 @@ a fixed time plus a time per source:
 The per-source time is proportional to the shot length: a 120 s shot takes about twice as long.
 Render memory is about 4 GB at 100 sources and 28 GB at 1000. Below 30 sources the render is
 dominated by its fixed time, so the fixed costs in the tables below matter more than the factors.
+Culling at its default (`cull_db=-40`) takes 4–9 % off the render and 3–6 % off the bake
+([E16](research/experiments/E16-culling.md)).
 
 **Render options**, most expensive first (effect relative to the defaults, at 100 sources):
 
 | change | effect |
 |---|---|
-| `doppler_factor` ≠ 1 (scene or source) or `sync_to_picture` on a one-shot with several triggers | every trigger renders as a separate source over the whole shot: 2.5× in a mix with 20 % one-shots of 10–20 triggers each |
+| `doppler_factor` ≠ 1 (scene or source) or `sync_to_picture` on a one-shot with several triggers | every trigger renders as a separate voice over the whole shot: 2.5× with culling off in a mix with 20 % one-shots of 10–20 triggers each; culling skips the silent parts of those voices, which leaves about 1.3× |
 | `--stems` or `--report` (either or both) | about 1.5 s per group (+6 s with four groups), nearly independent of the number of sources |
 | `--set reverb=<name>` | +10 %; long reverbs (hangar, 10 s) add 2 s more |
+| `--set cull_db=null` (culling off) | +4 to +10 % |
 | `--limit` | +1.2 s |
 | `--plot` | +0.6 s |
 | `panner=amplitude` instead of the default hybrid | −11 % |
@@ -82,6 +88,7 @@ dominated by its fixed time, so the fixed costs in the tables below matter more 
 | `head_shadow=0` | −8 % |
 | `air_absorption=0`, `itd_scale=0`, pan law, `--normalize`, `--pcm24` | 0–4 % |
 | `--quality high` | −18 % (−26 % at 1000 sources); slightly slower below 30 sources |
+| `--set cull_db=-20` instead of −40 | −21 to −40 % (more with more sources), error 20 dB below each group |
 
 **Bake settings**:
 

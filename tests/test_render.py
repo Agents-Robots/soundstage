@@ -1,5 +1,7 @@
 """Render and output with synthetic scenes (no Blender)."""
 
+import time
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -73,6 +75,7 @@ def test_solo_and_mute(make_scene, sine, click):
 def test_render_is_deterministic(make_scene, sine, tmp_path):
     scene = make_scene([{"sample": sine}], [[3, 4, 0]])
     a = mix.write_wav(tmp_path / "a.wav", render.render(scene).audio, RATE)
+    time.sleep(1.1)  # files written in different seconds: no timestamp in the output (WAV PEAK chunk)
     b = mix.write_wav(tmp_path / "b.wav", render.render(scene).audio, RATE)
     assert a.read_bytes() == b.read_bytes()
 

@@ -259,6 +259,10 @@ def cmd_render(a: argparse.Namespace) -> int:
         print("stems: " + ", ".join(str(mix.stem_path(out, g).name) for g in result.stems))
     if processing:
         print("processing: " + ", ".join(f"{k} {v}" for k, v in processing.items()))
+    if result.culling:
+        c = result.culling
+        print(f"culling ({c['cull_db']:g} dB): {c['skipped_entirely']} of {c['sources']} sources skipped entirely "
+              f"({c['skipped_before_setup']} before setup), {100 * c['rendered_share']:.0f} % of voice time rendered")
     if a.plot:
         print(f"plot: {plotted}" if plotted else "plot: no spatial source rendered, nothing to plot")
     if a.report:

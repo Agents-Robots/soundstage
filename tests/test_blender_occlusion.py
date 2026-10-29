@@ -275,3 +275,18 @@ merged("Tower", [((80, 20, 0), (20, 10, 30)), ((80, 13.5, 5), (6, 3, 3)), ((80, 
     assert vis["ThroughTheRing:0"].min() == 1.0  # 1 m brackets are below occluder_min_size
     # the two buildings by their parts, the tower (its shell fills its box) as one box
     assert manifest["occlusion"]["occluders"]["static"] == 3
+
+
+def test_bake_skips_visibility_far_below_the_budget(tmp_path, sine):
+    manifest, vis = bake(tmp_path, f"""
+box("Wall", (0, 10, 0), (10, 1, 6))
+emitter("Src", [(1, (-20, 20, 0)), (60, (0, 20, 0))])
+far = bpy.data.objects.new("Far", None)
+s.collection.objects.link(far)
+far.location = (0, 3000, 0)
+tag.add_sound(far, {sine!r}, gain_db=-30)  # about 74 dB below Src: skipped (budget -40, margin 20)
+""", sine)
+    assert manifest["occlusion"]["culled_share"] == pytest.approx(0.5)
+    assert np.all(vis["Far:0"] == 1.0)  # never computed: open
+    v = vis["Src:0"]
+    assert v[0].min() == 1.0 and v[-1].max() == 0.0

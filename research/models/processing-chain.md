@@ -86,9 +86,11 @@ oversampled signal ([fractional delay](fractional-delay.md)).
 sequenceDiagram
     participant M as render (main thread)
     participant W as worker threads
+    M->>M: culling bound: leave out sources far below the budget everywhere
     M->>W: build renderers (one per source or voice): path, delays, gains, stages
+    M->>M: culling plan: which voice renders in which chunk
     loop every 4 s chunk of output
-        M->>W: render chunk [c0, c1) for every source
+        M->>W: render chunk [c0, c1) for every source (skipped voices: nothing, or 10 ms fades)
         W->>W: extend delay line (dry, emission stages), read per ear, ear stages, gains, block peaks
         W-->>M: stereo chunk and mono send per source
         M->>M: add chunks to group buses and master in source order, sum the sends
@@ -99,7 +101,8 @@ sequenceDiagram
 
 - Geometry and all control-rate parameters are computed once per source for the whole render
   range; only audio-rate work is chunked. Filter states live in the stage objects, so chunked
-  processing equals one long run (tested).
+  processing equals one long run (tested). A voice that culling skipped restarts its delay line
+  and filters with a 50 ms warm-up, which matches the long run to 1e-9 ([culling](culling.md)).
 - The delay line keeps every emission sample a later read may still need (a cut to a farther
   camera reads further back); it is trimmed with the suffix minimum of the needed positions.
 - Per-sample loops are numba kernels with `nogil=True`; with them the thread pool scales (see

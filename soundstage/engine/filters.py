@@ -1,6 +1,6 @@
 """Gain laws, cutoff laws, air absorption and the audio-rate filter stages.
 
-- Gains: distance models (as in OpenAL and Blender), directivity cone, rear cue.
+- Gains: distance models (``soundstage.levels``, shared with the bake), directivity cone, rear cue.
 - Cutoffs: rear cue; air absorption from ISO 9613-1, realized as four cascaded one-pole low-passes
   whose cutoffs are fitted per distance once per render (``AirAbsorption``).
 - Head shadow: Brown-Duda first-order shelf coefficients per ear.
@@ -20,6 +20,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from soundstage.engine import kernels
+from soundstage.levels import DISTANCE_MODELS, distance_gain  # noqa: F401  (shared with the bake)
 
 # ---------------------------------------------------------------------------- gains
 
@@ -31,25 +32,6 @@ def db_to_gain(db: float | np.ndarray) -> float | np.ndarray:
 def gain_to_db(gain: float | np.ndarray, floor: float = -200.0) -> float | np.ndarray:
     g = np.maximum(np.abs(np.asarray(gain, dtype=np.float64)), 10.0 ** (floor / 20.0))
     return 20.0 * np.log10(g)
-
-
-def distance_gain(d: np.ndarray, model: str, ref: float, max_distance: float | None, rolloff: float) -> np.ndarray:
-    """Linear gain for distances ``d`` (metres); 1 at and inside the reference distance."""
-    d = np.asarray(d, dtype=np.float64)
-    hi = np.inf if max_distance is None else max_distance
-    dc = np.clip(d, ref, hi)
-    if model == "inverse_clamped":
-        return ref / (ref + rolloff * (dc - ref))
-    if model == "linear_clamped":
-        return np.maximum(0.0, 1.0 - rolloff * (dc - ref) / (hi - ref)) if hi > ref else np.ones_like(dc)
-    if model == "exponential_clamped":
-        return (dc / ref) ** (-rolloff)
-    if model == "none":
-        return np.ones_like(dc)
-    raise ValueError(f"unknown distance model {model!r}")
-
-
-DISTANCE_MODELS = ("inverse_clamped", "linear_clamped", "exponential_clamped", "none")
 
 
 def cone_gain(cos_angle: np.ndarray, inner_deg: float, outer_deg: float, outer_gain_db: float) -> np.ndarray:
@@ -178,6 +160,17 @@ def tpt_gain(cutoff_hz: np.ndarray, rate: float) -> np.ndarray:
     return np.where(np.isfinite(fc) & (fc < 0.49 * rate), g / (1.0 + g), 1.0)
 
 
+def _onepole_power(gain: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """|H|^2 of TPT one-pole low-passes with gains G (any shape) at warped frequencies
+    t = tan(pi f / fs) (B,): 1 / (1 + (t / g)^2), g = G / (1 - G); G = 1 passes."""
+    inv_g = (1.0 - gain) / np.maximum(gain, 1e-12)
+    return 1.0 / (1.0 + (inv_g[..., None] * t) ** 2)
+
+
+def _warped(freqs_hz: np.ndarray, rate: float) -> np.ndarray:
+    return np.tan(np.pi * np.minimum(np.asarray(freqs_hz, dtype=np.float64), 0.49 * rate) / rate)
+
+
 class OnePoleStage:
     """Emission-side cascade of TPT one-poles; parameters given at (monotonic) emission times."""
 
@@ -194,6 +187,10 @@ class OnePoleStage:
             return x
         return kernels.onepole_cascade_track(np.ascontiguousarray(x), a, self.rate, self.times, self.gains,
                                              self.state, np.empty(b - a))
+
+    def power_response(self, freqs_hz: np.ndarray, idx: np.ndarray) -> np.ndarray:
+        """|H|^2 (len(idx), B) at control points ``idx`` (for the culling estimate)."""
+        return _onepole_power(self.gains[idx], _warped(freqs_hz, self.rate)).prod(axis=1)
 
 
 class RearStage:
@@ -214,6 +211,12 @@ class RearStage:
             return x
         return kernels.rear_shelf_track(np.ascontiguousarray(x), a, self.rate, self.times, self.rear, self.gain,
                                         self.state, np.empty(b - a))
+
+    def power_response(self, freqs_hz: np.ndarray, idx: np.ndarray) -> np.ndarray:
+        """|1 + rho (LP - 1)|^2 = (1 + ((1 - rho) t/g)^2) / (1 + (t/g)^2) at control points ``idx``."""
+        tg = _warped(freqs_hz, self.rate) * (1.0 - self.gain) / max(self.gain, 1e-12)
+        rho = self.rear[idx][:, None]
+        return (1.0 + ((1.0 - rho) * tg) ** 2) / (1.0 + tg ** 2)
 
 
 OCCLUSION_ATTACK_S = 0.060  # becoming occluded
@@ -281,6 +284,9 @@ class GridOnePoleStage:
         g = self.grid.linear(self.gains, a, b, self.jumps)
         return kernels.onepole_cascade(np.ascontiguousarray(x), g[:, None], self.state, np.empty(b - a))
 
+    def power_response(self, freqs_hz: np.ndarray, idx: np.ndarray) -> np.ndarray:
+        return _onepole_power(self.gains[idx], _warped(freqs_hz, self.rate))
+
     def held(self, index: int) -> GridOnePoleStage:
         copy = GridOnePoleStage.__new__(GridOnePoleStage)
         copy.grid, copy.rate, copy.jumps = self.grid, self.rate, None
@@ -301,6 +307,13 @@ class ShelfStage:
         return kernels.first_order(np.ascontiguousarray(x), self.grid.linear(self.b0, a, b, self.jumps),
                                    self.grid.linear(self.b1, a, b, self.jumps), self.a1, self.state,
                                    np.empty(b - a))
+
+    def power_response(self, freqs_hz: np.ndarray, idx: np.ndarray) -> np.ndarray:
+        """|b0 + b1 z^-1|^2 / |1 + a1 z^-1|^2 at control points ``idx``."""
+        rate = self.grid.rate
+        c = np.cos(2.0 * np.pi * np.minimum(np.asarray(freqs_hz, dtype=np.float64), 0.49 * rate) / rate)
+        b0, b1 = self.b0[idx][:, None], self.b1[idx][:, None]
+        return (b0 ** 2 + b1 ** 2 + 2.0 * b0 * b1 * c) / (1.0 + self.a1 ** 2 + 2.0 * self.a1 * c)
 
     def held(self, index: int) -> ShelfStage:
         """A copy with the parameters frozen at a control index and the current state (crossfades)."""
