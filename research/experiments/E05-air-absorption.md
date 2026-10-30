@@ -96,6 +96,24 @@ moving sources over 20 s on one worker: 12.65 s with air absorption, 11.82 s wit
 Interpolating the sections' `h = 1/(1 + g k)` with the other coefficients instead of computing it
 keeps `h (1 + g k)` within 4.6·10⁻⁸ of 1.
 
+## 6. Doppler
+
+One source of noise at 80 m/s towards the listener (from 700 m), away from it (from 300 m), or
+standing at 450 m, 3 s measured, rendered by the full chain (air absorption on the emission side,
+at the emitted frequency) and by the far field (after the read, at the received frequency). Far
+field minus full chain, and what the full chain's loss at the emitted frequency `f / r` predicts
+with a loss in proportion to `f²` (`r` the Doppler factor), dB:
+
+| source | 1 kHz | 3.2 kHz | 6.4 kHz | predicted 1 kHz | 3.2 kHz | 6.4 kHz |
+|---|---|---|---|---|---|---|
+| +80 m/s, 700 m | -0.9 | -2.9 | -12.8 | -1.0 | -4.2 | -14.3 |
+| -80 m/s, 300 m | +0.4 | +2.6 | +11.9 | +1.2 | +5.3 | +18.1 |
+| +0 m/s, 450 m | -0.2 | -0.2 | +1.4 | -0.0 | -0.0 | -0.0 |
+
+The air absorbs the wave at its frequency in the air, the shifted one: the far field is right and
+the full chain gives an approaching source too little loss and a receding one too much (issue
+#40). Standing, the two tiers agree within 1.4 dB at 30 dB of loss.
+
 ## Conclusion
 
 The implementation of ISO 9613-1 is correct. Two second-order sections with a pair of zeros each,
@@ -107,5 +125,6 @@ bright beyond ([air absorption](../models/air-absorption.md), issue #36).
 ## Reproduce
 
 ```bash
-.venv/bin/python research/experiments/scripts/e05_air_absorption.py
+.venv/bin/python research/experiments/scripts/e05_air_absorption.py             # all sections
+.venv/bin/python research/experiments/scripts/e05_air_absorption.py --doppler   # section 6 alone
 ```

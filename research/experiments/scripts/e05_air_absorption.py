@@ -14,10 +14,15 @@
    the full chain (96 kHz) and ISO, bands sqrt(2) and an octave apart.
 5. Cost: the emission-side stage alone (ns per sample, one thread) and a full-chain render with air
    absorption on and off (48 moving sources, 20 s, one worker).
+6. Doppler: one source approaching or receding at 80 m/s (or standing) 450-700 m away, rendered by
+   the full chain (air absorption before the delay line, at the emitted frequency) and by the far
+   field (after the read, at the received frequency): the far field minus the full chain per band.
+   ``--doppler`` runs this section alone.
 Writes research/figures/e05_air_absorption.png.
 """
 
 import math
+import sys
 import time
 
 import matplotlib
@@ -248,7 +253,45 @@ def render_cost() -> tuple[float, float]:
     return tuple(out)
 
 
+def doppler() -> list[list]:
+    """Far field minus full chain (dB) at 1, 3.2 and 6.4 kHz for a source at 80 m/s towards and away
+    from the listener and a standing one, 3 s of noise (welch), and what the Doppler factor r of the
+    playback rate predicts if the full chain's loss is that of the emitted frequency f / r."""
+    from scipy.signal import welch
+
+    from soundstage.engine import farfield as ff
+
+    noise = sample("e05_doppler.wav", np.random.default_rng(1).standard_normal(4 * RATE) * 0.1)
+    f = np.array([1000.0, 3200.0, 6400.0])
+    rows = []
+    for v, d0 in ((80.0, 700.0), (-80.0, 300.0), (0.0, 450.0)):
+        t = np.arange(151)[:, None, None] / 30.0
+        pos = np.array([[[0.0, d0, 0.0]]]) - np.array([[[0.0, v, 0.0]]]) * t
+        sc = scene([{"sample": noise}], pos, frame_end=150,
+                   settings={"panner": "amplitude", "cull_db": None, "detail_voices": None})
+        full = render.render(sc).audio[RATE: 4 * RATE, 0]
+        assign = ff.assign_tiers
+        ff.assign_tiers = lambda e, g, sp, spans, n, d: np.zeros((len(e), n), dtype=bool)  # every source far
+        try:
+            sc.settings["detail_voices"] = 1
+            far = render.render(sc).audio[RATE: 4 * RATE, 0]
+        finally:
+            ff.assign_tiers = assign
+        fr, pa = welch(full, RATE, nperseg=4096)
+        _, pb = welch(far, RATE, nperseg=4096)
+        k = [int(np.argmin(np.abs(fr - x))) for x in f]
+        r = 1.0 / (1.0 - v / 343.0)
+        d = d0 - v * 2.5  # distance at the middle of the measured 3 s
+        predicted = -filters.iso9613_alpha(f) * d * (1.0 - 1.0 / r ** 2)
+        rows.append([f"{v:+.0f} m/s, {d0:.0f} m", *(f"{x:+.1f}" for x in 10 * np.log10(pb[k] / pa[k])),
+                     *(f"{x:+.1f}" for x in predicted)])
+    return rows
+
+
 def main() -> None:
+    if "--doppler" in sys.argv:
+        print_doppler()
+        return
     octave = np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000])
     centres = 1000 * 10 ** (np.arange(-12, 10, 3) / 10)  # exact band centres
     for freqs, label in ((octave, "nominal band frequencies"), (centres, "exact band centres")):
@@ -303,6 +346,8 @@ def main() -> None:
           f"{on:.2f} s with air absorption and {off:.2f} s without (+{100 * (on / off - 1):.1f} %). "
           f"Interpolating h with the other coefficients keeps h (1 + g k) within {stray:.1e} of 1.")
 
+    print_doppler()
+
     air = filters.AirAbsorption(20, 50, RATE_E)
     f = np.geomspace(50, 20000, 400)
     alpha = filters.iso9613_alpha(f)
@@ -318,6 +363,12 @@ def main() -> None:
     ax.grid(alpha=0.3, which="both")
     ax.legend(fontsize=7, ncol=2)
     save(fig, "e05_air_absorption.png")
+
+
+def print_doppler() -> None:
+    print("\n6. Doppler: far field minus full chain (dB), and what the full chain's loss at the emitted frequency "
+          "f / r predicts (r: the Doppler factor):\n")
+    print(table(["source", "1 kHz", "3.2 kHz", "6.4 kHz", "predicted 1 kHz", "3.2 kHz", "6.4 kHz"], doppler()))
 
 
 if __name__ == "__main__":

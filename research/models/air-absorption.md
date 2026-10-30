@@ -77,8 +77,12 @@ signal unchanged.
 | Placement | Emission side, mono | After the read per ear: twice the work, no audible difference. |
 
 Physically, absorption acts at the frequency of the wave in the air (the emitted frequency
-shifted by the source's motion); applying it before the read means the filter's corner is shifted
-by the Doppler factor too. At 30 m/s that is 10 % of the corner frequency, within the fit error.
+shifted by the source's motion); applied before the read, the filter acts on the emitted frequency.
+At high frequencies the loss grows with `f²`, so a source closing at 80 m/s (Doppler factor 1.3)
+gets 1.7 times too little loss in dB from the full chain: 12.8 dB too much at 6.4 kHz at 700 m,
+while a receding one gets 11.9 dB too little ([E05](../experiments/E05-air-absorption.md),
+section 6). The far field filters after the read and is right there; in dense traffic the full
+chain's highs are 0.6–1.3 dB louder (E18). Scaling the corners by the playback rate is issue #40.
 
 ## Verification
 

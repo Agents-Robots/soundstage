@@ -57,7 +57,7 @@ render memory follows the near voices alive at a time.
 
 ## Consequences
 
-- 10 000 sources over 60 s render in about 3 min and 16 GB on a 16-core node (E18).
+- 10 000 sources over 60 s render in about 3 min and 17 GB on a 16-core node (E18).
 - A far voice has no ITD, head shadow or rear low-pass, a per-band instead of a per-source air
   absorption, a single broadband visibility, no playback-rate clamp, and a 8-control-point fade at
   jumps instead of a crossfaded held branch. Which sources are far is decided by level, so these
