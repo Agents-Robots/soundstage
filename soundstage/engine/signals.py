@@ -169,33 +169,36 @@ class DryGenerator:
                  prefilter: np.ndarray | None = None):
         """``prefilter``: a symmetric FIR applied once to the sample (one-shots, which then start
         ``len // 2`` samples early) or circularly to the loop cycle (exactly periodic)."""
-        self.sample, self.params, self.rate = sample, params, rate
+        self.params, self.rate = params, rate
         self.start, self.end = start, end
         self.lead = 0
         self.fade_in = int(round(params["fade_in"] * rate))
         self.fade_out = int(round(params["fade_out"] * rate))
         self.once = params["mode"] == "once"
-        self.plain = sample  # before the prefilter, which the interpolator undoes: what ``energy`` measures
-        if self.once and prefilter is not None:
-            self.sample = np.convolve(sample, prefilter)  # full: starts len // 2 before the trigger
-            self.lead = len(prefilter) // 2
-        if not self.once:
-            self.cycle = loop_cycle(sample, int(round(params["loop_crossfade"] * rate)))
-            self.plain = self.cycle
+        if self.once:
+            plain = sample  # before the prefilter, which the interpolator undoes: what ``energy`` measures
+            if prefilter is not None:
+                sample = np.convolve(sample, prefilter)  # full: starts len // 2 before the trigger
+                self.lead = len(prefilter) // 2
+            self.sample = sample.astype(np.float32)  # float32: rounding 150 dB down, half the memory
+        else:
+            plain = cycle = loop_cycle(sample, int(round(params["loop_crossfade"] * rate)))
             if prefilter is not None:
                 m = len(prefilter) // 2
-                wrapped = np.concatenate([self.cycle[-m:], self.cycle, self.cycle[:m]]) if m else self.cycle
-                self.cycle = np.convolve(wrapped, prefilter, mode="valid")
+                wrapped = np.concatenate([cycle[-m:], cycle, cycle[:m]]) if m else cycle
+                cycle = np.convolve(wrapped, prefilter, mode="valid")
+            self.cycle = cycle.astype(np.float32)  # only the cycle is kept, not the whole sample
             period = len(self.cycle)
             if params["loop_phase"] == "random":
                 self.phase = int(np.random.default_rng(seed_for(source_id)).integers(0, period))
             else:
                 self.phase = int(round(params["loop_phase"] * rate)) % period
+        self._energy_blocks(plain)
 
     def window(self, n0: int, n1: int) -> np.ndarray:
         """Samples [n0, n1)."""
-        sample = self.sample
         if self.once:
+            sample = self.sample
             out = np.zeros((n1 - n0,) + sample.shape[1:])
             for start in (self.start if isinstance(self.start, list) else [self.start]):
                 trigger = start - self.lead
@@ -212,6 +215,17 @@ class DryGenerator:
         env = _envelope(n0, n1, self.start, self.fade_in, self.end, self.fade_out)
         return out * (env[:, None] if out.ndim == 2 else env)
 
+    def _energy_blocks(self, signal: np.ndarray) -> None:
+        """Energy per ``ENERGY_BLOCK_S`` block of the signal before the prefilter, as prefix sums: all
+        that ``energy`` needs of it, so the signal itself is not kept."""
+        sq = signal * signal if signal.ndim == 1 else (signal * signal).sum(axis=1)
+        self._n = len(sq)
+        self._block = max(1, int(round(ENERGY_BLOCK_S * self.rate)))
+        nb = -(-len(sq) // self._block)
+        per_block = np.add.reduceat(sq, np.arange(0, len(sq), self._block)) if len(sq) else np.zeros(0)
+        self._prefix = np.concatenate([[0.0], np.cumsum(per_block)])
+        self._block_len = np.minimum(self._block, len(sq) - np.arange(nb) * self._block)
+
     def energy(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """Energy (sum of squares over the channels) in the sample intervals [a, b), for culling.
 
@@ -219,15 +233,7 @@ class DryGenerator:
         it is an upper bound where they act. Measured before the interpolator's prefilter.
         """
         a, b = np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64)
-        signal = self.plain
-        if not hasattr(self, "_prefix"):
-            sq = signal * signal if signal.ndim == 1 else (signal * signal).sum(axis=1)
-            self._block = max(1, int(round(ENERGY_BLOCK_S * self.rate)))
-            nb = -(-len(sq) // self._block)
-            per_block = np.add.reduceat(sq, np.arange(0, len(sq), self._block)) if len(sq) else np.zeros(0)
-            self._prefix = np.concatenate([[0.0], np.cumsum(per_block)])
-            self._block_len = np.minimum(self._block, len(sq) - np.arange(nb) * self._block)
-        n = len(signal)
+        n = self._n
 
         def cum(x):  # energy of samples [0, x), x in [0, n]
             if not n:

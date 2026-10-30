@@ -257,8 +257,7 @@ class AirStage:
     def __init__(self, times: np.ndarray, params: np.ndarray, rate: int, bypass: bool = False):
         self.rate = rate
         self.times = times
-        self.params = np.ascontiguousarray(params)
-        self.coef = np.ascontiguousarray(kernels.svf_coefficients(self.params))
+        self.coef = np.ascontiguousarray(kernels.svf_coefficients(params))  # the parameters are not kept
         self.state = np.zeros((params.shape[1], 2))
         self.bypass = bypass
 
@@ -273,7 +272,8 @@ class AirStage:
         """|H|^2 (len(idx), B) at control points ``idx`` (for the culling estimate)."""
         if self.bypass:
             return np.ones((len(idx), len(freqs_hz)))
-        return section_power(_warped(freqs_hz, self.rate), self.params[idx]).prod(axis=1)
+        g, k, _, c, m = (self.coef[idx][..., q] for q in range(5))
+        return section_power(_warped(freqs_hz, self.rate), np.stack([g, 0.5 * (k - g), c, m], axis=-1)).prod(axis=1)
 
 
 class RearStage:

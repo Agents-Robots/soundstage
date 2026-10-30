@@ -29,6 +29,7 @@ The dry signal of a source: what it emits, in emission time, before any propagat
 | Seam law | Correlation-adaptive (Fink, Holters, Zölzer) | Equal power: +2.9 dB bump at the seam of correlated material (tonal loops, engine hums). Linear: −2.9 dB dip on uncorrelated material (noise, ambience). [E02](../experiments/E02-loop-crossfade.md). |
 | Correlation | One `ρ` per loop from the whole overlap, clipped to [0, 1] | Time-varying correlation: more accurate for loops whose head and tail drift apart, rarely needed. Negative correlation is clipped: it would demand gains above 1. |
 | Random phase | Seeded from the source id | Unseeded: renders not reproducible. Phase 0 for all: many copies of the same loop start in step and comb. |
+| Storage | Only what the dry timeline reads: the prefiltered cycle (loops) or sample (one-shots), in float32, and 1 ms block energies for the culling estimate | The sample, the cycle and its prefiltered copy in float64: 4× the memory per voice, 9 MB for an 11 s loop at the 2× emission rate ([E20](../experiments/E20-render-memory.md)); float32 rounds about 150 dB down. |
 | Pre-emphasis | Once per source on sample or cycle | Per chunk on the dry timeline: same result, the largest cost of a render ([E10](../experiments/E10-performance.md)). The small difference at fade edges (fade applied after instead of before the 0.3 ms FIR) is far below audibility. |
 
 ## Verification

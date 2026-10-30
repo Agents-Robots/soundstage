@@ -63,6 +63,7 @@ flowchart LR
 | [E17](experiments/E17-lens-and-pan.md) | Where a source at the frame edge is heard, against the lens | Camera mode ignores the lens: frame edge heard at 9° with 50 mm (HD screen edge 16.5°), 2.3° with 200 mm; `pan_reference = screen`: 16.5° for every lens |
 | [E18](experiments/E18-traffic.md) | Thousands of flying cars with the far field (`detail_voices`) | 10 000 cars over 60 s at the default 64: render 174 s and 16.7 GB (every car in the full chain: 0.23 s and 40 MB per car); band levels within what other loop phases change, 0.7–1.1 dB at pitch 1 (p95); distance bands √2 apart; far field 0.6–1.3 dB duller at 3–6 kHz, because the full chain absorbs at the emitted frequency, before the Doppler shift (#40); direct-path visibility for far cars makes the bake 2.3–3.6× faster at no measurable render difference |
 | [E19](experiments/E19-reverb-send.md) | Reverb send over distance with thousands of sources | EFX law (constant send): reverb 13–14 LU louder than 2000–10 000 cars, 94 % of it from cars beyond 100 m; revised law (Barron and Lee, then spreading): 3–4 LU below the cars, 1 % from beyond 1 km; far-field send with band air absorption matches the full chain within 0.2 dB up to 8 kHz (8–25 dB too bright before) |
+| [E20](experiments/E20-render-memory.md) | Memory a near voice holds | 11.9 → 4.6 MB per near renderer (only the float32 prefiltered loop cycle kept, not the sample and two cycles in float64); 30 s of 1000 cars at 128: peak RSS 14.8 → 7.4 GB |
 
 ## Conventions
 
@@ -73,7 +74,7 @@ flowchart LR
 - **Experiments are reproducible**: every number in an experiment page comes from a script in
   [experiments/scripts/](experiments/scripts/), run from the repository root in the venv
   (`.venv/bin/python research/experiments/scripts/eNN_*.py`); scripts print the tables and write
-  figures to [figures/](figures/). E01, E09, E11, E13, E15, E16 and E18 need Blender on `PATH` (E19 needs E18's scenes), E14 needs ffmpeg.
+  figures to [figures/](figures/). E01, E09, E11, E13, E15, E16 and E18 need Blender on `PATH` (E19 and E20 need E18's scenes), E14 needs ffmpeg.
 - **Corrections stay visible**: when a measurement turns out wrong, the page says what was wrong and
   shows the corrected result, instead of silently replacing it.
 - **Papers**: [papers/](papers/README.md) lists every source with what it is used for;
