@@ -74,15 +74,19 @@ signal unchanged.
 | Smoothness | Warm start along distance, held near the previous fit | Independent fits jump between equivalent parameter sets. |
 | Structure in time | TPT state-variable sections, coefficients stepped per sample | Direct-form biquads with interpolated coefficients: intermediate sets can be unstable. Recomputing `h` per sample: a division per sample and section for a deviation below 10⁻⁷. |
 | Cost | Same order as before | The stage takes 9.5 ns per emission sample against 12.8 ns for the 4 one-poles (no per-sample division or table search); air absorption adds 7 % to a full-chain render. |
-| Placement | Emission side, mono | After the read per ear: twice the work, no audible difference. |
+| Placement | Emission side, mono, corners scaled by the playback rate | After the read per ear: twice the work for the same response. Unscaled on the emission side (the first engine): absorbs at the emitted frequency, up to 13 dB off at 6.4 kHz for a source at 80 m/s. |
 
-Physically, absorption acts at the frequency of the wave in the air (the emitted frequency
-shifted by the source's motion); applied before the read, the filter acts on the emitted frequency.
-At high frequencies the loss grows with `f²`, so a source closing at 80 m/s (Doppler factor 1.3)
-gets 1.7 times too little loss in dB from the full chain: 12.8 dB too much at 6.4 kHz at 700 m,
-while a receding one gets 11.9 dB too little ([E05](../experiments/E05-air-absorption.md),
-section 6). The far field filters after the read and is right there; in dense traffic the full
-chain's highs are 0.6–1.3 dB louder (E18). Scaling the corners by the playback rate is issue #40.
+**Doppler.** Absorption acts at the frequency of the wave in the air: the emitted frequency
+shifted by the source's motion. The stage runs before the read, on the emitted frequency, so its
+corners are divided by the playback rate `r` at each control point (`g' = tan(atan(g) / r)`; the
+zeros and the damping are relative to the corner and stay): the filter then acts on the emitted
+signal as the fitted one does at the received frequency `r·f`. Without it, a source closing at
+80 m/s (`r` 1.3) got 1.7 times too little loss in dB, since the loss grows with `f²`: at 700 m
+12.8 dB too much at 6.4 kHz against the far field (which filters after the read), and a receding
+one 11.9 dB too little; with it the two tiers agree within 1 dB, as for a standing source
+([E05](../experiments/E05-air-absorption.md), section 6; issue #40). The playback rate includes the
+listener's motion, which the frequency in the air does not: an error of the listener's speed over
+`c` (9 % of the frequency at 30 m/s), the same in both tiers.
 
 ## Verification
 

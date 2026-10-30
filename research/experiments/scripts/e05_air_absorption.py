@@ -15,8 +15,9 @@
 5. Cost: the emission-side stage alone (ns per sample, one thread) and a full-chain render with air
    absorption on and off (48 moving sources, 20 s, one worker).
 6. Doppler: one source approaching or receding at 80 m/s (or standing) 450-700 m away, rendered by
-   the full chain (air absorption before the delay line, at the emitted frequency) and by the far
-   field (after the read, at the received frequency): the far field minus the full chain per band.
+   the full chain (air absorption before the delay line, corners divided by the playback rate) and
+   by the far field (after the read, at the received frequency): the far field minus the full chain
+   per band, and the difference an unscaled filter (at the emitted frequency) would make.
    ``--doppler`` runs this section alone.
 Writes research/figures/e05_air_absorption.png.
 """
@@ -256,7 +257,7 @@ def render_cost() -> tuple[float, float]:
 def doppler() -> list[list]:
     """Far field minus full chain (dB) at 1, 3.2 and 6.4 kHz for a source at 80 m/s towards and away
     from the listener and a standing one, 3 s of noise (welch), and what the Doppler factor r of the
-    playback rate predicts if the full chain's loss is that of the emitted frequency f / r."""
+    playback rate predicts if the full chain's loss were that of the emitted frequency f / r."""
     from scipy.signal import welch
 
     from soundstage.engine import farfield as ff
@@ -366,8 +367,8 @@ def main() -> None:
 
 
 def print_doppler() -> None:
-    print("\n6. Doppler: far field minus full chain (dB), and what the full chain's loss at the emitted frequency "
-          "f / r predicts (r: the Doppler factor):\n")
+    print("\n6. Doppler: far field minus full chain (dB), and what a full chain absorbing at the emitted frequency "
+          "f / r would make of it (r: the Doppler factor):\n")
     print(table(["source", "1 kHz", "3.2 kHz", "6.4 kHz", "predicted 1 kHz", "3.2 kHz", "6.4 kHz"], doppler()))
 
 

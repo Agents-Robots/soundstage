@@ -92,39 +92,43 @@ Render time (s) and peak memory (GB), 60 s shot, scenes baked with every path:
 
 ## Results: difference to the full render
 
+Runs at 6f62301: the full chain absorbs at the received frequency (#40), near voices hold only
+their dry signal (#32).
+
 | cars | case | band level median / p95 (dB) | balance p95 (dB) | block level p95 (dB) |
 |---|---|---|---|---|
-| 500 | phase | −0.01 / 3.31 | 3.02 | 2.34 |
-| 500 | 16 | −0.21 / 3.14 | 3.22 | 2.27 |
-| 500 | 64 | 0.02 / 1.86 | 1.25 | 1.08 |
-| 500 | 128 | 0.01 / 1.25 | 0.72 | 0.56 |
-| 500 | direct | 0.03 / 1.88 | 1.25 | 1.08 |
-| 500 | unpitched, 64 | 0.02 / 0.74 | 0.28 | 0.08 |
-| 1000 | phase | −0.02 / 3.34 | 3.03 | 2.71 |
-| 1000 | 16 | −0.32 / 3.27 | 3.54 | 2.16 |
-| 1000 | 64 | −0.07 / 2.54 | 2.30 | 1.56 |
-| 1000 | 128 | 0.02 / 1.76 | 1.37 | 1.03 |
-| 1000 | direct | −0.06 / 2.54 | 2.23 | 1.55 |
-| 1000 | unpitched, 64 | −0.01 / 0.90 | 0.79 | 0.12 |
-| 2000 | phase | 0.00 / 3.44 | 3.10 | 2.54 |
-| 2000 | 16 | −0.39 / 3.41 | 3.95 | 2.65 |
-| 2000 | 64 | −0.27 / 3.06 | 3.42 | 2.13 |
-| 2000 | 128 | −0.08 / 2.52 | 2.40 | 1.65 |
-| 2000 | direct | −0.26 / 3.06 | 3.39 | 2.17 |
-| 2000 | unpitched, 64 | −0.06 / 1.13 | 1.09 | 0.12 |
+| 500 | phase | −0.01 / 3.32 | 3.06 | 2.33 |
+| 500 | 16 | −0.18 / 3.04 | 2.94 | 2.26 |
+| 500 | 64 | 0.03 / 1.86 | 1.23 | 1.08 |
+| 500 | 128 | 0.01 / 1.25 | 0.67 | 0.56 |
+| 500 | direct | 0.03 / 1.85 | 1.23 | 1.08 |
+| 500 | unpitched, 64 | 0.02 / 0.60 | 0.24 | 0.08 |
+| 1000 | phase | −0.02 / 3.32 | 3.07 | 2.71 |
+| 1000 | 16 | −0.26 / 3.19 | 3.36 | 2.16 |
+| 1000 | 64 | −0.04 / 2.54 | 2.16 | 1.55 |
+| 1000 | 128 | 0.03 / 1.75 | 1.30 | 1.02 |
+| 1000 | direct | −0.03 / 2.53 | 2.16 | 1.55 |
+| 1000 | unpitched, 64 | 0.00 / 0.63 | 0.70 | 0.11 |
+| 2000 | phase | 0.00 / 3.43 | 3.16 | 2.53 |
+| 2000 | 16 | −0.32 / 3.32 | 3.46 | 2.66 |
+| 2000 | 64 | −0.22 / 3.02 | 2.99 | 2.12 |
+| 2000 | 128 | −0.05 / 2.52 | 2.12 | 1.65 |
+| 2000 | direct | −0.21 / 3.05 | 2.96 | 2.16 |
+| 2000 | unpitched, 64 | −0.05 / 0.73 | 0.90 | 0.12 |
 
 - **Other loop phases alone** change the band levels by up to 3.3–3.4 dB (95th percentile), the
   balance by 3.0–3.1 dB and the block level by 2.3–2.7 dB. Loops of nearly the same tone beat
   against each other, and where they beat depends on the phases, which the full chain draws at
   random from the source id. A difference of this size is not an error of the far field.
 - **The far field** stays at or below that in band level and block level in every case, and comes
-  closer to the reference with more near voices. The balance is the exception: at 2000 cars and
-  `detail_voices` up to 64 (and at 1000 cars and 16) it differs by 3.4–4.0 dB, more than other
-  phases change it (3.0–3.1 dB). The far field has no ITD or head shadow.
+  closer to the reference with more near voices. The balance is the exception at `detail_voices` 16
+  with 1000 and 2000 cars: 3.4–3.5 dB, more than other phases change it (3.1–3.2 dB). The far field
+  has no ITD or head shadow. At the default 64 it stays below (3.0 dB at 2000 cars; 3.4 dB before
+  #40, when the full chain's approaching cars were too bright).
 - **With pitch 1** (both tiers read the loops at the same point), the far field differs from the
-  full render by 0.7–1.1 dB in band level, 0.3–1.1 dB in balance and 0.1 dB in block level (95th
+  full render by 0.6–0.7 dB in band level, 0.2–0.9 dB in balance and 0.1 dB in block level (95th
   percentiles).
-- **Far visibility from the direct path** (the default bake) renders within 0.07 dB of the bake
+- **Far visibility from the direct path** (the default bake) renders within 0.04 dB of the bake
   with every path, in every measure.
 
 ## Results: high frequencies
@@ -134,15 +138,35 @@ Median band level difference per octave (dB; the octave from the given frequency
 | case | 400 Hz | 800 Hz | 1.6 kHz | 3.2 kHz | 6.4 kHz |
 |---|---|---|---|---|---|
 | phase | 0.03 | −0.04 | 0.00 | 0.00 | 0.11 |
-| 16 | 0.17 | −0.13 | −0.34 | −1.00 | −2.25 |
-| 64 | 0.06 | 0.02 | −0.21 | −0.64 | −1.31 |
-| 128 | 0.30 | 0.11 | −0.05 | −0.30 | −0.63 |
-| unpitched, 64 | 0.04 | 0.02 | −0.20 | −0.63 | −1.29 |
+| 16 | 0.20 | −0.19 | −0.43 | −0.60 | −0.34 |
+| 64 | 0.14 | −0.05 | −0.26 | −0.39 | −0.25 |
+| 128 | 0.31 | 0.07 | −0.08 | −0.15 | −0.01 |
+| unpitched, 64 | 0.10 | −0.03 | −0.26 | −0.37 | −0.38 |
+| 64, before #40 | 0.06 | 0.02 | −0.21 | −0.64 | −1.31 |
 
-The far field is duller above 3 kHz, by as much with pitch 1 (so not from the loop phases) and
-more with fewer near voices (so from the far voices). With the first air filter the medians were
-−0.65 and −1.09 dB at 64; the new filter, whose two tiers agree within 0.73 dB below 20 dB of loss
-and follow ISO to 60 dB, did not remove them:
+The air absorbs a wave at its frequency in the air, which for a moving source is the
+Doppler-shifted one, and the loss grows with the square of the frequency at high frequencies. The
+far field filters its buses after the read, at the received frequency. The full chain filters on
+the emission side, before the delay line; until #40 it used the emitted frequency, so a car closing
+at 80 m/s (Doppler factor 1.3) lost only about 1/1.7 of its dB, and in traffic the approaching
+cars are the brighter ones. The far field, there the more physical tier, sounded 0.6–1.3 dB duller
+than the full chain at 3–6 kHz (2000 cars, 64; the runs at 7e92f98, kept in
+`out/e18/results_7e92f98.jsonl`). The full chain now divides its filter corners by the playback
+rate. One source, far field minus full chain ([E05](E05-air-absorption.md), section 6):
+
+| source | 6.4 kHz before #40 | 6.4 kHz now |
+|---|---|---|
+| approaching at 80 m/s, 700 m | −12.8 | +1.0 |
+| receding at 80 m/s, 300 m | +11.9 | +1.0 |
+| standing, 450 m | +1.4 | +1.4 |
+
+In traffic the far field is now 0.25–0.4 dB duller at 1.6–6.4 kHz at 64, by as much with pitch 1
+and less with more near voices. That is within what the two tiers differ for one source between
+two distance bands (up to 0.73 dB below 20 dB of loss, E05): a voice between two bands is the sum of
+their filters, whose phases differ. With bands an octave apart the medians were 0.1–0.25 dB further
+off (the first runs), so the 20 bands (√2 apart) stay, at 5–13 % more render time.
+
+Both tiers' air filters against ISO 9613-1 (20 °C, 50 % humidity):
 
 | distance (m) | 3.2 kHz: ISO / far (48 kHz) / full (96 kHz) (dB) | 6.4 kHz | 9 kHz |
 |---|---|---|---|
@@ -150,26 +174,6 @@ and follow ISO to 60 dB, did not remove them:
 | 283 | −5.7 / −6.0 / −6.2 | −19.7 / −19.9 / −20.0 | −37.0 / −36.9 / −37.3 |
 | 566 | −11.5 / −10.9 / −10.8 | −39.4 / −39.3 / −39.7 | −74.1 / −64.0 / −66.7 |
 | 1131 | −22.9 / −23.5 / −23.6 | −78.7 / −62.9 / −63.9 | −148.0 / −62.5 / −61.0 |
-
-The cause is the Doppler shift. The full chain filters on the emission side, before the delay
-line: at the emitted frequency. The far field filters its buses after the read: at the received
-frequency. The air absorbs the wave at its frequency in the air, which for a moving source is the
-shifted one, and the loss grows with the square of the frequency at high frequencies: a car closing
-at 80 m/s (Doppler factor 1.3) loses about 1.7 times as many dB as the full chain gives it. One
-source, far field minus full chain ([E05](E05-air-absorption.md), section 6):
-
-| source | 1 kHz | 3.2 kHz | 6.4 kHz |
-|---|---|---|---|
-| approaching at 80 m/s, 700 m | −0.9 | −2.9 | −12.8 |
-| receding at 80 m/s, 300 m | +0.4 | +2.6 | +11.9 |
-| standing, 450 m | −0.2 | −0.2 | +1.4 |
-
-In traffic the approaching cars are the brighter ones, so the full chain's high frequencies are too
-loud, and the far field, here the more physical tier, sounds duller than it. Filtering the full
-chain at the received frequency (its corners scaled by the playback rate) is issue #40. The
-distance bands add a smaller part: a voice between two bands is the sum of their filters, whose
-phases differ (up to 0.3 dB at 6.5 kHz, E05); with bands an octave apart the medians were 0.1–0.25 dB
-further off (the first runs), so the 20 bands (√2 apart) stay, at 5–13 % more render time.
 
 ## Results: bake
 
@@ -216,8 +220,9 @@ three snapshots of the occluder setup.
 - The far field's difference to the full render is at or below what other random loop phases
   change, except for the left/right balance of dense traffic at `detail_voices` 64 or less. Raising
   `detail_voices` lowers it at 0.17–0.20 s of render and 63–110 MB per near voice.
-- The far field is 0.6–1.3 dB duller than the full chain at 3–6 kHz in dense traffic because the
-  full chain absorbs at the emitted frequency, before the Doppler shift (#40).
+- A moving source must be absorbed at its received frequency. Before #40 the full chain used the
+  emitted one and the far field sounded 0.6–1.3 dB duller than it at 3–6 kHz in dense traffic;
+  now 0.25–0.4 dB.
 - The bake follows the tiers: the direct path for the far cars costs nothing measurable in the
   render, and makes the bake of thousands of cars 2–4 times faster.
 - Distant traffic was too bright in both tiers with the first air filter, which stopped following

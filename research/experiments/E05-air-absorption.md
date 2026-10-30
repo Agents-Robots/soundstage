@@ -99,20 +99,22 @@ keeps `h (1 + g k)` within 4.6·10⁻⁸ of 1.
 ## 6. Doppler
 
 One source of noise at 80 m/s towards the listener (from 700 m), away from it (from 300 m), or
-standing at 450 m, 3 s measured, rendered by the full chain (air absorption on the emission side,
-at the emitted frequency) and by the far field (after the read, at the received frequency). Far
-field minus full chain, and what the full chain's loss at the emitted frequency `f / r` predicts
-with a loss in proportion to `f²` (`r` the Doppler factor), dB:
+standing at 450 m, 3 s measured, rendered by the full chain (air absorption on the emission side)
+and by the far field (after the read, at the received frequency). Far field minus full chain (dB),
+with the full chain's filter at the emitted frequency (before, 4bffce2) and with its corners
+divided by the playback rate (6f62301), and the difference the shift of the loss to the emitted
+frequency `f / r` predicts with a loss in proportion to `f²` (`r` the Doppler factor):
 
-| source | 1 kHz | 3.2 kHz | 6.4 kHz | predicted 1 kHz | 3.2 kHz | 6.4 kHz |
-|---|---|---|---|---|---|---|
-| +80 m/s, 700 m | -0.9 | -2.9 | -12.8 | -1.0 | -4.2 | -14.3 |
-| -80 m/s, 300 m | +0.4 | +2.6 | +11.9 | +1.2 | +5.3 | +18.1 |
-| +0 m/s, 450 m | -0.2 | -0.2 | +1.4 | -0.0 | -0.0 | -0.0 |
+| source | before: 1 kHz | 3.2 kHz | 6.4 kHz | now: 1 kHz | 3.2 kHz | 6.4 kHz | predicted 6.4 kHz |
+|---|---|---|---|---|---|---|---|
+| +80 m/s, 700 m | -0.9 | -2.9 | -12.8 | -0.2 | -0.4 | +1.0 | -14.3 |
+| -80 m/s, 300 m | +0.4 | +2.6 | +11.9 | -0.2 | +0.1 | +1.0 | +18.1 |
+| +0 m/s, 450 m | -0.2 | -0.2 | +1.4 | -0.2 | -0.2 | +1.4 | 0.0 |
 
-The air absorbs the wave at its frequency in the air, the shifted one: the far field is right and
-the full chain gives an approaching source too little loss and a receding one too much (issue
-#40). Standing, the two tiers agree within 1.4 dB at 30 dB of loss.
+The air absorbs the wave at its frequency in the air, the shifted one: the far field was right,
+and the full chain gave an approaching source too little loss and a receding one too much (issue
+#40). With the corners scaled, the tiers agree for moving sources as for a standing one, within
+1.4 dB at 30 dB of loss.
 
 ## Conclusion
 
