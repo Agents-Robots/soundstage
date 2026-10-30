@@ -15,6 +15,32 @@ def test_optimal2x_and_hermite_match_references():
     assert np.allclose(k.read_hermite4(buf, pos, np.empty(len(pos))), k.ref_read_hermite4(buf, pos), atol=1e-12)
 
 
+@pytest.mark.parametrize("block", [1024, 37])
+def test_far_mix_matches_reference(block):
+    cycle, once = rng.standard_normal(200), rng.standard_normal(300)
+    bufs = np.concatenate([cycle[-4:], cycle, cycle[:4], once])  # a loop padded with its ends, a one-shot
+    n_bands, count, step, a, n = 5, 14, 32, 10, 400
+    voices = 4
+    buf_start = np.array([0, 208, 0, 208], np.int64)
+    buf_len = np.array([208, 300, 208, 300], np.int64)
+    period, offset = np.array([200.0, 0.0, 200.0, 0.0]), np.array([4.0, 0.0, 4.0, 0.0])
+    origin, pitch, phase = rng.uniform(0, 50, voices), rng.uniform(0.85, 1.15, voices), rng.uniform(0, 199, voices)
+    e_ctl = 2.0 * step * np.arange(count)[None, :] + rng.uniform(-3, 3, (voices, count)) + rng.uniform(-80, 40, (voices, 1))
+    gl, gr, gs = (rng.uniform(0, 1, (voices, count)) for _ in range(3))
+    gs[1] = 0.0  # no reverb send
+    lo = rng.integers(0, n_bands - 1, (voices, count))
+    wts = rng.uniform(0, 1, (voices, count, 4)) * (rng.uniform(size=(voices, count, 4)) > 0.3)
+    wts[2, 5:8] = 0.0  # silent intervals
+    buses, send, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros(n), np.zeros((voices, count))
+    k.far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands, 0,
+              step, a, block, buses, send, peaks)
+    ref = k.ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts,
+                        n_bands, 0, step, a, n)
+    for got, want in zip((buses, send, peaks), ref):
+        assert np.allclose(got, want, atol=1e-9)
+    assert np.abs(buses).max() > 0.1 and np.abs(send).max() > 0.1
+
+
 def test_hermite_passes_through_samples():
     buf = rng.standard_normal(50)
     pos = np.arange(2, 48, dtype=float)

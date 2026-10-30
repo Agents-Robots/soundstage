@@ -119,6 +119,7 @@ changing the meaning of a key does, together with this spec.
     "occluders": {"static": 111180, "moving": 7002, "carried": 9},
     "geometry": "boxes",
     "culled_share": 0.31,
+    "direct_share": 0.0,
     "blockers": {"Ship.001:0": [["Hangar", 0.42], ["Crane", 0.05]]}
   },
 
@@ -149,8 +150,10 @@ Rules:
   visibility samples, occluder counts (static and moving boxes, objects left out because they
   travel with the listener), and per source up to three objects that block it most, with the share
   of all its paths over the shot they block (`"<instancer>/<object>"` for instances); `culled_share`:
-  the share of (source, sample) visibility values culling skipped (null with `cull_db` null). `null`
-  when no source occludes or `occlusion_rate` is 0.
+  the share of (source, sample) visibility values culling skipped (null with `cull_db` null);
+  `direct_share`: the share computed from the direct path alone, for sources ranked beyond 2 ×
+  `detail_voices` in their group (null with `detail_voices` null; absent in files baked before it).
+  `null` when no source occludes or `occlusion_rate` is 0.
 
 ## `scene.npz`
 

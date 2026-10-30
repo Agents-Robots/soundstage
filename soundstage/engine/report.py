@@ -85,6 +85,7 @@ def build_report(scene: Scene, result: RenderResult, output: Path, settings_over
         "cuts": [float(c) for c in scene.cuts],
         "warnings": result.warnings,
         "culling": result.culling,
+        "far_field": result.lod,
         "timing_s": result.timing_s,
     }
 

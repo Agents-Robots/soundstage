@@ -110,6 +110,11 @@ def raised_cosine(n: int) -> np.ndarray:
     return 0.5 - 0.5 * np.cos(np.pi * np.arange(n) / (n - 1))
 
 
+def raised_cosine_at(u: np.ndarray) -> np.ndarray:
+    """The raised-cosine ramp at positions u in [0, 1] (0 -> 0, 1 -> 1)."""
+    return 0.5 - 0.5 * np.cos(np.pi * np.asarray(u, dtype=np.float64))
+
+
 def loop_cycle(x: np.ndarray, crossfade: int) -> np.ndarray:
     """One period of a seamless loop: the tail is crossfaded into the head.
 

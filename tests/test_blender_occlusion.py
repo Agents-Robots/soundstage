@@ -49,14 +49,16 @@ bpy.ops.wm.save_as_mainfile(filepath={path!r})
 """
 
 
-def bake(tmp_path: Path, body: str, sine: str) -> tuple[dict, dict]:
+def bake(tmp_path: Path, body: str, sine: str, run: list[str] = ()) -> tuple[dict, dict]:
     script = tmp_path / "scene.py"
     blend = tmp_path / "scene.blend"
-    script.write_text(SCENE.format(repo=str(REPO), sample=sine, body=body, path=str(blend)))
-    subprocess.run(["blender", "-b", "--factory-startup", "--python-exit-code", "1", "--python", str(script)],
-                   check=True, capture_output=True)
+    if not blend.exists():
+        script.write_text(SCENE.format(repo=str(REPO), sample=sine, body=body, path=str(blend)))
+        subprocess.run(["blender", "-b", "--factory-startup", "--python-exit-code", "1", "--python", str(script)],
+                       check=True, capture_output=True)
     out = tmp_path / "bake"
-    assert main(["bake", str(blend), "--out", str(out), "--substeps", "1", "--pad", "0"]) == 0
+    args = [x for r in run for x in ("--run", r)]
+    assert main(["bake", str(blend), "--out", str(out), "--substeps", "1", "--pad", "0", *args]) == 0
     manifest = json.loads((out / "scene.json").read_text())
     arrays = np.load(out / "scene.npz")
     vis = {s["id"]: arrays["src_visibility"][:, s["track"]] for s in manifest["sources"]}
@@ -154,6 +156,42 @@ lift.keyframe_insert("location", frame=60)
     assert manifest["occlusion"]["occluders"]["moving"] == 2
     v = vis["Src:0"]
     assert v[0].min() == 1.0 and v[-1].max() == 0.0
+    # the door instance is moved by its instancer's matrix; the depsgraph walk gives the same visibility
+    walk = tmp_path / "walk.py"
+    walk.write_text(f"import sys; sys.path.insert(0, {str(REPO)!r})\n"
+                    "from soundstage.blender import occlusion; occlusion.BY_INSTANCER = False\n")
+    _, walked = bake(tmp_path, "", sine, run=[str(walk)])
+    assert np.array_equal(walked["Src:0"], v)
+
+
+def test_instance_scaled_to_zero_at_a_snapshot_stays_with_its_instancer(tmp_path, sine, capfd):
+    # traffic jumps back while scaled to zero: the middle snapshot (frame 30.5) lacks the door
+    script = """
+w = box("DoorAsset", (0, 0, 0), (10, 1, 6))
+asset = bpy.data.collections.new("Door")
+for c in list(w.users_collection):
+    c.objects.unlink(w)
+asset.objects.link(w)
+e = bpy.data.objects.new("DoorInst", None)
+e.instance_type = "COLLECTION"; e.instance_collection = asset
+s.collection.objects.link(e)
+for f, x in ((1, -30), (28, -16.5), (34, -13.5), (60, 0)):
+    e.location = (x, 10, 0)
+    e.keyframe_insert("location", frame=f)
+for f, k in ((1, 1), (28, 1), (29, 0), (33, 0), (34, 1)):
+    e.scale = (k, k, k)
+    e.keyframe_insert("scale", frame=f)
+emitter("Src", [(1, (0, 20, 0)), (60, (0, 20, 0))])
+"""
+    manifest, vis = bake(tmp_path, script, sine)
+    assert "0 moving boxes looked up per sample" in capfd.readouterr().out
+    assert manifest["occlusion"]["occluders"]["moving"] == 1
+    walk = tmp_path / "walk.py"
+    walk.write_text(f"import sys; sys.path.insert(0, {str(REPO)!r})\n"
+                    "from soundstage.blender import occlusion; occlusion.BY_INSTANCER = False\n")
+    _, walked = bake(tmp_path, "", sine, run=[str(walk)])
+    assert np.array_equal(walked["Src:0"], vis["Src:0"])
+    assert vis["Src:0"][0].min() == 1.0 and vis["Src:0"][-1].max() == 0.0
 
 
 def test_ground_reflects_and_a_low_barrier_occludes(tmp_path, sine):
@@ -288,5 +326,51 @@ tag.add_sound(far, {sine!r}, gain_db=-30)  # about 74 dB below Src: skipped (bud
 """, sine)
     assert manifest["occlusion"]["culled_share"] == pytest.approx(0.5)
     assert np.all(vis["Far:0"] == 1.0)  # never computed: open
+    v = vis["Src:0"]
+    assert v[0].min() == 1.0 and v[-1].max() == 0.0
+
+
+def test_far_ranked_sources_get_the_direct_path_only(tmp_path, sine):
+    # detail_voices 1: within each group the 2 loudest get every path, the third the direct path
+    manifest, vis = bake(tmp_path, f"""
+tag.set_scene_settings(s, detail_voices=1, cull_db=None)
+box("Wall", (0, 10, 0), (10, 1, 6))
+for name, x in (("LoudA", -30), ("LoudB", 30)):
+    o = bpy.data.objects.new(name, None)
+    s.collection.objects.link(o)
+    o.location = (x, 20, 0)
+    tag.add_sound(o, {sine!r})
+src = bpy.data.objects.new("Src", None)
+s.collection.objects.link(src)
+for f, x in ((1, -20), (60, 0)):
+    src.location = (x, 20, 0)
+    src.keyframe_insert("location", frame=f)
+tag.add_sound(src, {sine!r}, gain_db=-20)
+""", sine)
+    v = vis["Src:0"]
+    assert v[0].min() == 1.0 and v[-1].max() == 0.0
+    assert np.all((v == 0.0) | (v == 1.0)) and np.all(v == v[:, :1])  # no partial values, the same in every band
+    assert manifest["occlusion"]["direct_share"] == pytest.approx(1 / 3, abs=1e-3)
+    assert manifest["occlusion"]["blockers"]["Src:0"][0][0] == "Wall"
+
+
+def test_part_animated_inside_its_instance_is_looked_up(tmp_path, sine, capfd):
+    # the door slides inside its collection while the instancer stands still: not rigid with it
+    _, vis = bake(tmp_path, """
+w = box("DoorAsset", (-30, 0, 0), (10, 1, 6))
+w.keyframe_insert("location", frame=1)
+w.location = (0, 0, 0)
+w.keyframe_insert("location", frame=60)
+asset = bpy.data.collections.new("Door")
+for c in list(w.users_collection):
+    c.objects.unlink(w)
+asset.objects.link(w)
+e = bpy.data.objects.new("DoorInst", None)
+e.instance_type = "COLLECTION"; e.instance_collection = asset
+s.collection.objects.link(e)
+e.location = (0, 10, 0)
+emitter("Src", [(1, (0, 20, 0)), (60, (0, 20, 0))])
+""", sine)
+    assert "1 moving boxes looked up per sample" in capfd.readouterr().out
     v = vis["Src:0"]
     assert v[0].min() == 1.0 and v[-1].max() == 0.0

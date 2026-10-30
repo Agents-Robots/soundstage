@@ -108,12 +108,13 @@ SCENE_SETTINGS: dict[str, Field] = {
     "occluder_min_size": Field("float", 2.0, min=0.0, phase=3),  # m: smaller objects do not occlude
     "instance_limit": Field("int", 32, min=0, phase=3),
     "cull_db": Field("float", -40.0, max=-1.0, nullable=True, phase=4),  # culling budget per group; None: off
+    "detail_voices": Field("int", 64, min=1, nullable=True, phase=4),  # full chain per group; others far field
 }
 
 IMPLEMENTED_PHASE = 3
 """Keys with a higher phase are validated and stored, but the engine ignores them (with a warning)."""
 
-IMPLEMENTED_LATER = frozenset({"cull_db", "pan_reference", "screen_edge_deg"})
+IMPLEMENTED_LATER = frozenset({"cull_db", "pan_reference", "screen_edge_deg", "detail_voices"})
 """Phase 4 keys that are implemented (Phase 4 items are picked by need, in any order)."""
 
 BAKE_SETTINGS = ("samples_root", "substeps", "pad_seconds", "listener", "read_speakers", "occlusion_rate",

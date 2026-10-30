@@ -29,8 +29,10 @@ Fairlight, a loudness report, optional normalization and true-peak limiting, a d
 preview for checking sync. 50 sources over 5 minutes render in about a minute. From Phase 4,
 culling is implemented: voices that do not matter (silent, or far below the rest of their group)
 are skipped within an error budget, which saves a few percent at the default and halves renders
-with many silent voices; shots with thousands of sources still need about 27 MB of memory per source
-([E16](research/experiments/E16-culling.md)). Panning follows the picture: what is in the frame
+with many silent voices ([E16](research/experiments/E16-culling.md)). Shots with thousands of
+sources render the loudest 64 per group through the full chain and the rest in a cheaper far
+field: 10 000 flying cars, each with its engine, render over 60 s in under 3 minutes and 16 GB
+([E18](research/experiments/E18-traffic.md)). Panning follows the picture: what is in the frame
 is heard at its place on the screen, through the camera lens and its zooms
 ([E17](research/experiments/E17-lens-and-pan.md)). Binaural and ambisonic output, animated
 parameters and random variation follow by need (see the [roadmap](docs/roadmap.md)).
@@ -61,8 +63,9 @@ coding agents, readable for people), or place Speaker objects in Blender and bak
 ## How long it takes
 
 Measured on a 16-core desktop CPU (AMD Ryzen 9 3950X), for a 60-second shot in a city of 200
-buildings with default settings and culling off ([E15](research/experiments/E15-option-costs.md)). Both steps take
-a fixed time plus a time per source:
+buildings with default settings, culling off and every source through the full chain
+([E15](research/experiments/E15-option-costs.md)). Both steps take a fixed time plus a time per
+source:
 
 | step | fixed | per source | 10 sources | 100 sources | 1000 sources |
 |---|---|---|---|---|---|
@@ -74,6 +77,21 @@ Render memory is about 4 GB at 100 sources and 28 GB at 1000. Below 30 sources t
 dominated by its fixed time, so the fixed costs in the tables below matter more than the factors.
 Culling at its default (`cull_db=-40`) takes 4–9 % off the render and 3–6 % off the bake
 ([E16](research/experiments/E16-culling.md)).
+
+**Thousands of sources** ([E18](research/experiments/E18-traffic.md), flying cars in a canyon of
+towers, 60 s). Per group, at most `detail_voices` (64) sources run the full chain at a time; the rest
+run the far field. The render then costs a time per source plus a time per near voice, and its
+memory follows the near voices, not the sources:
+
+| | per source | per near voice (at most about 2 × `detail_voices` at once) | 10 000 cars, default |
+|---|---|---|---|
+| render | 13 ms | 0.17–0.20 s, 55–110 MB | 2.9 min, 16 GB |
+| bake | 0.14–0.17 s | | 25 min |
+
+The bake gives the sources ranked beyond 2 × `detail_voices` the direct path only for their
+visibility; with every path it took 91 min for the same 10 000 cars. `--set detail_voices=null`
+renders every source through the full chain (0.23 s and 35 MB per car here; 2000 cars took 7.5 min
+and 70 GB).
 
 **Render options**, most expensive first (effect relative to the defaults, at 100 sources):
 

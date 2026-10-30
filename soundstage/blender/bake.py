@@ -183,7 +183,7 @@ def bake(args: argparse.Namespace) -> None:
     cuts: list[float] = []
 
     occluding = [j for j, s in enumerate(spatial) if s["occlusion"]]
-    occluders, vis_frames, vis, vis_seconds = None, [], [], 0.0
+    occluders, vis_frames, vis, vis_seconds, update_seconds = None, [], [], 0.0, 0.0
     blockers = [Counter() for _ in spatial]  # per source: blocked paths by object, over the shot
     vis_step = max(1, round(fps * substeps / settings["occlusion_rate"])) if settings["occlusion_rate"] > 0 else 0
     if occluding and vis_step:
@@ -191,11 +191,12 @@ def bake(args: argparse.Namespace) -> None:
         occluders = occlusion.Occluders(scene, [float(first), (first + last) / 2, float(last)],
                                         settings["occluder_min_size"], scale, settings["listener"])
         log(f"occluders: {occluders.counts['static']} static, {occluders.counts['moving']} moving boxes, "
-            f"{occluders.counts['carried']} travelling with the listener ({time.perf_counter() - t0:.1f} s); "
+            f"{occluders.counts['carried']} travelling with the listener ({time.perf_counter() - t0:.1f} s; "
+            f"{occluders.walked} moving boxes looked up per sample in the instances); "
             f"visibility every {vis_step} samples")
     radii = [spatial[j]["occlusion_radius"] for j in occluding]
     culler = None
-    if occluders is not None and settings["cull_db"] is not None:
+    if occluders is not None and (settings["cull_db"] is not None or settings["detail_voices"] is not None):
         try:
             culler = cull.Culler(spatial, occluding, settings, fps)
         except Exception as e:  # a sample aud cannot decode: compute every source's visibility
@@ -239,30 +240,37 @@ def bake(args: argparse.Namespace) -> None:
             # the path of the sound heard now: from where the source emitted it to the listener and occluders now
             t_vis = time.perf_counter()
             occluders.update(depsgraph, frames[k] / fps, np.array(loc), settings["speed_of_sound"] / scale)
+            update_seconds += time.perf_counter() - t_vis
             emitted = occlusion.retarded_positions(frames[:k + 1] / fps, src_pos[:k + 1, occluding],
                                                    np.array(loc) * scale, settings["speed_of_sound"])
             v = np.ones((len(spatial), len(occlusion.BANDS_HZ)), dtype=np.float32)
-            todo = np.arange(len(occluding))
+            todo, direct = np.arange(len(occluding)), np.zeros(len(occluding), dtype=bool)
             if culler is not None:
-                todo = culler.keep(frames[k] / fps, np.array(loc) * scale, emitted, src_pos[k])
+                todo, direct = culler.keep(frames[k] / fps, np.array(loc) * scale, emitted, src_pos[k])
                 v[np.setdiff1d(occluding, np.asarray(occluding)[todo])] = np.nan  # filled in after the loop
-            sel = [occluding[i] for i in todo]
-            counts = [Counter() for _ in sel]
-            if sel:
-                v[sel] = occlusion.visibility(occluders, np.array(loc), emitted[todo] / scale,
-                                              [radii[i] for i in todo], scale, settings["speed_of_sound"], counts)
-            for j, c in zip(sel, counts):
-                blockers[j].update(c)
+            for few, part in ((False, todo[~direct]), (True, todo[direct])):
+                sel = [occluding[i] for i in part]
+                counts = [Counter() for _ in sel]
+                if not sel:
+                    continue
+                if few:  # far-field sources: one broadband visibility
+                    v[sel] = occlusion.direct_visibility(occluders, np.array(loc), emitted[part] / scale, counts)
+                else:
+                    v[sel] = occlusion.visibility(occluders, np.array(loc), emitted[part] / scale,
+                                                  [radii[i] for i in part], scale, settings["speed_of_sound"], counts)
+                for j, c in zip(sel, counts):
+                    blockers[j].update(c)
             vis_frames.append(float(f))
             vis.append(v)
             vis_seconds += time.perf_counter() - t_vis
     scene.frame_set(original_frame)
-    culled_share = None
+    culled_share = direct_share = None
     if vis:
         log(f"visibility: {len(vis)} samples x {len(occluding)} sources in {vis_seconds:.1f} s "
-            f"({vis_seconds / len(vis) * 1000:.0f} ms per sample)")
+            f"({vis_seconds / len(vis) * 1000:.0f} ms per sample, {update_seconds / len(vis) * 1000:.0f} ms of it "
+            f"moving the occluders)")
         if culler is not None:
-            culled_share = round(culler.report(), 4)
+            culled_share, direct_share = (None if x is None else round(x, 4) for x in culler.report())
             vis = list(cull.fill(np.array(vis, dtype=np.float32)))
     gone = [em for em in {id(em): em for em in objects}.values() if em.missing]
     if gone:
@@ -309,6 +317,7 @@ def bake(args: argparse.Namespace) -> None:
         "listener": {"objects": listener_names},
         "occlusion": ({"bands_hz": list(occlusion.BANDS_HZ), "samples": len(vis_frames),
                        "occluders": occluders.counts, "geometry": "boxes", "culled_share": culled_share,
+                       "direct_share": direct_share,
                        "blockers": {s["id"]: [[name, round(n / (len(vis_frames) * occlusion.PATHS), 3)]
                                               for name, n in blockers[j].most_common(3)]
                                     for j, s in enumerate(spatial) if blockers[j]}} if vis else None),

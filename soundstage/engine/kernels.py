@@ -54,26 +54,166 @@ def _at(buf, k):
 
 
 @_jit
+def _optimal2x_at(buf, p, c):
+    k = math.floor(p)
+    z = p - k - 0.5
+    ym2, ym1, y0 = _at(buf, k - 2), _at(buf, k - 1), _at(buf, k)
+    y1, y2, y3 = _at(buf, k + 1), _at(buf, k + 2), _at(buf, k + 3)
+    e1, o1 = y1 + y0, y1 - y0
+    e2, o2 = y2 + ym1, y2 - ym1
+    e3, o3 = y3 + ym2, y3 - ym2
+    c0 = e1 * c[0, 0] + e2 * c[0, 1] + e3 * c[0, 2]
+    c1 = o1 * c[1, 0] + o2 * c[1, 1] + o3 * c[1, 2]
+    c2 = e1 * c[2, 0] + e2 * c[2, 1] + e3 * c[2, 2]
+    c3 = o1 * c[3, 0] + o2 * c[3, 1] + o3 * c[3, 2]
+    c4 = e1 * c[4, 0] + e2 * c[4, 1] + e3 * c[4, 2]
+    c5 = o1 * c[5, 0] + o2 * c[5, 1] + o3 * c[5, 2]
+    return ((((c5 * z + c4) * z + c3) * z + c2) * z + c1) * z + c0
+
+
+@_jit
+def _optimal2x_inside(buf, p, c):
+    """``_optimal2x_at`` for positions with all six taps inside the buffer (no bounds checks)."""
+    k = int(math.floor(p))
+    z = p - k - 0.5
+    ym2, ym1, y0, y1, y2, y3 = buf[k - 2], buf[k - 1], buf[k], buf[k + 1], buf[k + 2], buf[k + 3]
+    e1, o1 = y1 + y0, y1 - y0
+    e2, o2 = y2 + ym1, y2 - ym1
+    e3, o3 = y3 + ym2, y3 - ym2
+    c0 = e1 * c[0, 0] + e2 * c[0, 1] + e3 * c[0, 2]
+    c1 = o1 * c[1, 0] + o2 * c[1, 1] + o3 * c[1, 2]
+    c2 = e1 * c[2, 0] + e2 * c[2, 1] + e3 * c[2, 2]
+    c3 = o1 * c[3, 0] + o2 * c[3, 1] + o3 * c[3, 2]
+    c4 = e1 * c[4, 0] + e2 * c[4, 1] + e3 * c[4, 2]
+    c5 = o1 * c[5, 0] + o2 * c[5, 1] + o3 * c[5, 2]
+    return ((((c5 * z + c4) * z + c3) * z + c2) * z + c1) * z + c0
+
+
+@_jit
 def read_optimal2x(buf, pos, out):
     """6-point, 5th-order optimal-2x polynomial read of a 2x-oversampled buffer."""
     c = OPT2X_6P5O
     for i in range(pos.shape[0]):
-        p = pos[i]
-        k = math.floor(p)
-        z = p - k - 0.5
-        ym2, ym1, y0 = _at(buf, k - 2), _at(buf, k - 1), _at(buf, k)
-        y1, y2, y3 = _at(buf, k + 1), _at(buf, k + 2), _at(buf, k + 3)
-        e1, o1 = y1 + y0, y1 - y0
-        e2, o2 = y2 + ym1, y2 - ym1
-        e3, o3 = y3 + ym2, y3 - ym2
-        c0 = e1 * c[0, 0] + e2 * c[0, 1] + e3 * c[0, 2]
-        c1 = o1 * c[1, 0] + o2 * c[1, 1] + o3 * c[1, 2]
-        c2 = e1 * c[2, 0] + e2 * c[2, 1] + e3 * c[2, 2]
-        c3 = o1 * c[3, 0] + o2 * c[3, 1] + o3 * c[3, 2]
-        c4 = e1 * c[4, 0] + e2 * c[4, 1] + e3 * c[4, 2]
-        c5 = o1 * c[5, 0] + o2 * c[5, 1] + o3 * c[5, 2]
-        out[i] = ((((c5 * z + c4) * z + c3) * z + c2) * z + c1) * z + c0
+        out[i] = _optimal2x_at(buf, pos[i], c)
     return out
+
+
+@_jit
+def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands, ctl_start, step, a,
+               i0, i1, buses, send, peaks, bus, w_start, w_step):
+    """Samples [i0, i1) of one far voice (see ``far_mix``)."""
+    c = OPT2X_6P5O
+    count = e_ctl.shape[0]
+    i = i0
+    while i < i1:
+        k = min(max(int(math.floor((a + i - ctl_start) / step)), 0), count - 2)
+        end = min(i1, ctl_start + (k + 1) * step - a)
+        if end <= i:
+            end = i1
+        # the buses this interval touches: two bands x (open, occluded) at each end, merged
+        m = 0
+        for side in range(2):
+            kk = k + side
+            for q in range(4):
+                bb = lo[kk] + (q & 1) + (n_bands if q >= 2 else 0)
+                wv = wts[kk, q]
+                found = -1
+                for r in range(m):
+                    if bus[r] == bb:
+                        found = r
+                if found < 0:
+                    bus[m] = bb
+                    w_start[m] = 0.0
+                    w_step[m] = 0.0
+                    found = m
+                    m += 1
+                if side == 0:
+                    w_start[found] += wv
+                else:
+                    w_step[found] += wv  # end value for now
+        mm = 0
+        for r in range(m):
+            if w_start[r] != 0.0 or w_step[r] != 0.0:
+                bus[mm], w_start[mm], w_step[mm] = bus[r], w_start[r], w_step[r]
+                mm += 1
+        m = mm
+        has_send = gs[k] != 0.0 or gs[k + 1] != 0.0
+        if m == 0 and not has_send:
+            i = end
+            continue
+        f0 = (a + i - ctl_start) / step - k
+        inv = 1.0 / step
+        for r in range(m):
+            w_end = w_step[r]
+            w_step[r] = (w_end - w_start[r]) * inv
+            w_start[r] = w_start[r] + (w_end - w_start[r]) * f0
+        de = (e_ctl[k + 1] - e_ctl[k]) * inv
+        e = e_ctl[k] + (e_ctl[k + 1] - e_ctl[k]) * f0
+        dl, dr, ds = (gl[k + 1] - gl[k]) * inv, (gr[k + 1] - gr[k]) * inv, (gs[k + 1] - gs[k]) * inv
+        vl, vr, vs = gl[k] + (gl[k + 1] - gl[k]) * f0, gr[k] + (gr[k + 1] - gr[k]) * f0, gs[k] + (gs[k + 1] - gs[k]) * f0
+        u = (e - origin) * pitch + phase
+        du = de * pitch
+        if period > 0:
+            u = u - period * math.floor(u / period)
+        peak = peaks[k]
+        size = buf.shape[0]
+        for j in range(i, end):
+            if period > 0:
+                x = _optimal2x_inside(buf, u + offset, c)  # the padding keeps every tap inside
+            elif 2.0 <= u < size - 4.0:
+                x = _optimal2x_inside(buf, u, c)
+            elif -4.0 < u < size + 3.0:
+                x = _optimal2x_at(buf, u, c)
+            else:
+                x = 0.0
+            if has_send:
+                send[j] += x * vs
+            if m > 0:
+                xl, xr = x * vl, x * vr
+                for r in range(m):
+                    bb = bus[r]
+                    buses[bb, j, 0] += xl * w_start[r]
+                    buses[bb, j, 1] += xr * w_start[r]
+                    w_start[r] += w_step[r]
+                peak = max(peak, abs(xl), abs(xr))
+            u += du
+            if period > 0:
+                while u >= period:
+                    u -= period
+                while u < 0.0:
+                    u += period
+            vl += dl
+            vr += dr
+            vs += ds
+        peaks[k] = peak
+        i = end
+
+
+@_jit
+def far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands,
+            ctl_start, step, a, block, buses, send, peaks):
+    """Far-field voices added into ``buses`` (n_bus, n, 2) and ``send`` (n,) over output samples
+    [a, a + n), in blocks of ``block`` samples (every voice per block, so the buses stay in cache).
+
+    Per voice v: its buffer ``bufs[buf_start[v]: buf_start[v] + buf_len[v]]``; control values every
+    ``step`` output samples from ``ctl_start`` (linear in between): emission index ``e_ctl[v]``,
+    gains ``gl``, ``gr``, ``gs``, the lower distance band ``lo[v]`` and the weights ``wts[v]``
+    (count, 4) of the buses lo, lo + 1 (open) and n_bands + lo, n_bands + lo + 1 (occluded).
+    Buffer position at emission index e: ``u = (e - origin) * pitch + phase``; a loop
+    (``period`` > 0) reads ``offset + (u mod period)`` from a buffer padded with the cycle's ends, a
+    one-shot reads ``u`` directly (zero outside). ``peaks[v]`` (count,) gets the largest
+    |gain * x| per interval (left or right), before the buses' filters."""
+    n = buses.shape[1]
+    bus = np.empty(8, np.int64)
+    w_start = np.empty(8)
+    w_step = np.empty(8)
+    for b0 in range(0, n, block):
+        b1 = min(n, b0 + block)
+        for v in range(e_ctl.shape[0]):
+            buf = bufs[buf_start[v]: buf_start[v] + buf_len[v]]
+            _far_range(buf, period[v], offset[v], origin[v], pitch[v], phase[v], e_ctl[v], gl[v], gr[v], gs[v],
+                       lo[v], wts[v], n_bands, ctl_start, step, a, b0, b1, buses, send, peaks[v], bus, w_start,
+                       w_step)
 
 
 @_jit
@@ -288,6 +428,10 @@ def warmup() -> None:
     """Compile (or load from cache) every kernel in the calling thread, before threads use them."""
     buf, pos, one = np.zeros(16), np.full(2, 8.0), np.ones(2)
     read_optimal2x(buf, pos, np.empty(2))
+    far_mix(buf, np.zeros(1, np.int64), np.full(1, 16, np.int64), np.full(1, 8.0), np.full(1, 4.0), np.zeros(1),
+            np.ones(1), np.zeros(1), np.zeros((1, 2)), np.ones((1, 2)), np.ones((1, 2)), np.ones((1, 2)),
+            np.zeros((1, 2), np.int64), np.ones((1, 2, 4)), 2, 0, 48, 0, 1024, np.zeros((4, 2, 2)), np.zeros(2),
+            np.zeros((1, 2)))
     read_hermite4(buf, pos, np.empty(2))
     read_sinc(buf, pos, one, sinc_table(2, 4), 2, 4, SINC_CUTOFF, np.empty(2))
     onepole_cascade(buf[:2], np.ones((2, 1)), np.zeros(1), np.empty(2))
@@ -318,6 +462,34 @@ def ref_read_optimal2x(buf: np.ndarray, pos: np.ndarray) -> np.ndarray:
         terms = [(a + b) if row % 2 == 0 else (a - b) for a, b in pairs]
         coeffs.append(sum(c * term for c, term in zip(OPT2X_6P5O[row], terms)))
     return np.polyval(coeffs[::-1], z)
+
+
+def ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts,
+                n_bands: int, ctl_start: int, step: int, a: int, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``far_mix`` per output sample with numpy: control values interpolated at every sample, the
+    weights summed per bus at the control points. Returns buses (2 n_bands, n, 2), send and peaks."""
+    count = e_ctl.shape[1]
+    buses, send, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros(n), np.zeros(e_ctl.shape)
+    fpos = (a + np.arange(n) - ctl_start) / step
+    k = np.clip(np.floor(fpos).astype(np.int64), 0, count - 2)
+    f = fpos - k
+    for v in range(len(e_ctl)):
+        def lerp(x):
+            return x[k] + (x[k + 1] - x[k]) * f
+        buf = bufs[buf_start[v]: buf_start[v] + buf_len[v]]
+        u = (lerp(e_ctl[v]) - origin[v]) * pitch[v] + phase[v]
+        x = ref_read_optimal2x(buf, offset[v] + np.mod(u, period[v]) if period[v] > 0 else u)
+        send += x * lerp(gs[v])
+        w = np.zeros((2 * n_bands, count))
+        for q in range(4):
+            np.add.at(w, (lo[v] + (q & 1) + (n_bands if q >= 2 else 0), np.arange(count)), wts[v][:, q])
+        wb = w[:, k] + (w[:, k + 1] - w[:, k]) * f
+        xl, xr = x * lerp(gl[v]), x * lerp(gr[v])
+        buses[:, :, 0] += xl * wb
+        buses[:, :, 1] += xr * wb
+        on = (w[:, k] != 0).any(axis=0) | (w[:, k + 1] != 0).any(axis=0)
+        np.maximum.at(peaks[v], k[on], np.maximum(np.abs(xl), np.abs(xr))[on])
+    return buses, send, peaks
 
 
 def ref_read_hermite4(buf: np.ndarray, pos: np.ndarray) -> np.ndarray:

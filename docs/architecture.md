@@ -23,6 +23,7 @@ decisions behind the structure are in [adr/](adr/README.md).
 │ filters.py    distance gain, cone, air absorption, rear cue, occlusion, head shadow │
 │ panning.py    amplitude / hybrid (binaural later); kernels.py numba loops           │
 │ source.py     the processing chain of one source (emission → delay line → ears)     │
+│ farfield.py   sources beyond detail_voices: shared buffers, distance-band buses      │
 │ reverb.py     EFX presets → synthetic IR, or IR file; send bus convolution          │
 │ render.py     orchestrates per source and per chunk; group buses, reverb bus        │
 │ mix.py        normalize, true-peak limiter, stems, WAV writing                      │
@@ -55,11 +56,11 @@ decisions behind the structure are in [adr/](adr/README.md).
 | `tag.py` | Public helper for generator scripts: add, clear, list sound tags; scene settings; validation of keys and types against the schema. `bpy` and stdlib only. |
 | `bake.py` | Script run with `blender -b … --python bake.py -- <args>`. Collects and validates the sources, resolves the listener per frame, steps through frames and sub-frames (`scene.frame_set(f, subframe=s)`), reads evaluated world matrices and the camera's frame edges (`view_frame`: lens, sensor fit, aspect, shift) from the depsgraph, applies tag offsets, samples visibility at `occlusion_rate`, detects cuts, resolves sample paths and defaults, writes the scene file. Uses Blender's bundled numpy. |
 | `emitters.py` | Where sources come from: tags on view-layer objects, Speaker objects (mapped to tag entries, packed sounds written out), tags inside collection and geometry-nodes instances (one source per instance, the closest `instance_limit`); each source's world matrix per sample. |
-| `occlusion.py` | Occluders (oriented bounding boxes of the connected parts of rendered meshes in a BVH, light-only materials and the listener's vehicle left out, moving ones per sample at their retarded positions, `sfx_occluder` overrides), Fresnel-zone points per band, visibility per source with the containment and reflector rules ([model](../research/models/occlusion.md)). |
+| `occlusion.py` | Occluders (oriented bounding boxes of the connected parts of rendered meshes in a BVH, light-only materials and the listener's vehicle left out, moving ones per sample at their retarded positions (instances rigid with their instancer by its matrix), `sfx_occluder` overrides), Fresnel-zone points per band, visibility per source with the containment and reflector rules ([model](../research/models/occlusion.md)). |
 | `scan.py` | Script run like `bake.py`: samples the shot at evenly spaced frames and writes a JSON list of cameras, moving objects and static objects near the camera, so an agent can choose sound sources. |
 | `util.py` | Shared helpers for `bake.py` and `scan.py`: argument handling, running `--run` scripts, frame stepping, output prefix for the CLI. |
 | `schema.py` | The tag and settings schema (keys, types, defaults, ranges) as plain data, shared by `tag.py`, `bake.py` and the engine, so defaults exist in one place (NFR-8). Stdlib only. |
-| `cull.py` | Culling in the bake: per visibility sample, which occluding sources may be heard (level estimate from distance, gain and the sample's level read with `aud`); fills the skipped visibility samples by interpolation. |
+| `cull.py` | Culling and level of detail in the bake: per visibility sample, which occluding sources may be heard (level estimate from distance, gain and the sample's level read with `aud`) and which rank beyond 2 × `detail_voices` in their group (direct path only); fills the skipped visibility samples by interpolation. |
 
 ### `soundstage/levels.py`
 
@@ -83,8 +84,9 @@ group, skip the quietest entries while their summed energy stays within the budg
 | `mix.py` | Loudness normalization, true peak (BS.1770 interpolator), offline true-peak limiter returning a gain curve, stem file names, WAV writing (float or PCM24 with dither). |
 | `report.py` | Peak, true peak, loudness and loudness range for the master and each group, per-source statistics (including visibility), warnings. |
 | `plot.py` | Debug plot: distance, level, pan, delay, playback rate and visibility per source over frames (matplotlib, optional). |
-| `cull.py` | Culling in the render: the upper bound per source before setup (from the baked positions), the per-voice energy per decision block after setup, and the plan of which voice renders in which chunk. |
-| `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, culling, renderers per source, chunked rendering with sources in a thread pool, summed in source order into group buses (deterministic), reverb bus per chunk, statistics. |
+| `cull.py` | Culling in the render: the level estimate and upper bound per source and decision block from the baked positions (also used to rank sources for the far field), the skip before setup, the per-voice energy per decision block after setup, and the plan of which voice renders in which chunk. |
+| `farfield.py` | The far field (FR-56, ADR 0013): tiers per source and chunk (the `detail_voices` loudest of each group near), dry buffers shared per sample file, per-chunk geometry from the baked positions for many voices at once, per-group buses by distance band and occlusion with their filters, the crossfade law between tiers. |
+| `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, culling, tiers, renderers per source (near sources: per run of near chunks, on a part of the grid), the far field, chunked rendering in a thread pool, summed in source and group order into group buses (deterministic), reverb bus per chunk, statistics. |
 
 ### `soundstage/cli.py`
 

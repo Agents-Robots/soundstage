@@ -8,6 +8,10 @@ per group, the quietest occluding sources ``BOUND_MARGIN_DB`` below ``cull_db``.
 skipped samples the visibility interpolated from the source's computed samples, so the scene file
 keeps its format; whatever is filled in belongs to sources that contribute far below the budget.
 
+Level of detail (FR-56): with ``detail_voices`` set, the sources that rank beyond ``DETAIL_MARGIN``
+times ``detail_voices`` in their group (by the mean-square estimate, as the render's tiers) get the
+direct path only: the far field uses one broadband visibility per source.
+
 Sample levels are read with Blender's ``aud`` module. Runs inside Blender (Blender's numpy only).
 Spec: docs/spec/signal-model.md#culling.
 """
@@ -22,6 +26,9 @@ from soundstage.levels import BOUND_MARGIN_DB, distance_gain, skip_mask
 ACTIVE_SLACK_S = 0.5
 """One-shots count as sounding this long before and after their sample (visibility smoothing)."""
 STATS_BLOCK_S = 0.010
+DETAIL_MARGIN = 2.0
+"""Sources ranked within this many times ``detail_voices`` at a visibility sample get every path:
+the render's hysteresis (1.5) and its ranking per 4 s chunk instead of per sample."""
 
 _levels: dict[str, tuple[float, float, float]] = {}
 
@@ -46,11 +53,14 @@ def sample_level(path: str) -> tuple[float, float, float]:
 
 
 class Culler:
-    """Per visibility sample: which occluding sources get their visibility computed."""
+    """Per visibility sample: which occluding sources get their visibility computed, and which of
+    them from the direct path only."""
 
     def __init__(self, spatial: list[dict], occluding: list[int], settings: dict, fps: float):
         self.occluding = np.asarray(occluding, dtype=np.int64)
-        self.budget = settings["cull_db"] - BOUND_MARGIN_DB
+        self.cull_db = settings["cull_db"]
+        self.budget = None if self.cull_db is None else self.cull_db - BOUND_MARGIN_DB
+        self.detail = settings.get("detail_voices")
         self.c = float(settings["speed_of_sound"])
         self.spatial = spatial
         self.groups = [s["group"] for s in spatial]
@@ -71,30 +81,55 @@ class Culler:
         self.mean, self.peak = g2 * np.array(mean), g2 * np.array(peak)
         self.cullable = np.zeros(len(spatial), dtype=bool)
         self.cullable[self.occluding] = True
+        labels = np.asarray([str(g) for g in self.groups], dtype=object)
+        self.members = [np.nonzero(labels == g)[0] for g in dict.fromkeys(labels)]
         self.samples = 0
         self.skipped = 0
+        self.direct = 0
 
-    def keep(self, t: float, listener_m: np.ndarray, emitted_m: np.ndarray, positions_m: np.ndarray) -> np.ndarray:
-        """Indices into the occluding sources to compute at time ``t`` (s): ``emitted_m`` are their
-        retarded positions, ``positions_m`` every spatial source's position now (metres)."""
+    def keep(self, t: float, listener_m: np.ndarray, emitted_m: np.ndarray,
+             positions_m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Indices into the occluding sources to compute at time ``t`` (s), and per index whether
+        the direct path is enough: ``emitted_m`` are their retarded positions, ``positions_m``
+        every spatial source's position now (metres)."""
         d = np.linalg.norm(positions_m - listener_m, axis=1)
         d[self.occluding] = np.linalg.norm(emitted_m - listener_m, axis=1)
         dg2 = np.array([distance_gain(dj, s["distance_model"], s["ref_distance"], s["max_distance"], s["rolloff"])
                         for dj, s in zip(d, self.spatial)], dtype=np.float64) ** 2
         te = t - d / self.c
         on = np.array([any(lo <= tj <= hi for lo, hi in w) for tj, w in zip(te, self.windows)], dtype=np.float64)
-        skip = skip_mask(self.peak * dg2 * on, self.groups, self.budget, cullable=self.cullable,
-                         totals=self.mean * dg2 * on)
+        power = self.mean * dg2 * on
+        skip = np.zeros(len(power), dtype=bool)
+        if self.budget is not None:
+            skip = skip_mask(self.peak * dg2 * on, self.groups, self.budget, cullable=self.cullable, totals=power)
+        far = np.zeros(len(power), dtype=bool)
+        if self.detail is not None:
+            limit = DETAIL_MARGIN * self.detail
+            for idx in self.members:
+                if len(idx) > limit:
+                    rank = np.empty(len(idx), dtype=np.int64)
+                    rank[np.argsort(-power[idx], kind="stable")] = np.arange(len(idx))
+                    far[idx] = rank >= limit
         keep = np.nonzero(~skip[self.occluding])[0]
+        direct = far[self.occluding][keep]
         self.samples += len(self.occluding)
         self.skipped += len(self.occluding) - len(keep)
-        return keep
+        self.direct += int(direct.sum())
+        return keep, direct
 
-    def report(self) -> float:
-        share = self.skipped / max(self.samples, 1)
-        log(f"culling: visibility skipped for {100 * share:.0f} % of source samples "
-            f"({self.budget + BOUND_MARGIN_DB:g} dB budget, {BOUND_MARGIN_DB:g} dB margin)")
-        return share
+    def report(self) -> tuple[float | None, float | None]:
+        """Shares of the source samples that culling skipped and that got the direct path only
+        (None when off)."""
+        n = max(self.samples, 1)
+        culled = None if self.budget is None else self.skipped / n
+        direct = None if self.detail is None else self.direct / n
+        if culled is not None:
+            log(f"culling: visibility skipped for {100 * culled:.0f} % of source samples "
+                f"({self.cull_db:g} dB budget, {BOUND_MARGIN_DB:g} dB margin)")
+        if direct is not None:
+            log(f"level of detail: direct path only for {100 * direct:.0f} % of source samples "
+                f"(beyond {DETAIL_MARGIN:g} x detail_voices {self.detail} per group)")
+        return culled, direct
 
 
 def fill(vis: np.ndarray) -> np.ndarray:

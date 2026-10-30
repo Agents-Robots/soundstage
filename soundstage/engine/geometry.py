@@ -237,6 +237,19 @@ class SceneGeometry:
             self.frame = tuple(np.interp(self.t, self.times, frame[:, i]) for i in (0, 1))
         self._tracks: dict[int, tuple[Track, Track | None]] = {}
 
+    def sub(self, j0: int, count: int) -> SceneGeometry:
+        """The same geometry on control points j0 .. j0 + count - 1 of this grid (a sub-grid aligned
+        with it), sharing the listener tracks; source tracks are built anew and dropped with it."""
+        g = object.__new__(SceneGeometry)
+        g.__dict__.update(self.__dict__)
+        g.grid = ControlGrid(start=self.grid.start + j0 * self.grid.step, count=count, rate=self.grid.rate,
+                             step=self.grid.step)
+        sl = slice(j0, j0 + count)
+        g.t, g.p, g.rot, g.segment = self.t[sl], self.p[sl], self.rot[sl], self.segment[sl]
+        g.frame = None if self.frame is None else tuple(f[sl] for f in self.frame)
+        g._tracks = {}
+        return g
+
     def tracks(self, track: int) -> tuple[Track, Track | None]:
         if track not in self._tracks:
             pos = self.scene.src_pos[:, track]

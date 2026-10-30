@@ -17,7 +17,9 @@ larger than ``occluder_min_size``; an object's custom property ``sfx_occluder`` 
 "mesh" uses its real triangles. Meshes whose materials only emit or pass light (fog volumes, light
 beams, holograms), text objects and objects that travel with the listener (the camera's vehicle) do
 not occlude. Static boxes go into one BVH tree; moving ones into a small tree
-rebuilt per sample. A box that contains the listener or the source (an engine inside its car, a
+rebuilt per sample. A moving instance whose matrix relative to its instancer is the same at every
+snapshot (a part of a keyed collection-instance empty) is moved by its instancer's matrix; only the
+others are looked up in the depsgraph's instances, a walk over every instance of the scene. A box that contains the listener or the source (an engine inside its car, a
 camera inside a cockpit) does not occlude that source's paths.
 
 Runs inside Blender (bpy, mathutils, Blender's numpy).
@@ -46,6 +48,7 @@ CLEARANCE_BU = 1e-3  # a ray continued past an occluder starts this far behind t
 HISTORY = 128  # moving-occluder samples kept for their retarded positions (12.8 s at 10 Hz)
 MAX_RECAST = 16  # rays continued past reflecting occluders
 SPLIT_FILL = 0.5  # a mesh is split into its parts when its largest part fills less of its box
+BY_INSTANCER = True  # moving instances rigid with their instancer: by its matrix (False: depsgraph walk, tests)
 
 
 def _key(inst) -> tuple:
@@ -186,11 +189,15 @@ class Occluders:
     segments are blocked."""
 
     def __init__(self, scene, frames: list[float], min_size_m: float, scale: float, listener: str | None = None):
-        snaps, cams, materials = [], [], {}
+        snaps, cams, materials, parents = [], [], {}, []
         for f in frames:
             util.set_frame(scene, f)
             depsgraph = bpy.context.evaluated_depsgraph_get()
             snaps.append(_snapshot(depsgraph, min_size_m / scale, materials))
+            # instancers: also those of the first snapshot's instances, which a later one may lack (scaled to 0)
+            names = {k[0] for k in snaps[-1] if k[0] is not None} | {k[0] for k in snaps[0] if k[0] is not None}
+            parents.append({n: np.array(bpy.data.objects[n].evaluated_get(depsgraph).matrix_world) for n in names
+                            if n in bpy.data.objects})
             cam = util.listener_object(scene, listener)
             cams.append(np.array(cam.evaluated_get(depsgraph).matrix_world) if cam else None)
         first = snaps[0]
@@ -225,17 +232,32 @@ class Occluders:
         self.moving_mid = np.array([(c.min(axis=0) + c.max(axis=0)) / 2 for c in self.moving_local]).reshape(-1, 3)
         index = {k: i for i, k in enumerate(self.moving_order)}
         self.moving_objects = [(index[k], bpy.data.objects[k[2]]) for k in self.moving_order if k[0] is None]
-        # instances by instancer and persistent id: reading inst.object in the per-sample walk leaks
-        # memory in Blender 5.2 (see emitters.instance_key); one instance has one entry per island
+        # instances rigid with their instancer: its matrix times a fixed relative matrix
+        rows, owners, rel = [], [], []
+        for k in self.moving_order:
+            r = _relative(k, snaps, parents, min_size_m / scale) if k[0] is not None and BY_INSTANCER else None
+            if r is not None:
+                rows.append(index[k])
+                owners.append(k[0])
+                rel.append(r)
+        self.rigid_parents = [bpy.data.objects[n] for n in dict.fromkeys(owners)]
+        slot = {n: j for j, n in enumerate(dict.fromkeys(owners))}
+        self.rigid_rows = np.array(rows, dtype=np.int64)
+        self.rigid_owner = np.array([slot[n] for n in owners], dtype=np.int64)
+        self.rigid_rel = np.array(rel).reshape(-1, 4, 4)
+        rigid = set(rows)
+        # the other instances by instancer and persistent id: reading inst.object in the per-sample walk
+        # leaks memory in Blender 5.2 (see emitters.instance_key); one instance has one entry per island
         self.moving_instances: dict[tuple, list[int]] = {}
         for k in self.moving_order:
-            if k[0] is not None:
+            if k[0] is not None and index[k] not in rigid:
                 self.moving_instances.setdefault(k[:2], []).append(index[k])
         self.moving_parents = {k[0] for k in self.moving_instances}
         self.history_t: list[float] = []
         self.history_c: list[np.ndarray] = []
         self.moving_tree, self.moving_owner, self.moving_boxes, self.moving_keys = None, None, None, []
         self.counts = {"static": len(static), "moving": len(moving), "carried": len(carried)}
+        self.walked = len(moving) - len(rows) - len(self.moving_objects)  # moving boxes found by the walk
 
     def update(self, depsgraph, time_s: float = 0.0, listener: np.ndarray | None = None,
                speed_bu: float | None = None) -> None:
@@ -251,6 +273,9 @@ class Occluders:
             if ob.name not in evaluated:
                 evaluated[ob.name] = np.array(ob.evaluated_get(depsgraph).matrix_world)
             mats[i] = evaluated[ob.name]
+        if len(self.rigid_rows):
+            par = np.array([np.array(ob.evaluated_get(depsgraph).matrix_world) for ob in self.rigid_parents])
+            mats[self.rigid_rows] = np.einsum("rij,rjk->rik", par[self.rigid_owner], self.rigid_rel)
         if self.moving_instances:
             for inst in depsgraph.object_instances:
                 if inst.is_instance and inst.parent is not None and inst.parent.original.name in self.moving_parents:
@@ -318,6 +343,38 @@ class Occluders:
                     if gone >= length:
                         break
         return hit
+
+
+def _relative(key: tuple, snaps: list[dict], parents: list[dict], min_size_bu: float) -> np.ndarray | None:
+    """The instance's matrix relative to its instancer (from the first snapshot, which has the key)
+    when it is the same at every snapshot, else None. A snapshot may lack the instance where its
+    instancer makes it smaller than the minimum size: traffic scaled to zero while it jumps back."""
+    m, local, mode = snaps[0][key][:3]
+    rel = None
+    for snap, par in zip(snaps, parents):
+        p = par.get(key[0])
+        if p is None:
+            return None
+        if rel is None:
+            if abs(np.linalg.det(p[:3, :3])) < 1e-12:  # flattened: cannot tell
+                return None
+            rel = np.linalg.inv(p) @ m
+        elif key in snap:
+            if not np.allclose(p @ rel, snap[key][0], rtol=1e-5, atol=1e-4):
+                return None
+        elif _counted(local, p @ rel, mode, min_size_bu):
+            return None  # missing at its size: hidden or replaced, not scaled away
+    return rel
+
+
+def _counted(local: np.ndarray, m: np.ndarray, mode: str, min_size_bu: float) -> bool:
+    """Whether ``_snapshot`` keeps a part with these local corners at matrix ``m``: its size times
+    the largest column scale (the box parts' pre-test), then its world box."""
+    if mode == "box" and (np.linalg.norm(local.max(axis=0) - local.min(axis=0))
+                          < min_size_bu / max(np.linalg.norm(m[:3, :3], axis=0).max(), 1e-9)):
+        return False
+    world = local @ m[:3, :3].T
+    return bool(np.linalg.norm(world.max(axis=0) - world.min(axis=0)) >= min_size_bu)
 
 
 def _label(key: tuple) -> str:
@@ -438,6 +495,21 @@ def retarded_positions(times: np.ndarray, positions: np.ndarray, listener: np.nd
         w = np.clip((te - times[i - 1]) / (times[i] - times[i - 1]), 0.0, 1.0)[:, None]
         x = positions[i - 1, cols] * (1 - w) + positions[i, cols] * w
     return x
+
+
+def direct_visibility(occluders: Occluders, listener: np.ndarray, sources: np.ndarray,
+                      blockers: list | None = None) -> np.ndarray:
+    """Visibility (S, bands) of sources (S, 3) from the direct path alone: 0 or 1, the same in every
+    band (far-field sources, which use one broadband visibility). A blocked direct path counts as
+    ``PATHS`` blocked paths in ``blockers``, so the shares stay comparable with ``visibility``."""
+    lis = np.repeat(listener[None], len(sources), axis=0)
+    by = [None] * len(sources) if blockers is not None else None
+    open_ = ~occluders.blocked(lis, sources, lis, sources, by)
+    if blockers is not None:
+        for k, name in enumerate(by):
+            if name is not None:
+                blockers[k][name] += PATHS
+    return np.repeat(open_.astype(np.float64)[:, None], len(BANDS_HZ), axis=1)
 
 
 def visibility(occluders: Occluders, listener: np.ndarray, sources: np.ndarray, radii_m: list[float],

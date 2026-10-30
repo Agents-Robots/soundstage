@@ -38,6 +38,7 @@ flowchart LR
 | [Mixing and loudness](models/mixing-and-loudness.md) | Stems, loudness and true peak, normalization, limiter, report |
 | [Blender integration](models/blender-integration.md) | Speaker objects, instanced assets, occluder marking: manual and scripted workflows |
 | [Culling](models/culling.md) | Skipping sources that do not matter within an error budget, in render and bake |
+| [Level of detail](models/level-of-detail.md) | The far field: the loudest sources per group in full, the rest cheaply, for thousands of sources |
 
 ## Experiments
 
@@ -60,6 +61,7 @@ flowchart LR
 | [E15](experiments/E15-option-costs.md) | Execution time per option and source count | Render ≈ 3.7 s + 190 ms per source, bake ≈ 7.3 s + 380 ms (60 s shot); `doppler_factor` ≠ 1 2.5×, `occlusion_rate` linear in the per-source bake cost, `frame_set` 35 ms at 16 000 objects |
 | [E16](experiments/E16-culling.md) | Culling against budget and source count | Default −40 dB: render 4–9 % and bake 3–6 % faster, error of the shot 4–10 dB below the budget; −20 dB: 1.3–1.7×; `doppler_factor` 0.5: 1.9–2.0×. Distant sources that fill an area carry a similar power share per octave of distance, so few can be skipped; memory (27 MB per source) is not reduced |
 | [E17](experiments/E17-lens-and-pan.md) | Where a source at the frame edge is heard, against the lens | Camera mode ignores the lens: frame edge heard at 9° with 50 mm (HD screen edge 16.5°), 2.3° with 200 mm; `pan_reference = screen`: 16.5° for every lens |
+| [E18](experiments/E18-traffic.md) | Thousands of flying cars with the far field (`detail_voices`) | 10 000 cars over 60 s at the default 64: render 173 s and 15.8 GB (every car in the full chain: 0.23 s and 35 MB per car); band levels within what other loop phases change, 0.7–1.2 dB at pitch 1 (p95); distance bands √2 apart; distant cars too bright in both tiers beyond 20 dB of air loss; direct-path visibility for far cars makes the bake 2.3–3.6× faster at no measurable render difference |
 
 ## Conventions
 
@@ -70,7 +72,7 @@ flowchart LR
 - **Experiments are reproducible**: every number in an experiment page comes from a script in
   [experiments/scripts/](experiments/scripts/), run from the repository root in the venv
   (`.venv/bin/python research/experiments/scripts/eNN_*.py`); scripts print the tables and write
-  figures to [figures/](figures/). E01, E09, E11, E13, E15 and E16 need Blender on `PATH`, E14 needs ffmpeg.
+  figures to [figures/](figures/). E01, E09, E11, E13, E15, E16 and E18 need Blender on `PATH`, E14 needs ffmpeg.
 - **Corrections stay visible**: when a measurement turns out wrong, the page says what was wrong and
   shows the corrected result, instead of silently replacing it.
 - **Papers**: [papers/](papers/README.md) lists every source with what it is used for;

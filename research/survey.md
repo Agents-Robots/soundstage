@@ -45,7 +45,9 @@ Conclusion: no professional system renders thousands of sources individually at 
 of them keep a few near, loud sources individual and represent the rest by aggregates: clusters,
 beds driven by density, shared voices. Real-time engines also never hold whole-shot arrays per
 source; they process one buffer at a time, which is why their memory does not grow with the shot
-length ([#32](https://github.com/Agents-Robots/soundstage/issues/32)).
+length ([#32](https://github.com/Agents-Robots/soundstage/issues/32)). soundstage follows the same pattern
+with its far field ([level of detail](models/level-of-detail.md), ADR 0013): the loudest sources per group
+in full, the rest per source but without per-source filters or state, filtered in shared buses.
 
 ## Camera lens and sound direction
 

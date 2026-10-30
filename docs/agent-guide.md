@@ -155,8 +155,10 @@ To check one source or group in isolation: `--solo 'Ship:*'`, `--solo group:engi
 `--mute 'Beacon:0'`; a part of the shot: `--frames 100-180`.
 
 Culling is on by default (`cull_db` −40): per group, sources that add less than −40 dB to the group
-are skipped where they do not matter, which keeps shots with hundreds or thousands of sources fast.
-`--set cull_db=-20` for a quicker preview; `--set cull_db=null` for a reference render.
+are skipped where they do not matter. `--set cull_db=-20` for a quicker preview; `--set
+cull_db=null` for a reference render. Beyond 64 sources in a group (`detail_voices`), the quieter
+ones render in the far field, so shots with thousands of sources (traffic, crowds) render in minutes:
+tag every car, not a selection ([usage](usage.md#4-render)).
 
 ## 7. Verify (you cannot listen)
 

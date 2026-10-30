@@ -87,6 +87,7 @@ Decisions taken with the user (2026-10-25):
 | FR-53 | Optional first-order (or higher) AmbiX ambisonic output for 360 video or re-panning in Fairlight. | 4 |
 | FR-54 | Random variation of one-shots (gain, pitch, choice among several samples), seeded. | 4 |
 | FR-55 | Screen-relative panning: sources in the frame are heard where the viewer sees them on the screen, through the camera lens (zooms and lens shift included); on by default, the direction relative to the camera as the alternative. | 4 |
+| FR-56 | Shots with thousands of sources (traffic, swarms, crowds) render within minutes and bounded memory: the loudest sources of each group get the full chain, the rest a cheaper far-field rendering with the same distance, delay, Doppler, pan and air absorption; the bake computes the far sources' visibility from the direct path alone. | 4 |
 
 ### Output and mixing
 

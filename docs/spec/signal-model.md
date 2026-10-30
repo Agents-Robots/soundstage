@@ -434,6 +434,60 @@ sources 20 dB below `cull_db`. Skipped samples get the visibility interpolated f
 computed samples (open where none was computed); the manifest records the skipped share
 (`occlusion.culled_share`).
 
+## Far field
+
+With many sources, only the `detail_voices` loudest of each group (scene setting, default 64;
+`null` = every source) get the full processing chain; the others are rendered by the far field
+(FR-56, [model](../../research/models/level-of-detail.md), ADR 0013). Beds are always near.
+
+**Tiers.** Per group and 4 s chunk, sources are ranked by the culling estimate from the baked
+positions (distance law, gain, sample level, while they sound). A source is near in a chunk when it
+ranks within `detail_voices`, or within 1.5 × `detail_voices` when it was near in the chunk before;
+a silent one is far. When every source is near in every chunk the render is the one without the
+far field, sample for sample. A near source's renderer is built for its run of near chunks only
+(on a part of the control grid, with the 50 ms warm-up before it), so memory follows the near
+voices alive at a time. At a change of tier both tiers render the first 100 ms of the chunk and
+crossfade with gains `a, b` that keep the level for the expected correlation ρ of the two renders
+(`a² + b² + 2ρab = 1`): ρ = 1 at pitch 1 with the `amplitude` panner (the same dry signal and loop
+phase), 0.5 at pitch 1 with `hybrid` (ITD and head shadow decorrelate the highs), 0 otherwise.
+
+**Signal.** Per far voice and output sample:
+
+```
+e(t)  = (t − τ_read(t)) · 2 f_s                      emission index (τ_read as in the full chain)
+u     = (e − origin) · pitch + phase                 position in the shared dry buffer (loops: mod period)
+x     = optimal-2x read of the shared buffer at u     (prefiltered at 2 f_s, one buffer per sample file)
+y_L,R += x · g(t) · g_L,R(λ) · w_bus(t)               into the group's buses
+```
+
+`g` is gain × distance law × cone × rear level × fades; `g_L,R` the pan law on the same lateral
+sine as the full chain (screen mode included). Geometry is evaluated every 4 control points from the
+baked positions, linear between baked samples, with 6 fixed-point steps for the retarded delay, and
+interpolated (the delay with Catmull-Rom). The buses are a distance band (none, then 25 m to
+12.8 km, √2 apart: 20 bands) × open / occluded: a voice's weight goes to the two bands around its
+distance (linear in log distance) times its visibility v (open) and `(1 − v) · 10^(occlusion_gain_db/20)`
+(occluded). Each bus is filtered once per chunk by the air absorption of its band distance; the
+occluded buses also by the transmission low-pass at `occlusion_cutoff_hz`. The reverb send gets
+`g` with the room rolloff and no air absorption.
+
+With culling on, the skip before setup applies as usual; far voices are gated per decision block
+by the rule on the estimates (10-control-point ramps), and near voices, the loudest of their group,
+are not culled.
+
+Left out compared with the full chain: ITD, head shadow, the rear low-pass (the rear cue stays as
+its level), the per-band occlusion low-pass, the playback-rate clamp. At a jump (cut, teleport) the
+voice fades out and in over 8 control points instead of crossfading a held branch.
+
+**Visibility in the bake.** With `detail_voices` set, the bake ranks the sources of each group at
+every visibility sample by the same estimate (mean square of the sample, gain, distance law at the
+retarded distance, while it sounds). Those within 2 × `detail_voices` get every path (the direct
+path and the Fresnel rings, [occlusion](#occlusion)); the others only the direct path, 0 or 1 in
+every band: the far field uses one broadband visibility. The factor 2 covers the render's
+hysteresis (1.5) and its ranking per 4 s chunk instead of per sample. `occlusion.direct_share` in
+the scene file is the share of source samples baked this way; rendering with a larger
+`detail_voices` (or `null`) than the bake warns, since some near sources then have the direct-path
+visibility.
+
 ## Report metrics
 
 - Master and each group (stem): sample peak (dBFS), true peak (dBTP, ITU-R BS.1770-4: 4×
@@ -491,6 +545,7 @@ by ear.
 | Instances per tagged object | 32 closest | scene `instance_limit` |
 | Cut crossfade | 10 ms | engine constant |
 | Loop seam crossfade | 50 ms, correlation-adaptive | source `loop_crossfade` |
+| Far field | `detail_voices` 64 per group; hysteresis 1.5; tier crossfade 100 ms; geometry every 4 control points; 20 distance bands (√2 apart) | scene `detail_voices`; engine constants in `farfield.py` |
 | Culling | budget −40 dB per group; 0.4 s decision blocks, 4 s chunks; upper bounds 20 dB below; fades 10 ms, warm-up 50 ms | scene `cull_db`; engine constants `cull.BLOCK_S`, `render.CHUNK_BLOCKS`, `levels.BOUND_MARGIN_DB`, `render.CULL_FADE_S`, `source.WARMUP_S` |
 
 ## References

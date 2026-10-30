@@ -69,7 +69,7 @@ to sources whose contribution is at least 60 dB below their group at the default
 | Decision resolution | 0.4 s blocks, 4 s render chunks | Deciding per 4 s chunk let the error reach −29 dB in the worst 1 s at a −40 dB budget, and −10.5 dB at −20 (a loud event in one part of the chunk hides a louder background elsewhere); with 0.4 s blocks (the EBU R 128 momentary-loudness window) the worst 0.4 s stayed within 1 dB of the budget. Smaller render chunks would skip more, at the cost of more warm-ups |
 | What is skipped | voices (one per trigger when a one-shot needs per-trigger references) | Per source would keep every voice of a multi-trigger one-shot for the whole shot, which was the 2.5× cost of `doppler_factor` ≠ 1 in E15 |
 | Transitions | 10 ms raised-cosine fades rendered inside the skipped chunk; a resumed voice rebuilds its delay line and clears its filters 50 ms earlier | Fading inside the rendered chunk would change it (a one-shot's attack right at the chunk start); without warm-up the filter states would start from zero. With both, rendered chunks equal the full render to 1e-9 |
-| Level of detail | skip | Rendering quiet sources cheaply (amplitude pan only, no filters or Doppler) instead of skipping them would keep the texture of a crowd at a fraction of the cost; not needed while the budget keeps the error far below the mix |
+| Level of detail | skip | Rendering quiet sources cheaply instead of skipping them keeps the texture of a crowd at a fraction of the cost: the far field ([level of detail](level-of-detail.md)) does this for everything beyond the `detail_voices` loudest of a group; culling still skips what is negligible |
 | Filters in the estimate | included, through the sample's band spectrum | Leaving them out overestimates every source, but not by the same amount: the occlusion low-pass takes most of the energy of a bright impact, air absorption little of a rumble. In E16's first run without them, the estimated group totals were 2.2 dB above the rendered stems (median, 4.5 dB in the worst blocks), and one stem's worst 0.4 s exceeded a −30 dB budget by 1.8 dB. With them, totals are 0.8 dB above the stems in the median block, and the worst stem window exceeds the budget by at most 1.1 dB (see Limits). The prefilter of the standard interpolator had the same effect for bright samples (3 dB on white noise) until the energy was measured before it |
 | Masking model | broadband energy | A psychoacoustic masking model per band (as in perceptual audio rendering, Tsingos et al. 2004) culls more where spectra differ, but needs per-band estimates of every source; the energy budget is simpler and conservative where spectra are similar |
 | Default | −40 dB, on | Off by default would leave large shots slow unless the user knows the setting; at −40 dB the measured error of the whole shot is −44 dB or lower and no 0.4 s of any stem exceeds −39 dB (E16), far under audibility in a mix. `null` gives the full render for reference |
@@ -87,8 +87,12 @@ to sources whose contribution is at least 60 dB below their group at the default
   0.1 dB.
 - **Far sources are not negligible when they fill an area.** With the inverse-distance law, every
   octave of distance carries a similar share of the power (E16), so an energy budget drops few of
-  them and render time still grows with the total number of sources. Rendering the distant ones as
-  a few clustered voices would scale; culling does not.
+  them and render time still grows with the total number of sources. The far field
+  ([level of detail](level-of-detail.md)) is what scales.
+- **With the far field active** (some source beyond `detail_voices`), far voices are gated by the
+  rule on the estimates from the baked positions, and near voices are not culled: they are the
+  loudest of their group, and their exact estimate would need every near renderer built for the
+  whole shot.
 - **Memory is not reduced** unless sources are skipped before setup: about 27 MB per source for a
   60 s shot, so 5000 sources did not fit in 110 GB in E16, with or without culling.
 - **A render with a stricter budget than the bake** uses interpolated visibility for sources the

@@ -261,8 +261,13 @@ def cmd_render(a: argparse.Namespace) -> int:
         print("processing: " + ", ".join(f"{k} {v}" for k, v in processing.items()))
     if result.culling:
         c = result.culling
+        share = f", {100 * c['rendered_share']:.0f} % of voice time rendered" if c["rendered_share"] is not None else ""
         print(f"culling ({c['cull_db']:g} dB): {c['skipped_entirely']} of {c['sources']} sources skipped entirely "
-              f"({c['skipped_before_setup']} before setup), {100 * c['rendered_share']:.0f} % of voice time rendered")
+              f"({c['skipped_before_setup']} before setup){share}")
+    if result.lod:
+        d = result.lod
+        print(f"far field (detail_voices {d['detail_voices']}): {d['far_sources']} sources ({d['far_voices']} voices) "
+              f"far in {100 * d['far_share']:.0f} % of source time; at most {d['near_voices_max']} near voices at a time")
     if a.plot:
         print(f"plot: {plotted}" if plotted else "plot: no spatial source rendered, nothing to plot")
     if a.report:

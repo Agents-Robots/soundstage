@@ -75,10 +75,12 @@ def _per_chunk(r: np.ndarray, value: np.ndarray, edges_s: np.ndarray, reduce: st
     return out
 
 
-def before_setup(scene: Scene, sources: list[Source], spans: list[tuple[int, int, int]], budget_db: float,
-                 room_rolloff: float | None) -> np.ndarray:
-    """Sources (bool, one per source) whose upper bound stays ``BOUND_MARGIN_DB`` below the budget
-    in every decision block: they are skipped before setup. Beds are never skipped."""
+def estimates(scene: Scene, sources: list[Source], spans: list[tuple[int, int, int]],
+              room_rolloff: float | None) -> tuple[np.ndarray, np.ndarray]:
+    """Upper bound and estimate of each source's energy per decision block, (sources, blocks) each,
+    from the baked positions alone (no setup): the straight-line distance mapped to its reception
+    time, distance law, gain, send, and the sample's highest 10 ms (bound) or mean (estimate) mean
+    square, while the source sounds. Cone, occlusion, pan and filters can only lower them."""
     s, rate = scene.settings, scene.sample_rate
     t = np.asarray(scene.seconds(scene.frames), dtype=np.float64)
     lpos = scene.listener_matrix[:, :3, 3]
@@ -107,6 +109,15 @@ def before_setup(scene: Scene, sources: list[Source], spans: list[tuple[int, int
         r = t + d / c
         bound[i] = ms_peak * _per_chunk(r, pw, edges_s, "max") * lengths
         estimate[i] = ms_mean * _per_chunk(r, pw, edges_s, "mean") * lengths
+    return bound, estimate
+
+
+def before_setup(scene: Scene, sources: list[Source], spans: list[tuple[int, int, int]], budget_db: float,
+                 room_rolloff: float | None, levels: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
+    """Sources (bool, one per source) whose upper bound stays ``BOUND_MARGIN_DB`` below the budget
+    in every decision block: they are skipped before setup. Beds are never skipped. ``levels``:
+    the result of ``estimates`` when already computed."""
+    bound, estimate = levels if levels is not None else estimates(scene, sources, spans, room_rolloff)
     spatial = np.array([src.spatial for src in sources], dtype=bool)
     skip = skip_mask(bound, [src.group for src in sources], budget_db - BOUND_MARGIN_DB, cullable=spatial,
                      totals=estimate)

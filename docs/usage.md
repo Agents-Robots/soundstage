@@ -202,13 +202,25 @@ Iterate quickly on one part:
 less than that to the group where they do not matter: a car 800 m away while a ship passes the
 camera, a one-shot between its triggers. At the default this saves 4–9 % of the render and 3–6 %
 of the bake, and about half the render when many voices are silent (`doppler_factor` ≠ 1). Distant
-sources that fill the area around the camera still add up, so render time and memory (about 27 MB
-per source for a 60 s shot) keep growing with the total number of sources
+sources that fill the area around the camera still add up, so few of them can be skipped
 ([E16](../research/experiments/E16-culling.md)). The render
 prints how much it skipped; the report has `culled_s` per source. `--set cull_db=-20` renders faster
 for a preview (an error 20 dB below the mix); `--set cull_db=null` renders everything, for a
 reference or to check that culling is not the cause of something you hear. The bake reads the same
 setting from the scene settings to skip visibility rays of sources far below the budget.
+
+**Thousands of sources.** Per group and 4 s chunk, the `detail_voices` loudest sources (64 by
+default) run the full chain; the others run the far field, which keeps each source's level, pitch,
+Doppler, delay and side but shares air absorption and occlusion filtering per distance band, and
+leaves out the interaural delay, head shadow and rear low-pass. For a 60 s shot, a far source costs
+about 13 ms of render and almost no memory; a near voice 0.17–0.20 s and 55–110 MB at its peak. 10 000
+flying cars over 60 s render in under 3 minutes with 16 GB
+([E18](../research/experiments/E18-traffic.md)). The render prints the far share and the most near
+voices alive at once. `--set detail_voices=16` is faster; `--set detail_voices=null` renders every
+source in full (0.23 s and 35 MB per source). The bake reads `detail_voices` from the scene
+settings too and gives the sources ranked beyond twice that the direct path only for their
+visibility, which makes the bake of thousands of sources 2–4 times faster; render with the same
+setting you baked with (the render warns otherwise).
 
 **Panning and the lens.** What is in the frame is panned to its place on the screen, through the
 camera lens, as a film mix would: a source at the frame edge is heard at the screen edge whatever
