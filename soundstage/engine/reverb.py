@@ -10,6 +10,10 @@
 - Files: a WAV/FLAC impulse response, resampled to the output rate, used as recorded.
 - ``ReverbBus``: the sum of all sources' sends is convolved once per chunk (FFT overlap-add); the
   tail carries over to the next chunk, so chunked output equals one long convolution.
+- ``SendLaw``: the send's distance law. The EFX room rolloff (normally 0: constant), times the
+  revised theory of Barron and Lee within the listener's space (the reverberation a source excites
+  has decayed by 60 dB per c T60 of distance by the time its direct sound arrives), and spherical
+  spreading beyond it (sound from outside reaches the listener's space as it reaches the listener).
 
 Model and choices: research/models/reverb.md; spec: docs/spec/signal-model.md#reverb.
 """
@@ -168,6 +172,47 @@ class Environment:
     name: str  # preset name or file path
     ir: np.ndarray  # (n, 2) at the output rate
     room_rolloff: float  # rolloff factor of the send with distance (EFX room rolloff)
+    decay_s: float | None = None  # mid-frequency T60 (preset decay time, or measured on a file)
+
+
+LN1000 = 3.0 * math.log(10.0)
+"""Amplitude decay of a 60 dB reverberation, in nepers."""
+
+
+@dataclass(frozen=True)
+class SendLaw:
+    """The reverb send's gain over distance: ``room law (EFX) x factor``. With the revised law the
+    factor is ``exp(-ln(1000) d / (c T))`` up to the radius R (Barron and Lee: the reflected energy
+    a source excites decays from its emission on, and reaches a listener at d only after d / c) and
+    ``factor(R) R / d`` beyond (spherical spreading into the listener's space). The default R,
+    c T / ln(1000), is where both fall equally fast per log distance: the law is smooth there."""
+
+    room_rolloff: float
+    decay_s: float | None = None  # None: the EFX law alone
+    radius_m: float | None = None
+    speed_of_sound: float = SPEED_OF_SOUND
+
+    @property
+    def radius(self) -> float | None:
+        if self.decay_s is None:
+            return None
+        return self.radius_m if self.radius_m is not None else self.speed_of_sound * self.decay_s / LN1000
+
+    def factor(self, distance: np.ndarray) -> np.ndarray:
+        d = np.maximum(np.asarray(distance, dtype=np.float64), 0.0)
+        if self.decay_s is None:
+            return np.ones_like(d)
+        k = LN1000 / (self.speed_of_sound * self.decay_s)
+        r = self.radius
+        return np.where(d <= r, np.exp(-k * d), math.exp(-k * r) * r / np.maximum(d, 1e-9))
+
+
+def send_law(env: Environment | None, law: str, radius_m: float | None, speed_of_sound: float) -> SendLaw | None:
+    """The send law of a render (None without a reverb)."""
+    if env is None:
+        return None
+    decay = env.decay_s if law == "revised" else None
+    return SendLaw(env.room_rolloff, decay, radius_m, speed_of_sound)
 
 
 @functools.lru_cache(maxsize=4)
@@ -186,10 +231,16 @@ def environment(spec: str, rate: int, room_rolloff: float | None = None) -> Envi
         data = data[:, :2] if data.shape[1] >= 2 else np.repeat(data, 2, axis=1)
         if file_rate != rate:
             data = soxr.resample(data, file_rate, rate, quality="VHQ")
-        return Environment(str(path), np.ascontiguousarray(data), 0.0 if room_rolloff is None else room_rolloff)
+        try:
+            decay = rt60(data, rate, band=(500.0, 2000.0))
+        except (ValueError, TypeError, np.linalg.LinAlgError):  # too short or no decay to measure
+            decay = math.nan
+        return Environment(str(path), np.ascontiguousarray(data), 0.0 if room_rolloff is None else room_rolloff,
+                           decay if math.isfinite(decay) and decay > 0 else None)
     name = spec.lower()
     p = preset(name)
-    return Environment(name, _synthesized(name, rate), p["room_rolloff_factor"] if room_rolloff is None else room_rolloff)
+    return Environment(name, _synthesized(name, rate), p["room_rolloff_factor"] if room_rolloff is None else room_rolloff,
+                       decay_times(p)[1])
 
 
 class ReverbBus:

@@ -293,17 +293,14 @@ FIT_M = (141.0, 283.0, 566.0, 1131.0)
 
 
 def air_fits() -> list[tuple[float, list[tuple[float, float, float]]]]:
-    """Loss of the air-absorption cascades at the far field's rate and the full chain's (2x), and ISO."""
+    """Loss of the air-absorption filters at the far field's rate and the full chain's (2x), and ISO."""
     from soundstage.engine import filters
 
     f = np.array(FIT_HZ)
     iso = filters.iso9613_alpha(f, 20.0, 50.0)
 
     def loss(rate: int, d: float) -> np.ndarray:
-        cut = filters.AirAbsorption(20.0, 50.0, rate).cutoffs(np.array([d]))[0]
-        t = np.tan(np.pi * f / rate)
-        return -sum(10 * np.log10(1 + (t / np.tan(np.pi * min(c, 0.49 * rate) / rate)) ** 2)
-                    for c in cut if np.isfinite(c))
+        return -filters.AirAbsorption(20.0, 50.0, rate).loss_db(f, d)
 
     return [(d, list(zip(-iso * d, loss(48000, d), loss(96000, d)))) for d in FIT_M]
 

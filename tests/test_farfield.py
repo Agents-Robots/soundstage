@@ -65,7 +65,8 @@ def test_far_air_absorption_follows_the_band_at_its_distance(make_scene, noise, 
 @pytest.mark.parametrize("distance", [59.5, 84.1])
 def test_far_air_absorption_between_bands(make_scene, noise, tiers, distance):
     # halfway (in log distance) between two bands a voice is the sum of their filters, whose phases
-    # differ; sqrt(2) apart the sum stays within 0.5 dB (an octave apart: 0.7 and 1.0 dB low at 6.4 kHz)
+    # differ (up to 0.3 dB at 6.5 kHz), and the far field's air fit (48 kHz) differs from the full
+    # chain's (96 kHz) by up to 0.3 dB: sqrt(2) apart the tiers stay within 0.8 dB (E05)
     tiers(lambda i, c: False)
     settings = {**PLAIN, "air_absorption": 1.0}
     scene = make_scene([{"sample": noise}], [[0.0, distance, 0.0]], frame_end=150, settings=settings)
@@ -75,7 +76,7 @@ def test_far_air_absorption_between_bands(make_scene, noise, tiers, distance):
     _, pb = welch(b, RATE, nperseg=4096)
     band = (f > 100) & (f < 6500)
     diff = 10 * np.log10(pb[band] / pa[band])
-    assert np.abs(diff).max() < 0.5
+    assert np.abs(diff).max() < 0.8
 
 
 def test_far_field_beside_a_bed(make_scene, noise, tiers):

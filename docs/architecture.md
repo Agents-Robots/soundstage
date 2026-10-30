@@ -76,16 +76,16 @@ group, skip the quietest entries while their summed energy stays within the budg
 | `control.py` | The control grid (1 kHz) and interpolation of control-rate tracks to audio samples (linear for gains and filter parameters, Catmull-Rom for delays), never across a jump. |
 | `geometry.py` | Tracks: positions as cubic splines per piece (split at cuts and detected teleports), listener rotation as `RotationSpline` per segment; retarded-time solver (fixed point + Newton, audibility mask); the per-source `Path` on the control grid; camera-space vectors and derived angles (with `pan_reference = "screen"` the lateral sine through the lens, from the baked frame edges). |
 | `propagation.py` | Read delays per ear (Doppler factor, picture sync, ITD, playback-rate clamp per run between jumps); interpolator registry (`optimal2x`, `sinc`, `hermite4`); the `DelayLine` of emission samples. |
-| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted one-pole cascade, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear), each with its power response at control points for the culling estimate. |
+| `filters.py` | Gain laws (distance models, cone, rear), ISO 9613-1 air absorption and its fitted state-variable sections, Brown–Duda head-shadow coefficients, occlusion gain and fitted cutoff from visibility; stages `OnePoleStage`, `RearStage` (emission side), `GridOnePoleStage` (occlusion) and `ShelfStage` (per ear), each with its power response at control points for the culling estimate. |
 | `panning.py` | Pan-law registry (`sine`, `power`) and panner registry (`amplitude`, `hybrid`): per-ear delays (ITD), per-ear stages and pan gains from the path; later `binaural`. The screen-relative mapping of the lateral sine (`screen_lateral`). |
 | `kernels.py` | All per-sample loops as numba kernels (interpolators, one-pole cascades, first-order section, control-rate interpolation, the visibility follower) with reference implementations; the optimal-2× pre-emphasis design. |
 | `source.py` | The processing chain of one source or voice (ADR [0009](adr/0009-processing-chain.md)): emission chain → delay line → per-ear read and stages → gains and pan; held branches crossfaded at jumps; beds. |
-| `reverb.py` | EFX presets (`data/efx_presets.json`, from OpenAL Soft) synthesized into stereo impulse responses (seeded, cached), or IR files; `ReverbBus`: overlap-add convolution of the summed send per chunk; decay-time measurement for tests. |
+| `reverb.py` | EFX presets (`data/efx_presets.json`, from OpenAL Soft) synthesized into stereo impulse responses (seeded, cached), or IR files; `SendLaw`: the send's distance law (EFX room rolloff, revised theory, spreading); `ReverbBus`: overlap-add convolution of the summed send per chunk; decay-time measurement for tests. |
 | `mix.py` | Loudness normalization, true peak (BS.1770 interpolator), offline true-peak limiter returning a gain curve, stem file names, WAV writing (float or PCM24 with dither). |
 | `report.py` | Peak, true peak, loudness and loudness range for the master and each group, per-source statistics (including visibility), warnings. |
 | `plot.py` | Debug plot: distance, level, pan, delay, playback rate and visibility per source over frames (matplotlib, optional). |
 | `cull.py` | Culling in the render: the level estimate and upper bound per source and decision block from the baked positions (also used to rank sources for the far field), the skip before setup, the per-voice energy per decision block after setup, and the plan of which voice renders in which chunk. |
-| `farfield.py` | The far field (FR-56, ADR 0013): tiers per source and chunk (the `detail_voices` loudest of each group near), dry buffers shared per sample file, per-chunk geometry from the baked positions for many voices at once, per-group buses by distance band and occlusion with their filters, the crossfade law between tiers. |
+| `farfield.py` | The far field (FR-56, ADR 0013): tiers per source and chunk (the `detail_voices` loudest of each group near), dry buffers shared per sample file, per-chunk geometry from the baked positions for many voices at once, per-group buses by distance band and occlusion with their filters, the reverb send per distance band, the crossfade law between tiers. |
 | `render.py` | Orchestrates a render: control grid, scene geometry, reverb environment, culling, tiers, renderers per source (near sources: per run of near chunks, on a part of the grid), the far field, chunked rendering in a thread pool, summed in source and group order into group buses (deterministic), reverb bus per chunk, statistics. |
 
 ### `soundstage/cli.py`
@@ -132,8 +132,8 @@ emission sample a later read may still need (a cut to a farther camera reads fur
 
 ## Performance model
 
-Per source and output sample: the emission chain at the 2× rate (63-tap pre-emphasis, four
-one-poles for air absorption, the rear shelf), one 6-point read per ear, one first-order section
+Per source and output sample: the emission chain at the 2× rate (63-tap pre-emphasis, two
+state-variable sections for air absorption, the rear shelf), one 6-point read per ear, one first-order section
 per ear, gains. Geometry at 1 kHz is negligible. Sources render in parallel (numba kernels release
 the GIL). Measured with `tools/benchmark.py`: 50 sources × 5 minutes in 42 s on a 16-core desktop
 CPU, 63 s with occlusion on every source, a reverb and stems; a single thread 1.6× real time for 50

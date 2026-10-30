@@ -1,7 +1,8 @@
 # E05: air absorption (ISO 9613-1) and its filter
 
-**Questions.** Is the ISO 9613-1 implementation right? Which filter realizes it well enough, and is
-the fitted table smooth over distance?
+**Questions.** Is the ISO 9613-1 implementation right? Which filter realizes it well enough, also
+where the loss is large (distant sources), is the fitted table smooth over distance, how close are
+the far field's filters to the full chain's, and what does it cost?
 
 ## 1. ISO 9613-1 against ISO 9613-2 Table 2
 
@@ -21,35 +22,87 @@ Every value matches to the table's rounding (4.2 against 4.1 lies on the roundin
 nominal frequencies (4000, 8000 Hz) the formula gives up to 1.2 % more, which is the frequency
 difference, not an error.
 
-## 2. Filter realization
+## 2. Filter structures
 
-Largest error against ISO (20 °C, 50 % RH, 100 Hz–20 kHz) where the loss is below 20 dB, at the
-96 kHz emission rate:
+Largest error against ISO (20 °C, 50 % RH) over 40 distances from 1 m to 20 km, at the 96 kHz
+emission rate, each structure fitted per distance by least squares on the loss in dB: where the
+loss is below 20 dB and from 20 to 60 dB (50 Hz – 16 kHz), and how far the filter stays short of
+60 dB where ISO exceeds it (up to 0.45 of the rate; negative: more). "Spec one-pole" is the
+original spec's one-pole at the 3 dB point of `0.1 dB/m · (f/8 kHz)²`; "one-poles fitted below
+20 dB" is the first engine (free beyond 20 dB); the others are fitted to follow ISO below 60 dB and
+to reach at least 60 dB beyond. "Sections" are second-order low-passes, "with zeros" each with a
+pair of zeros on the frequency axis (an elliptic-type section):
 
-| Distance | Spec one-pole | Fit, 1 pole | 2 poles | 3 poles | 4 poles | Engine table (4) | Engine: min. loss above 20 dB region |
-|---|---|---|---|---|---|---|---|
-| 10 m | 0.2 | 0.04 | 0.03 | 0.03 | 0.03 | 0.04 | – |
-| 30 m | 6.1 | 3.92 | 1.34 | 0.13 | 0.10 | 0.09 | – |
-| 100 m | 10.8 | 7.21 | 4.21 | 2.73 | 1.85 | 1.89 | 18.5 |
-| 300 m | 11.2 | 6.91 | 4.06 | 2.67 | 1.84 | 1.90 | 18.3 |
-| 1 km | 11.9 | 5.40 | 3.11 | 2.60 | 2.40 | 2.49 | 17.7 |
-| 3 km | 13.4 | 2.60 | 1.31 | 1.20 | 1.16 | 1.05 | 18.8 |
+| structure | order | < 20 dB | 20-60 dB | short of 60 dB |
+|---|---|---|---|---|
+| spec one-pole | 1 | 18.3 | 53.0 | 53.6 |
+| one-poles fitted below 20 dB (earlier engine) | 4 | 2.3 | 29.0 | 30.8 |
+| one-poles | 4 | 7.3 | 14.7 | 14.2 |
+| one-poles | 8 | 3.8 | 8.6 | 7.9 |
+| one-poles | 12 | 3.0 | 5.6 | 6.0 |
+| sections | 4 | 4.8 | 11.0 | 10.8 |
+| sections | 6 | 0.7 | 4.7 | 4.6 |
+| sections | 12 | 0.4 | 0.1 | -0.3 |
+| sections with zeros | 2 | 11.1 | 19.3 | 19.0 |
+| sections with zeros (engine) | 4 | 0.9 | 1.3 | 0.8 |
+| sections with zeros | 6 | 0.6 | 0.3 | 0.0 |
 
-("Spec one-pole": the original spec's one-pole at the 3 dB point of `0.1 dB/m · (f/8 kHz)²`.)
+The loss in dB grows with `f²` and in proportion to the distance, so at long range ISO falls far
+faster per octave than a low order can (56 dB from 3.2 to 6.4 kHz at 1 km). One-poles and plain
+sections need order 12 to come close; the zeros let order 4 fall steeply enough and keep its floor
+below 60 dB. The engine uses two sections with zeros: the same order as the first engine, within
+0.9 dB below 20 dB of loss and 1.3 dB from 20 to 60 dB, where the first engine was up to 29 dB too
+bright.
 
 ![air absorption](../figures/e05_air_absorption.png)
 
-## 3. Smoothness
+## 3. The engine's table
 
-Largest response change between neighbouring distances 0.46 % apart, where the loss is below
-20 dB: 0.37 dB (at 7 km, 520 Hz). Individual cutoffs may jump where the fit changes how it uses its
-poles, but the response does not.
+Over 2000 distances from 1 m to 20 km (between the table's 112 fitted distances too), dB; the
+largest response change between neighbouring distances (0.46 % apart) where the loss is below 20
+and 60 dB; the time to fit the table (once per render and rate):
+
+| rate | < 20 dB (to 16 kHz) | 20-60 dB (to 16 kHz) | short of 60 dB | < 20 dB, 16-20 kHz | largest step 0.46 % apart (< 20 / 60 dB) | fit (s) |
+|---|---|---|---|---|---|---|
+| 48 kHz | 1.43 | 2.78 | 1.7 | 7.1 | 1.43 / 1.43 | 0.89 |
+| 96 kHz | 0.94 | 2.43 | 1.6 | 0.4 | 0.14 / 0.61 | 0.41 |
+
+The full chain filters at 96 kHz. The far field filters its buses at 48 kHz, at its fixed band
+distances: there the bilinear transform compresses the top octave, and above 16 kHz the fit takes
+up to 7 dB more than ISO where the loss is below 20 dB. The largest steps lie where they cannot be
+heard (at 59–60 dB of loss at 96 kHz, at 19.5 kHz at 48 kHz); below 20 dB of loss the 96 kHz
+response changes by at most 0.14 dB between neighbouring distances.
+
+## 4. Far field against the full chain
+
+A far voice between two distance bands is the sum of their filters (weights linear in log
+distance), whose phases differ. Largest difference where the loss is below 20 dB, 100 Hz – 6.5 kHz,
+25 m – 3 km:
+
+| band spacing | far - full chain | far - ISO | full chain - ISO |
+|---|---|---|---|
+| sqrt(2) (engine) | 0.73 | 0.91 | 0.94 |
+| octave | 2.16 | 1.75 | 0.94 |
+
+Bands √2 apart keep the tiers within 0.73 dB of each other and the far field within 0.91 dB of ISO;
+an octave apart, 2.2 dB.
+
+## 5. Cost
+
+The emission-side stage alone, a source moving from 10 m to 2 km over 60 s at 96 kHz: 12.8 ns per
+sample with four one-poles (per-sample table search and interpolation), 9.5 ns with two sections
+whose coefficients are stepped by per-sample increments (no division). A full-chain render of 48
+moving sources over 20 s on one worker: 12.65 s with air absorption, 11.82 s without (+7.0 %).
+Interpolating the sections' `h = 1/(1 + g k)` with the other coefficients instead of computing it
+keeps `h (1 + g k)` within 4.6·10⁻⁸ of 1.
 
 ## Conclusion
 
-The implementation is correct; four one-poles fitted per distance stay within about 2.5 dB of ISO
-wherever the sound is less than 20 dB down and keep attenuating beyond; the table is smooth. The
-original model was off by 6–13 dB from 30 m on ([air absorption](../models/air-absorption.md)).
+The implementation of ISO 9613-1 is correct. Two second-order sections with a pair of zeros each,
+fitted per distance to follow ISO down to 60 dB of loss, stay within 0.94 dB of it where the loss is
+below 20 dB and 2.4 dB down to 60 dB, at the same order and a quarter less time than the four
+one-poles they replace, which followed ISO only to 20 dB and left distant sources up to 29 dB too
+bright beyond ([air absorption](../models/air-absorption.md), issue #36).
 
 ## Reproduce
 

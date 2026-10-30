@@ -1,12 +1,12 @@
 """Gain laws, cutoff laws, air absorption and the audio-rate filter stages.
 
 - Gains: distance models (``soundstage.levels``, shared with the bake), directivity cone, rear cue.
-- Cutoffs: rear cue; air absorption from ISO 9613-1, realized as four cascaded one-pole low-passes
-  whose cutoffs are fitted per distance once per render (``AirAbsorption``).
+- Cutoffs: rear cue; air absorption from ISO 9613-1, realized as two state-variable sections with a
+  pair of zeros each, fitted per distance once per render (``AirAbsorption``).
 - Head shadow: Brown-Duda first-order shelf coefficients per ear.
-- Stages (ADR 0009): ``OnePoleStage`` (emission side, cascade of TPT one-poles with per-sample
-  interpolated gains) and ``ShelfStage`` (reception side, per ear). Both keep their state between
-  calls to ``process``.
+- Stages (ADR 0009): ``AirStage`` (emission side, the air sections with per-sample interpolated
+  parameters), ``RearStage``, ``GridOnePoleStage`` and ``ShelfStage`` (reception side, per ear). All
+  keep their state between calls to ``process``.
 
 Spec: docs/spec/signal-model.md (distance gain, directivity cone, air absorption, panning, rear cue).
 """
@@ -71,61 +71,140 @@ def iso9613_alpha(f: np.ndarray, temperature_c: float = 20.0, humidity_pct: floa
     )
 
 
-AIR_POLES = 4
-AIR_FIT_MAX_LOSS_DB = 20.0
+AIR_SECTIONS = 2
+"""Second-order sections of the air-absorption filter (order 4)."""
+AIR_FIT_MAX_LOSS_DB = 60.0
+"""Below this loss the fit follows ISO 9613-1; beyond it the filter only has to attenuate at least as much."""
+AIR_FIT_HZ = (50.0, 20000.0)
 AIR_DISTANCES = np.geomspace(0.05, 20000.0, 112)
 AIR_BYPASS_DB = 0.05  # loss at 20 kHz below this: the stage passes the signal unchanged
+AIR_SMOOTH = 0.3
+"""Weight (dB per unit of log parameter) that keeps each distance's fit near the previous one's."""
+AIR_DAMPING = (0.3, 2.0)
+"""Bounds of the sections' damping R = 1/(2Q)."""
+IDENTITY = (1.0, 1.0, 2.0, 1.0)
+"""Section parameters (g, R, c, m) that pass the signal unchanged."""
 
 
-def _onepole_loss_db(f: np.ndarray, fc: np.ndarray, rate: float) -> np.ndarray:
-    """Loss in dB of bilinear one-pole low-passes (summed over the cutoffs ``fc``)."""
-    w = np.tan(np.pi * f[:, None] / rate) / np.tan(np.pi * fc[None, :] / rate)
-    return (10.0 * np.log10(1.0 + w * w)).sum(axis=1)
+def section_power(t: np.ndarray, p: np.ndarray) -> np.ndarray:
+    """|H|^2 of TPT state-variable sections ``y = lp + c bp + m hp`` with parameters p (..., 4) =
+    (g, R, c, m) at warped frequencies t = tan(pi f / fs) (B,): the bilinear transform of
+    H(s) = (1 + c s + m s^2) / (1 + 2R s + s^2), s in units of the prewarped corner g."""
+    g, r, c, m = (p[..., i, None] for i in range(4))
+    x = t / g
+    num = (1.0 - m * x * x) ** 2 + (c * x) ** 2
+    den = (1.0 - x * x) ** 2 + (2.0 * r * x) ** 2
+    return num / den
+
+
+def _air_loss(v: np.ndarray, t: np.ndarray, jac: bool) -> tuple[np.ndarray, np.ndarray | None]:
+    """Loss in dB (B,) of AIR_SECTIONS low-pass sections with a pair of zeros, parameters
+    v = (log g, log R, log z) per section (zeros at z times the corner, m = 1/z^2, c = 0), and its
+    Jacobian (B, 3 AIR_SECTIONS)."""
+    k = 10.0 / math.log(10.0)
+    loss = np.zeros(len(t))
+    out = np.empty((len(t), len(v))) if jac else None
+    for s in range(len(v) // 3):
+        g, r, m = math.exp(v[3 * s]), math.exp(v[3 * s + 1]), math.exp(-2.0 * v[3 * s + 2])
+        x = t / g
+        x2 = x * x
+        den = (1.0 - x2) ** 2 + 4.0 * r * r * x2
+        e = 1.0 - m * x2
+        e = np.where(np.abs(e) < 1e-9, 1e-9, e)
+        loss += k * (np.log(den) - 2.0 * np.log(np.abs(e)))
+        if jac:
+            ddx = (-4.0 * x * (1.0 - x2) + 8.0 * r * r * x) / den  # d log(den) / dx
+            out[:, 3 * s] = k * (-x * ddx - 4.0 * m * x2 / e)  # dx/dlog g = -x
+            out[:, 3 * s + 1] = k * 8.0 * r * r * x2 / den
+            out[:, 3 * s + 2] = -4.0 * k * m * x2 / e  # dm/dlog z = -2m
+    return loss, out
 
 
 @functools.lru_cache(maxsize=8)
 def _air_table(temperature_c: float, humidity_pct: float, rate: int) -> np.ndarray:
-    """Cutoffs (len(AIR_DISTANCES), AIR_POLES) in Hz; inf where the stage is bypassed."""
-    f = np.geomspace(100.0, min(20000.0, 0.45 * rate), 200)
+    """Section parameters (len(AIR_DISTANCES), AIR_SECTIONS, 4) as ``section_power``; NaN rows where the
+    stage is bypassed. Fit per distance (least squares in dB): within ``AIR_FIT_HZ`` the loss follows
+    ISO 9613-1 where it is below ``AIR_FIT_MAX_LOSS_DB``; elsewhere, up to 0.45 of the rate (what a
+    Doppler shift could bring down into the audible range), it must reach at least that loss."""
+    f = np.geomspace(AIR_FIT_HZ[0], 0.45 * rate, 240)
+    t = np.tan(np.pi * f / rate)
+    inside = f <= AIR_FIT_HZ[1]
     alpha = iso9613_alpha(f, temperature_c, humidity_pct)
-    lo, hi = math.log(20.0), math.log(0.49 * rate)
-    x = np.log(np.full(AIR_POLES, 0.45 * rate)) - np.linspace(0.0, 0.3, AIR_POLES)
-    table = np.full((len(AIR_DISTANCES), AIR_POLES), np.inf)
+    lo = np.tile([math.log(math.tan(math.pi * 20.0 / rate)), math.log(AIR_DAMPING[0]), math.log(1.02)], AIR_SECTIONS)
+    hi = np.tile([math.log(math.tan(math.pi * 0.49)), math.log(AIR_DAMPING[1]), math.log(60.0)], AIR_SECTIONS)
+    x = np.tile([math.log(math.tan(math.pi * 0.4)), math.log(0.7), math.log(3.0)], AIR_SECTIONS)
+    x[0::3] -= 0.2 * np.arange(AIR_SECTIONS)
+    table = np.full((len(AIR_DISTANCES), AIR_SECTIONS, 4), np.nan)
+    n_v = 3 * AIR_SECTIONS
     for i, d in enumerate(AIR_DISTANCES):
         target = alpha * d
-        if target[-1] < AIR_BYPASS_DB:
+        if target[inside][-1] < AIR_BYPASS_DB:
             continue
-        m = target < AIR_FIT_MAX_LOSS_DB
-        fit = least_squares(lambda v: _onepole_loss_db(f[m], np.exp(v), rate) - target[m], np.clip(x, lo, hi),
-                            bounds=(lo, hi))
-        x = np.sort(fit.x)  # warm start for the next distance keeps the cutoffs smooth
-        table[i] = np.exp(x)
+        follow = inside & (target < AIR_FIT_MAX_LOSS_DB)
+        floor = np.minimum(target, AIR_FIT_MAX_LOSS_DB)
+        prev = x.copy()
+
+        def res(v):
+            loss, _ = _air_loss(v, t, False)
+            return np.concatenate([np.where(follow, loss - target, np.minimum(loss - floor, 0.0)),
+                                   AIR_SMOOTH * (v - prev)])
+
+        def jac(v):
+            loss, j = _air_loss(v, t, True)
+            j = np.where((follow | (loss < floor))[:, None], j, 0.0)
+            return np.vstack([j, AIR_SMOOTH * np.eye(n_v)])
+
+        x = least_squares(res, np.clip(x, lo + 1e-9, hi - 1e-9), jac=jac, bounds=(lo, hi)).x
+        x = x.reshape(-1, 3)[np.argsort(x[0::3])].ravel()  # sections by corner: warm starts stay on one path
+        g, r, z = np.exp(x.reshape(-1, 3)).T
+        table[i] = np.stack([g, r, np.zeros(AIR_SECTIONS), 1.0 / (z * z)], axis=1)
     return table
 
 
 class AirAbsorption:
-    """Cutoffs of the air-absorption cascade as a function of propagation distance."""
+    """Parameters of the air-absorption sections as a function of propagation distance."""
 
     def __init__(self, temperature_c: float, humidity_pct: float, rate: int, scale: float = 1.0):
-        self.scale = scale
+        self.scale, self.rate = scale, rate
         self.table = _air_table(float(temperature_c), float(humidity_pct), int(rate))
 
-    def cutoffs(self, distance: np.ndarray) -> np.ndarray:
-        """(n, AIR_POLES) cutoffs in Hz for distances in metres (inf = no filtering)."""
+    def params(self, distance: np.ndarray) -> np.ndarray:
+        """(n, AIR_SECTIONS, 4) section parameters for distances in metres, interpolated in log
+        distance (log corner, damping, zeros); ``IDENTITY`` sections where the loss is negligible,
+        with the first fitted denominator, so that a track passing that distance changes smoothly."""
         d = np.asarray(distance, dtype=np.float64) * self.scale
-        out = np.full((len(d), AIR_POLES), np.inf)
-        if self.scale <= 0:
+        out = np.empty((len(d), AIR_SECTIONS, 4))
+        out[:] = IDENTITY
+        finite = ~np.isnan(self.table[:, 0, 0])
+        if self.scale <= 0 or not finite.any():
             return out
+        grid = np.log(AIR_DISTANCES[finite])
+        tab = self.table[finite]
         logd = np.log(np.clip(d, AIR_DISTANCES[0], AIR_DISTANCES[-1]))
-        grid = np.log(AIR_DISTANCES)
-        finite = np.isfinite(self.table[:, 0])
-        if not finite.any():
-            return out
-        first = int(np.argmax(finite))
-        active = logd >= grid[first]
-        for j in range(AIR_POLES):
-            out[active, j] = np.exp(np.interp(logd[active], grid[finite], np.log(self.table[finite, j])))
+        active = logd >= grid[0]
+        u = np.clip(logd[active], grid[0], grid[-1])
+        for s in range(AIR_SECTIONS):
+            out[:, s, 0] = tab[0, s, 0]
+            out[:, s, 1] = tab[0, s, 1]
+            out[:, s, 2] = 2.0 * tab[0, s, 1]
+            out[active, s, 0] = np.exp(np.interp(u, grid, np.log(tab[:, s, 0])))
+            out[active, s, 1] = np.interp(u, grid, tab[:, s, 1])
+            out[active, s, 2] = 0.0
+            out[active, s, 3] = np.exp(np.interp(u, grid, np.log(tab[:, s, 3])))
         return out
+
+    def bypass(self, distance: np.ndarray) -> bool:
+        """Whether every distance is closer than the first fitted one (the stage passes the signal)."""
+        finite = ~np.isnan(self.table[:, 0, 0])
+        if self.scale <= 0 or not finite.any():
+            return True
+        return bool(np.all(np.asarray(distance) * self.scale < AIR_DISTANCES[finite][0]))
+
+    def loss_db(self, f: np.ndarray, distance: float) -> np.ndarray:
+        """The designed loss in dB at frequencies f (B,) for one distance."""
+        p = self.params(np.array([distance]))[0]
+        t = np.tan(np.pi * np.minimum(np.asarray(f, dtype=np.float64), 0.49 * self.rate) / self.rate)
+        return -10.0 * np.log10(section_power(t, p).prod(axis=0))
 
 
 # ---------------------------------------------------------------------------- head shadow
@@ -171,26 +250,30 @@ def _warped(freqs_hz: np.ndarray, rate: float) -> np.ndarray:
     return np.tan(np.pi * np.minimum(np.asarray(freqs_hz, dtype=np.float64), 0.49 * rate) / rate)
 
 
-class OnePoleStage:
-    """Emission-side cascade of TPT one-poles; parameters given at (monotonic) emission times."""
+class AirStage:
+    """Emission-side air absorption: state-variable sections whose parameters (n_ctl, S, 4) are given
+    at (monotonic) emission times."""
 
-    def __init__(self, times: np.ndarray, cutoffs: np.ndarray, rate: int):
+    def __init__(self, times: np.ndarray, params: np.ndarray, rate: int, bypass: bool = False):
         self.rate = rate
         self.times = times
-        self.gains = np.ascontiguousarray(tpt_gain(cutoffs, rate))  # (n_ctl, poles)
-        self.state = np.zeros(self.gains.shape[1])
-        self.bypass = bool(np.all(self.gains >= 1.0))
+        self.params = np.ascontiguousarray(params)
+        self.coef = np.ascontiguousarray(kernels.svf_coefficients(self.params))
+        self.state = np.zeros((params.shape[1], 2))
+        self.bypass = bypass
 
     def process(self, x: np.ndarray, a: int, b: int) -> np.ndarray:
         """Emission samples [a, b) (index / rate = emission time in seconds)."""
         if self.bypass:
             return x
-        return kernels.onepole_cascade_track(np.ascontiguousarray(x), a, self.rate, self.times, self.gains,
-                                             self.state, np.empty(b - a))
+        return kernels.svf_cascade_track(np.ascontiguousarray(x), a, self.rate, self.times, self.coef,
+                                         self.state, np.empty(b - a))
 
     def power_response(self, freqs_hz: np.ndarray, idx: np.ndarray) -> np.ndarray:
         """|H|^2 (len(idx), B) at control points ``idx`` (for the culling estimate)."""
-        return _onepole_power(self.gains[idx], _warped(freqs_hz, self.rate)).prod(axis=1)
+        if self.bypass:
+            return np.ones((len(idx), len(freqs_hz)))
+        return section_power(_warped(freqs_hz, self.rate), self.params[idx]).prod(axis=1)
 
 
 class RearStage:

@@ -37,6 +37,7 @@ PAN_LAWS = ("sine", "power")
 QUALITIES = ("standard", "high")
 OCCLUSION_MODES = ("obstruction", "occlusion")
 PAN_REFERENCES = ("camera", "screen")
+REVERB_SEND_LAWS = ("revised", "efx")
 
 SOURCE_KEYS: dict[str, Field] = {
     "sample": Field("str", REQUIRED),
@@ -103,6 +104,8 @@ SCENE_SETTINGS: dict[str, Field] = {
     "reverb": Field("str", None, nullable=True, phase=3),  # EFX preset name or impulse-response file
     "reverb_send_db": Field("float", 0.0, phase=3),
     "reverb_room_rolloff": Field("float", None, min=0.0, nullable=True, phase=3),  # None: the preset's
+    "reverb_send_law": Field("choice", "revised", choices=REVERB_SEND_LAWS, phase=3),  # efx: room rolloff alone
+    "reverb_radius_m": Field("float", None, min=0.0, nullable=True, phase=3),  # None: c T60 / ln(1000)
     "read_speakers": Field("bool", True, phase=3),
     "occlusion_rate": Field("float", 10.0, min=0.0, phase=3),  # visibility samples per second; 0: none
     "occluder_min_size": Field("float", 2.0, min=0.0, phase=3),  # m: smaller objects do not occlude

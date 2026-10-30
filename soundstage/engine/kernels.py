@@ -99,8 +99,8 @@ def read_optimal2x(buf, pos, out):
 
 
 @_jit
-def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands, ctl_start, step, a,
-               i0, i1, buses, send, peaks, bus, w_start, w_step):
+def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, frac, n_bands, ctl_start, step,
+               a, i0, i1, buses, sends, peaks, bus, w_start, w_step, sbus, s_start, s_step):
     """Samples [i0, i1) of one far voice (see ``far_mix``)."""
     c = OPT2X_6P5O
     count = e_ctl.shape[0]
@@ -137,8 +137,30 @@ def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo,
                 bus[mm], w_start[mm], w_step[mm] = bus[r], w_start[r], w_step[r]
                 mm += 1
         m = mm
-        has_send = gs[k] != 0.0 or gs[k + 1] != 0.0
-        if m == 0 and not has_send:
+        # the send: two bands at each end, merged likewise
+        ms = 0
+        if gs[k] != 0.0 or gs[k + 1] != 0.0:
+            for side in range(2):
+                kk = k + side
+                gv = gs[kk]
+                for q in range(2):
+                    bb = lo[kk] + q
+                    wv = gv * (frac[kk] if q == 1 else 1.0 - frac[kk])
+                    found = -1
+                    for r in range(ms):
+                        if sbus[r] == bb:
+                            found = r
+                    if found < 0:
+                        sbus[ms] = bb
+                        s_start[ms] = 0.0
+                        s_step[ms] = 0.0
+                        found = ms
+                        ms += 1
+                    if side == 0:
+                        s_start[found] += wv
+                    else:
+                        s_step[found] += wv
+        if m == 0 and ms == 0:
             i = end
             continue
         f0 = (a + i - ctl_start) / step - k
@@ -147,10 +169,14 @@ def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo,
             w_end = w_step[r]
             w_step[r] = (w_end - w_start[r]) * inv
             w_start[r] = w_start[r] + (w_end - w_start[r]) * f0
+        for r in range(ms):
+            w_end = s_step[r]
+            s_step[r] = (w_end - s_start[r]) * inv
+            s_start[r] = s_start[r] + (w_end - s_start[r]) * f0
         de = (e_ctl[k + 1] - e_ctl[k]) * inv
         e = e_ctl[k] + (e_ctl[k + 1] - e_ctl[k]) * f0
-        dl, dr, ds = (gl[k + 1] - gl[k]) * inv, (gr[k + 1] - gr[k]) * inv, (gs[k + 1] - gs[k]) * inv
-        vl, vr, vs = gl[k] + (gl[k + 1] - gl[k]) * f0, gr[k] + (gr[k + 1] - gr[k]) * f0, gs[k] + (gs[k + 1] - gs[k]) * f0
+        dl, dr = (gl[k + 1] - gl[k]) * inv, (gr[k + 1] - gr[k]) * inv
+        vl, vr = gl[k] + (gl[k + 1] - gl[k]) * f0, gr[k] + (gr[k + 1] - gr[k]) * f0
         u = (e - origin) * pitch + phase
         du = de * pitch
         if period > 0:
@@ -166,8 +192,9 @@ def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo,
                 x = _optimal2x_at(buf, u, c)
             else:
                 x = 0.0
-            if has_send:
-                send[j] += x * vs
+            for r in range(ms):
+                sends[sbus[r], j] += x * s_start[r]
+                s_start[r] += s_step[r]
             if m > 0:
                 xl, xr = x * vl, x * vr
                 for r in range(m):
@@ -184,21 +211,22 @@ def _far_range(buf, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo,
                     u += period
             vl += dl
             vr += dr
-            vs += ds
         peaks[k] = peak
         i = end
 
 
 @_jit
-def far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands,
-            ctl_start, step, a, block, buses, send, peaks):
-    """Far-field voices added into ``buses`` (n_bus, n, 2) and ``send`` (n,) over output samples
-    [a, a + n), in blocks of ``block`` samples (every voice per block, so the buses stay in cache).
+def far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, frac, n_bands,
+            ctl_start, step, a, block, buses, sends, peaks):
+    """Far-field voices added into ``buses`` (n_bus, n, 2) and the send buses ``sends`` (n_bands, n)
+    over output samples [a, a + n), in blocks of ``block`` samples (every voice per block, so the
+    buses stay in cache).
 
     Per voice v: its buffer ``bufs[buf_start[v]: buf_start[v] + buf_len[v]]``; control values every
     ``step`` output samples from ``ctl_start`` (linear in between): emission index ``e_ctl[v]``,
     gains ``gl``, ``gr``, ``gs``, the lower distance band ``lo[v]`` and the weights ``wts[v]``
-    (count, 4) of the buses lo, lo + 1 (open) and n_bands + lo, n_bands + lo + 1 (occluded).
+    (count, 4) of the buses lo, lo + 1 (open) and n_bands + lo, n_bands + lo + 1 (occluded); the send
+    ``gs`` goes to the send buses lo and lo + 1 with the weights 1 - ``frac[v]`` and ``frac[v]``.
     Buffer position at emission index e: ``u = (e - origin) * pitch + phase``; a loop
     (``period`` > 0) reads ``offset + (u mod period)`` from a buffer padded with the cycle's ends, a
     one-shot reads ``u`` directly (zero outside). ``peaks[v]`` (count,) gets the largest
@@ -207,13 +235,16 @@ def far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ct
     bus = np.empty(8, np.int64)
     w_start = np.empty(8)
     w_step = np.empty(8)
+    sbus = np.empty(4, np.int64)
+    s_start = np.empty(4)
+    s_step = np.empty(4)
     for b0 in range(0, n, block):
         b1 = min(n, b0 + block)
         for v in range(e_ctl.shape[0]):
             buf = bufs[buf_start[v]: buf_start[v] + buf_len[v]]
             _far_range(buf, period[v], offset[v], origin[v], pitch[v], phase[v], e_ctl[v], gl[v], gr[v], gs[v],
-                       lo[v], wts[v], n_bands, ctl_start, step, a, b0, b1, buses, send, peaks[v], bus, w_start,
-                       w_step)
+                       lo[v], wts[v], frac[v], n_bands, ctl_start, step, a, b0, b1, buses, sends, peaks[v], bus,
+                       w_start, w_step, sbus, s_start, s_step)
 
 
 @_jit
@@ -308,6 +339,91 @@ def onepole_cascade(x, gains, state, out):
     return out
 
 
+def svf_coefficients(params: np.ndarray) -> np.ndarray:
+    """(g, R, c, m) (..., 4) -> what the TPT state-variable kernels use per section (..., 5):
+    g, k = 2R + g, h = 1 / (1 + g k), c, m."""
+    g, r, c, m = (params[..., i] for i in range(4))
+    k = 2.0 * r + g
+    return np.stack([g, k, 1.0 / (1.0 + g * k), c, m], axis=-1)
+
+
+@_jit
+def _svf(v, g, k, h, c, m, state, s):
+    """One sample of TPT state-variable section ``s`` (Zavalishin): y = lp + c bp + m hp."""
+    s1, s2 = state[s, 0], state[s, 1]
+    hp = (v - k * s1 - s2) * h
+    v1 = g * hp
+    bp = v1 + s1
+    v2 = g * bp
+    lp = v2 + s2
+    state[s, 0] = bp + v1
+    state[s, 1] = lp + v2
+    return lp + c * bp + m * hp
+
+
+@_jit
+def svf_cascade(x, coef, state, out):
+    """Cascade of TPT state-variable sections with fixed coefficients ``coef`` (S, 5)
+    (``svf_coefficients``); ``state`` (S, 2)."""
+    n_sec = coef.shape[0]
+    for i in range(x.shape[0]):
+        v = x[i]
+        for s in range(n_sec):
+            v = _svf(v, coef[s, 0], coef[s, 1], coef[s, 2], coef[s, 3], coef[s, 4], state, s)
+        out[i] = v
+    return out
+
+
+@_jit
+def svf_cascade_track(x, a, rate, times, coef, state, out):
+    """Cascade of TPT state-variable sections whose coefficients (n_ctl, S, 5) (``svf_coefficients``)
+    are given at increasing ``times`` (s) and interpolated linearly at the sample times (a + i) / rate
+    (stepped per sample between two control points); held outside ``times``."""
+    n, n_sec = times.shape[0], coef.shape[1]
+    cur = np.empty((n_sec, 5))
+    step = np.empty((n_sec, 5))
+    j = 0
+    i = 0
+    total = x.shape[0]
+    while i < total:
+        tt = (a + i) / rate
+        if tt <= times[0] or tt >= times[n - 1]:
+            jj = 0 if tt <= times[0] else n - 1
+            end = i + 1
+            while end < total and ((a + end) / rate <= times[0]) == (tt <= times[0]) and \
+                    ((a + end) / rate >= times[n - 1]) == (tt >= times[n - 1]):
+                end += 1
+            for s in range(n_sec):
+                for q in range(5):
+                    cur[s, q] = coef[jj, s, q]
+                    step[s, q] = 0.0
+        else:
+            if times[j] > tt:
+                j = 0
+            while times[j + 1] < tt:
+                j += 1
+            w = times[j + 1] - times[j]
+            f = 0.0 if w <= 0 else (tt - times[j]) / w
+            df = 0.0 if w <= 0 else 1.0 / (w * rate)
+            end = i + 1
+            while end < total and (a + end) / rate <= times[j + 1]:
+                end += 1
+            for s in range(n_sec):
+                for q in range(5):
+                    d = coef[j + 1, s, q] - coef[j, s, q]
+                    cur[s, q] = coef[j, s, q] + d * f
+                    step[s, q] = d * df
+        for ii in range(i, end):
+            v = x[ii]
+            for s in range(n_sec):
+                v = _svf(v, cur[s, 0], cur[s, 1], cur[s, 2], cur[s, 3], cur[s, 4], state, s)
+                for q in range(5):
+                    cur[s, q] += step[s, q]
+            out[ii] = v
+        i = end
+    return out
+
+
 @_jit
 def first_order(x, b0, b1, a1, state, out):
     """y[n] = b0[n] x[n] + b1[n] x[n-1] - a1 y[n-1]; ``state`` = [x[n-1], y[n-1]]."""
@@ -356,36 +472,6 @@ def control_cubic(values, jump, start, step, a, out):
 
 
 @_jit
-def onepole_cascade_track(x, a, rate, times, gains, state, out):
-    """TPT one-pole cascade whose gains (n_ctl, P) are given at increasing ``times`` (s) and
-    interpolated linearly at the sample times (a + i) / rate."""
-    n, n_poles = times.shape[0], gains.shape[1]
-    j = 0
-    for i in range(x.shape[0]):
-        tt = (a + i) / rate
-        if tt <= times[0]:
-            j, f = 0, 0.0
-        elif tt >= times[n - 1]:
-            j, f = n - 2, 1.0
-        else:
-            if times[j] > tt:
-                j = 0
-            while times[j + 1] < tt:
-                j += 1
-            w = times[j + 1] - times[j]
-            f = 0.0 if w <= 0 else (tt - times[j]) / w
-        v = x[i]
-        for p in range(n_poles):
-            g = gains[j, p] + (gains[j + 1, p] - gains[j, p]) * f
-            u = g * (v - state[p])
-            y = u + state[p]
-            state[p] = y + u
-            v = y
-        out[i] = v
-    return out
-
-
-@_jit
 def rear_shelf_track(x, a, rate, times, weight, gain, state, out):
     """y = x + w (LP(x) - x) with a TPT one-pole LP (fixed ``gain``) and w interpolated at
     the sample times from ``weight`` given at increasing ``times``."""
@@ -430,8 +516,8 @@ def warmup() -> None:
     read_optimal2x(buf, pos, np.empty(2))
     far_mix(buf, np.zeros(1, np.int64), np.full(1, 16, np.int64), np.full(1, 8.0), np.full(1, 4.0), np.zeros(1),
             np.ones(1), np.zeros(1), np.zeros((1, 2)), np.ones((1, 2)), np.ones((1, 2)), np.ones((1, 2)),
-            np.zeros((1, 2), np.int64), np.ones((1, 2, 4)), 2, 0, 48, 0, 1024, np.zeros((4, 2, 2)), np.zeros(2),
-            np.zeros((1, 2)))
+            np.zeros((1, 2), np.int64), np.ones((1, 2, 4)), np.zeros((1, 2)), 2, 0, 48, 0, 1024,
+            np.zeros((4, 2, 2)), np.zeros((2, 2)), np.zeros((1, 2)))
     read_hermite4(buf, pos, np.empty(2))
     read_sinc(buf, pos, one, sinc_table(2, 4), 2, 4, SINC_CUTOFF, np.empty(2))
     onepole_cascade(buf[:2], np.ones((2, 1)), np.zeros(1), np.empty(2))
@@ -439,7 +525,8 @@ def warmup() -> None:
     flags = np.zeros(4, dtype=np.uint8)
     control_linear(buf[:2], flags, 0, 48, 0, np.empty(2))
     control_cubic(buf[:2], flags, 0, 48, 0, np.empty(2))
-    onepole_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1)), np.zeros(1), np.empty(2))
+    svf_cascade(buf[:2], np.ones((1, 5)), np.zeros((1, 2)), np.empty(2))
+    svf_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1, 5)), np.zeros((1, 2)), np.empty(2))
     rear_shelf_track(buf[:2], 0, 48000, np.arange(2.0), one, 0.5, np.zeros(1), np.empty(2))
     follow(one, 0.5, 0.5, np.empty(2))
 
@@ -464,12 +551,13 @@ def ref_read_optimal2x(buf: np.ndarray, pos: np.ndarray) -> np.ndarray:
     return np.polyval(coeffs[::-1], z)
 
 
-def ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts,
+def ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, frac,
                 n_bands: int, ctl_start: int, step: int, a: int, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """``far_mix`` per output sample with numpy: control values interpolated at every sample, the
-    weights summed per bus at the control points. Returns buses (2 n_bands, n, 2), send and peaks."""
+    weights summed per bus at the control points. Returns buses (2 n_bands, n, 2), send buses
+    (n_bands, n) and peaks."""
     count = e_ctl.shape[1]
-    buses, send, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros(n), np.zeros(e_ctl.shape)
+    buses, sends, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros((n_bands, n)), np.zeros(e_ctl.shape)
     fpos = (a + np.arange(n) - ctl_start) / step
     k = np.clip(np.floor(fpos).astype(np.int64), 0, count - 2)
     f = fpos - k
@@ -479,7 +567,10 @@ def ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, 
         buf = bufs[buf_start[v]: buf_start[v] + buf_len[v]]
         u = (lerp(e_ctl[v]) - origin[v]) * pitch[v] + phase[v]
         x = ref_read_optimal2x(buf, offset[v] + np.mod(u, period[v]) if period[v] > 0 else u)
-        send += x * lerp(gs[v])
+        ws = np.zeros((n_bands, count))
+        np.add.at(ws, (lo[v], np.arange(count)), gs[v] * (1.0 - frac[v]))
+        np.add.at(ws, (lo[v] + 1, np.arange(count)), gs[v] * frac[v])
+        sends += x * (ws[:, k] + (ws[:, k + 1] - ws[:, k]) * f)
         w = np.zeros((2 * n_bands, count))
         for q in range(4):
             np.add.at(w, (lo[v] + (q & 1) + (n_bands if q >= 2 else 0), np.arange(count)), wts[v][:, q])
@@ -489,7 +580,7 @@ def ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, 
         buses[:, :, 1] += xr * wb
         on = (w[:, k] != 0).any(axis=0) | (w[:, k + 1] != 0).any(axis=0)
         np.maximum.at(peaks[v], k[on], np.maximum(np.abs(xl), np.abs(xr))[on])
-    return buses, send, peaks
+    return buses, sends, peaks
 
 
 def ref_read_hermite4(buf: np.ndarray, pos: np.ndarray) -> np.ndarray:
@@ -523,6 +614,26 @@ def ref_onepole_cascade(x: np.ndarray, gains: np.ndarray, state: np.ndarray) -> 
             g = gains[i, j] / (1.0 - gains[i, j])  # back from G to g = tan(pi fc / fs)
             y = (g * v + state[j]) / (1.0 + g)
             state[j] = 2.0 * y - state[j]
+            v = y
+        out[i] = v
+    return out
+
+
+def ref_svf_cascade(x: np.ndarray, params: np.ndarray) -> np.ndarray:
+    """``svf_cascade`` with per-sample parameters (n, S, 4) from rest, written as the bilinear transform of
+    each section's H(s) = (1 + c s + m s^2) / (1 + 2R s + s^2) (direct form I per sample, so the
+    state is the last two inputs and outputs, not the integrators'); equal for constant parameters."""
+    out = np.empty(len(x))
+    hist = [[0.0, 0.0, 0.0, 0.0] for _ in range(params.shape[1])]  # x1, x2, y1, y2 per section
+    for i, v in enumerate(x):
+        for s in range(params.shape[1]):
+            g, r, c, m = params[i, s]
+            k = 1.0 / g  # s = k (1 - z^-1) / (1 + z^-1)
+            b = [1.0 + c * k + m * k * k, 2.0 - 2.0 * m * k * k, 1.0 - c * k + m * k * k]
+            a = [1.0 + 2.0 * r * k + k * k, 2.0 - 2.0 * k * k, 1.0 - 2.0 * r * k + k * k]
+            x1, x2, y1, y2 = hist[s]
+            y = (b[0] * v + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2) / a[0]
+            hist[s] = [v, x1, y, y1]
             v = y
         out[i] = v
     return out

@@ -157,8 +157,13 @@ room (behind a closed door: its reverb is muffled too). Scene: `occlusion_gain_d
 | Underwater | `underwater` |
 
 All spatial sources send to it (0 dB by default); `reverb_send_db` per source or scene changes the
-amount. The reverberant level stays constant with distance while the direct sound falls, which is
-what makes far sources sound far.
+amount. The reverberant level falls more slowly with distance than the direct sound, which is what
+makes far sources sound far: within the listener's space by 60 dB per `c·T60` of distance (city
+streets: −3 dB at 30 m, −10 dB at 100 m), beyond its radius (`c·T60 / ln 1000`, 89 m for city
+streets) 6 dB per doubling like the direct sound, so thousands of distant cars do not fill the
+reverb. `reverb_radius_m` sets that radius (any other than the default gives distant sources less
+reverb); `reverb_send_law=efx` keeps the reverberant level constant at any distance (the classical
+room, as in game engines' EFX presets).
 
 ## 3. Bake
 

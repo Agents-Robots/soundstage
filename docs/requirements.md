@@ -79,7 +79,7 @@ Decisions taken with the user (2026-10-25):
 | FR-45 | Air absorption: high frequencies drop with distance. | 2 |
 | FR-46 | Sources behind the camera are marked by a mild low-pass and attenuation (stereo cannot otherwise tell front from back). | 2 |
 | FR-47 | Occluded sources are attenuated and low-passed, with smooth transitions. | 3 |
-| FR-48 | A reverb send models the environment (preset or impulse response per scene); the reverb level falls more slowly with distance than the direct sound. | 3 |
+| FR-48 | A reverb send models the environment (preset or impulse response per scene); the reverb level falls more slowly with distance than the direct sound, and sources far outside the listener's space do not fill the reverb (ADR 0014). | 3 |
 | FR-49 | Camera cuts produce clean audio cuts: no Doppler sweep across a cut, short crossfade. | 2 |
 | FR-50 | Non-spatial bed sources (ambience, music) are mixed with gain and fades only. | 1 |
 | FR-51 | Supersonic or near-supersonic motion does not break the render: the playback rate is clamped and a warning is reported. | 2 |

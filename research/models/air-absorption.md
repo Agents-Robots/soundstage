@@ -28,32 +28,57 @@ The loss over the propagation distance `d` is `A · α(f) · d` dB, with
 ```mermaid
 flowchart LR
     A["ISO 9613-1 α(f)<br/>at T, RH"] --> B["for 112 distances<br/>5 cm – 20 km (log)"]
-    B --> C["least-squares fit of 4 one-pole cutoffs<br/>to the loss in dB, 100 Hz – 20 kHz,<br/>where the loss < 20 dB<br/>(warm start from the previous distance)"]
-    C --> D["table: distance → 4 cutoffs<br/>(once per render, cached)"]
-    D --> E["control rate: cutoffs for d = c τ<br/>(interpolated in log distance)"]
-    E --> F["emission side: cascade of 4 TPT one-poles,<br/>gains interpolated per sample"]
+    B --> C["least-squares fit of 2 sections with zeros<br/>to the loss in dB: follow ISO below 60 dB,<br/>at least 60 dB beyond<br/>(warm start, held near the previous distance)"]
+    C --> D["table: distance → section parameters<br/>(once per render, cached)"]
+    D --> E["control rate: parameters for d = c τ<br/>(interpolated in log distance)"]
+    E --> F["emission side: 2 TPT state-variable sections,<br/>coefficients stepped per sample"]
 ```
 
-Four cascaded one-pole low-passes approximate the ISO curve within 2.5 dB wherever the loss is
-below 20 dB (within 0.1 dB up to 30 m, 1 to 2.5 dB at 100 m to 3 km), and keep attenuating by more
-than 17.7 dB beyond. Where the loss at 20 kHz is below 0.05 dB (closer than about 10 cm) the stage
-passes the signal unchanged. The filter runs on the emission side
+The loss in dB grows with `f²` at high frequencies and in proportion to the distance: the
+magnitude response is close to a Gaussian in frequency, whose fall steepens without bound. A
+rational filter of order `n` falls at most `6n` dB per octave far above its corners, so a cascade of
+one-pole low-passes cannot follow it beyond the first 20 dB or so: at 1 km ISO falls 56 dB between
+3.2 and 6.4 kHz. A low-pass section with a pair of zeros on the frequency axis (an elliptic-type
+section) can: its notch makes the fall steeper than its order, and its floor beyond the notch can be
+placed below 60 dB, where the exact loss no longer matters.
+
+Two such sections (order 4, as before):
+
+```
+H_k(s) = (1 + m_k s²) / (1 + 2 R_k s + s²),   s in units of the corner f_k,   zeros at f_k / √m_k
+```
+
+are fitted per distance, from 50 Hz to 20 kHz, to follow ISO where its loss is below 60 dB, and to
+reach at least 60 dB (or ISO, if less) everywhere else up to 0.45 of the rate: frequencies above
+20 kHz at the emission rate can be brought down into the audible range by a receding source's
+Doppler shift. The damping is kept in `R` ∈ [0.3, 2] (no resonance above 0 dB), the zeros at 1.02–60
+times the corner. Each distance starts from the previous one's parameters and is held near them, so
+the table changes smoothly. The sections run as TPT state-variable filters
+([time-varying filters](time-varying-filters.md)) on the emission side
 ([processing chain](processing-chain.md)).
+
+At 96 kHz (the full chain's emission rate) the result follows ISO within 0.94 dB where the loss is
+below 20 dB and within 2.4 dB from 20 to 60 dB (50 Hz – 16 kHz), and attenuates at least 58 dB
+beyond. The far field filters its buses at 48 kHz: within 1.4 and 2.8 dB to 16 kHz; above 16 kHz the
+bilinear transform's compression near Nyquist leaves up to 7 dB more loss than ISO, where little is
+audible. Where the loss at 20 kHz is below 0.05 dB (closer than about 10 cm) the stage passes the
+signal unchanged.
 
 ## Choices
 
 | Question | Choice | Alternatives and why not |
 |---|---|---|
 | Coefficient | ISO 9613-1 with temperature and humidity | The original spec's `0.1 dB/m · (f/8 kHz)²`: underestimates the mid range about 3× (ISO is not proportional to f²) and has no climate. pyfar implements the same formula; one formula did not justify the dependency, and the implementation is tested against ISO 9613-2 Table 2 instead. |
-| Filter | 4 one-poles fitted per distance | One one-pole at the 3 dB point of the f² law (original spec): 6–13 dB error from 30 m to 3 km. Fitted 1/2/3 poles: up to 7.2 / 4.2 / 2.7 dB. Octave-band EQ (as some game engines): coarse steps between bands. STFT filtering with the exact curve: accurate at any distance, but block-based and harder to combine with per-sample modulation. |
-| Fit region | Loss below 20 dB | Fitting larger losses forces the poles to trade accuracy where the sound is audible for accuracy where it is already 20 dB down. |
-| Smoothness | Warm start along distance | Independent fits jump between equivalent parameter sets; with warm start the response changes by at most 0.37 dB between distances 0.46 % apart (in the audible region). |
+| Filter | 2 second-order sections with a pair of zeros each, fitted per distance | One one-pole at the 3 dB point of the f² law (original spec): 18 dB error below 20 dB of loss. 4 one-poles fitted below 20 dB (the first engine): within 2.3 dB there, but up to 29 dB too bright from 20 to 60 dB (distant traffic sounds bright). One-poles fitted to 60 dB: 4/8/12 poles leave 7.3/3.8/3.0 dB below 20 dB and 15/8.6/5.6 dB above. Sections without zeros: 6 of them (order 12) to match what 2 sections with zeros do. 3 sections with zeros: 0.6 / 0.3 dB, one more section per voice. Octave-band EQ (as some game engines): coarse steps between bands. STFT filtering with the exact curve: accurate at any distance, but block-based and harder to combine with per-sample modulation. ([E05](../experiments/E05-air-absorption.md)) |
+| Fit region | Follow ISO below 60 dB of loss; at least 60 dB beyond | Below 20 dB only (the first engine): where the loss exceeds 20 dB the filter was free, and a thousand distant cars summed their too-bright highs (E18). Beyond 60 dB the exact loss does not matter; asking for it would cost accuracy where it does. |
+| Smoothness | Warm start along distance, held near the previous fit | Independent fits jump between equivalent parameter sets. |
+| Structure in time | TPT state-variable sections, coefficients stepped per sample | Direct-form biquads with interpolated coefficients: intermediate sets can be unstable. Recomputing `h` per sample: a division per sample and section for a deviation below 10⁻⁷. |
+| Cost | Same order as before | The stage takes 9.5 ns per emission sample against 12.8 ns for the 4 one-poles (no per-sample division or table search); air absorption adds 7 % to a full-chain render. |
 | Placement | Emission side, mono | After the read per ear: twice the work, no audible difference. |
 
 Physically, absorption acts at the frequency of the wave in the air (the emitted frequency
 shifted by the source's motion); applying it before the read means the filter's corner is shifted
-by the Doppler factor too. At 30 m/s that is 10 % of the corner frequency, far inside the fit
-error.
+by the Doppler factor too. At 30 m/s that is 10 % of the corner frequency, within the fit error.
 
 ## Verification
 
@@ -61,15 +86,23 @@ error.
 
 - ISO 9613-2 Table 2, six climates, 63 Hz – 8 kHz: matches to the table's rounding at the exact
   band centres (63.1 … 7943 Hz).
-- Largest error of the engine's table against ISO where the loss is below 20 dB: 0.04 dB at 10 m,
-  0.09 at 30 m, 1.9 at 100 and 300 m, 2.5 at 1 km, 1.05 at 3 km.
+- The engine's table over 2000 distances from 1 m to 20 km (between its fitted distances too):
+  within 0.94 dB of ISO below 20 dB of loss and 2.4 dB from 20 to 60 dB at 96 kHz; at least 58 dB
+  beyond.
+- The far field's filters (48 kHz, a voice between two bands √2 apart) against the full chain's
+  (96 kHz): within 0.73 dB where the loss is below 20 dB, up to 6.5 kHz; against ISO within 0.91 dB.
 
 `tests/test_filters.py`: the Table 2 rows; a render of noise at 10, 100 and 1000 m measured through
-the engine matches the designed filter within 0.5 dB and ISO within 2.6 dB at 1, 4, 8, 16 kHz where
-the loss is below 20 dB, and attenuates more than 17 dB elsewhere.
+the engine matches the designed filter within 0.5 dB where the loss is below 60 dB and ISO within
+1.0 dB below 20 dB and 2.7 dB from 20 to 60 dB, and attenuates more than 57 dB beyond; the
+designed loss changes by less than 0.5 dB between distances 0.46 % apart below 60 dB of loss
+(0.5 m – 5 km); a section is −3.01 dB at its corner. `tests/test_kernels.py`: the state-variable
+kernels against the direct-form bilinear transform, in chunks, with stepped coefficients.
 
 ## References
 
+- V. Zavalishin, *The Art of VA Filter Design* (`zavalishin2020vafilter`): the TPT state-variable
+  filter.
 - ISO 9613-1:1993 (no open copy); formula as reproduced by
   [sengpielaudio](https://sengpielaudio.com/AirdampingFormula.htm) and in pyfar's
   `air_attenuation`; ISO 9613-2:1996 Table 2 for the reference values.

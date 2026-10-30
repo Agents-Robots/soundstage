@@ -44,18 +44,35 @@ def test_air_absorption_follows_iso9613_in_a_render(make_scene, wav, distance):
     f = np.array([1000.0, 4000.0, 8000.0, 16000.0])
     loss = -_transfer_db(dry, wet, f)
     iso = filters.iso9613_alpha(f) * distance
-    designed = filters._onepole_loss_db(f, filters.AirAbsorption(20, 50, 2 * RATE).cutoffs(np.array([distance]))[0],
-                                        2 * RATE)
-    audible = iso < 20
-    assert np.all(np.abs(loss - designed)[audible] < 0.5), (loss, designed)  # the render realizes the design
-    assert np.all(np.abs(loss - iso)[audible] < 2.6), (loss, iso)  # the design follows ISO 9613-1
-    assert np.all(loss[~audible] > 17.0)
+    designed = filters.AirAbsorption(20, 50, 2 * RATE).loss_db(f, distance)
+    low, mid = iso < 20, (iso >= 20) & (iso < 60)
+    assert np.all(np.abs(loss - designed)[iso < 60] < 0.5), (loss, designed)  # the render realizes the design
+    assert np.all(np.abs(loss - iso)[low] < 1.0), (loss, iso)  # the design follows ISO 9613-1
+    assert np.all(np.abs(loss - iso)[mid] < 2.7), (loss, iso)
+    assert np.all(loss[iso >= 60] > 57.0)
 
 
 def test_air_absorption_off_and_bypass_for_near_sources():
+    f = np.geomspace(20.0, 40000.0, 50)
     air = filters.AirAbsorption(20, 50, 96000, scale=0.0)
-    assert np.all(np.isinf(air.cutoffs(np.array([10.0, 1000.0]))))
-    assert np.all(np.isinf(filters.AirAbsorption(20, 50, 96000).cutoffs(np.array([0.1]))))
+    assert air.bypass(np.array([10.0, 1000.0])) and np.allclose(air.loss_db(f, 1000.0), 0.0, atol=1e-12)
+    near = filters.AirAbsorption(20, 50, 96000)
+    assert near.bypass(np.array([0.05])) and not near.bypass(np.array([0.05, 10.0]))
+    assert np.allclose(near.loss_db(f, 0.05), 0.0, atol=1e-12)  # identity sections
+
+
+def test_air_absorption_parameters_change_smoothly_with_distance():
+    # a source moving away: the designed loss changes by little between close distances, everywhere
+    # the loss is below 60 dB (no jumps between the fits of neighbouring table distances)
+    air = filters.AirAbsorption(20, 50, 96000)
+    f = np.geomspace(50.0, 20000.0, 200)
+    prev = None
+    for d in np.geomspace(0.5, 5000.0, 2000):  # 0.46 % apart
+        loss = air.loss_db(f, d)
+        if prev is not None:
+            sel = loss < 60
+            assert np.abs(loss - prev)[sel].max() < 0.5, d
+        prev = loss
 
 
 def _shelf_response_db(alpha, f, rate=RATE):
@@ -116,11 +133,14 @@ def test_source_passing_through_the_camera_has_no_steps(make_scene, sine):
         assert np.abs(np.diff(20 * np.log10(env + 1e-9))).max() < 0.5  # level changes smoothly (1 ms blocks)
 
 
-def test_one_pole_stage_is_minus_3db_at_its_cutoff():
-    stage = filters.OnePoleStage(np.array([0.0, 10.0]), np.array([[2000.0], [2000.0]]), RATE)
+def test_air_stage_section_is_minus_3db_at_its_corner():
+    # one Butterworth section (R = 1/sqrt(2), no zeros): -3.01 dB at its corner
+    p = np.array([[[np.tan(np.pi * 2000.0 / RATE), 2 ** -0.5, 0.0, 0.0]]] * 2)
+    stage = filters.AirStage(np.array([0.0, 10.0]), p, RATE)
     x = np.random.default_rng(1).standard_normal(RATE)
     y = stage.process(x, 0, RATE)
     assert _transfer_db(x, y, np.array([2000.0]))[0] == pytest.approx(-3.01, abs=0.1)
+    assert 10 * np.log10(stage.power_response(np.array([2000.0]), np.array([0]))[0, 0]) == pytest.approx(-3.01, abs=0.01)
 
 
 def test_shelf_stage_chunks_equal_one_call():

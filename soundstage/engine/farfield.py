@@ -8,13 +8,14 @@ direction: one bus per distance band (no air absorption, then 25 m to 12.8 km, s
 and occluded. A voice's contribution is split between the two bands around its distance (weights
 linear in log distance) and between open (visibility v) and occluded (1 - v, times the
 transmission gain), so nothing switches; each bus is filtered once per chunk by the air absorption
-of its band distance (and the occluded buses by the transmission low-pass).
+of its band distance (and the occluded buses by the transmission low-pass). The reverb send goes to
+one mono bus per band, filtered by the band's air absorption as well.
 
 What the far field leaves out, compared with the full chain (``source.SpatialRenderer``): ITD, head
-shadow, the rear low-pass (the rear cue stays as a level), the per-band occlusion low-pass and the
-air absorption of the reverb send. Geometry is computed per chunk from the baked positions
-(linear between baked samples, retarded delay by fixed-point steps): nothing is kept per voice over
-the whole shot. Jumps (camera cuts, teleports) fade the voice out and in over ``JUMP_FADE_CTL``
+shadow, the rear low-pass (the rear cue stays as a level), the per-band occlusion low-pass, and the
+occlusion low-pass of the send in ``occlusion`` mode (its gain stays). Geometry is computed per chunk
+from the baked positions (linear between baked samples, retarded delay by fixed-point steps):
+nothing is kept per voice over the whole shot. Jumps (camera cuts, teleports) fade the voice out and in over ``JUMP_FADE_CTL``
 control points instead of crossfading a held branch.
 
 Spec: docs/spec/signal-model.md#far-field; model: research/models/level-of-detail.md; ADR 0013.
@@ -36,8 +37,8 @@ BAND_FIRST_M = 25.0
 BAND_RATIO = math.sqrt(2.0)
 N_BANDS = 20
 """Bus 0 has no air absorption; bus k >= 1 has the air absorption of 25 m * sqrt(2)^(k - 1) (25 m ... 12.8 km).
-A voice between two bands is the sum of their filters, whose phases differ: an octave apart that was
-up to 1 dB low at 6.4 kHz between the bands, sqrt(2) apart it stays within 0.5 dB of the full chain."""
+A voice between two bands is the sum of their filters, whose phases differ: where the loss is below
+20 dB it stays within 0.73 dB of the full chain up to 6.5 kHz sqrt(2) apart, 2.2 dB an octave apart (E05)."""
 TIER_FADE_S = 0.1
 """Equal-power crossfade between the tiers when a source changes tier at a chunk boundary."""
 COARSE = 4
@@ -255,16 +256,17 @@ class FarField:
         self.cut = np.zeros(self.grid.count, dtype=bool)
         self.cut[1:] = seg[1:] != seg[:-1]
         self.cut[:-1] |= self.cut[1:]
-        # buses: distance bands x (open, occluded); filters per group, states carried between chunks
+        # buses: distance bands x (open, occluded), and the send per band; filters per group, states
+        # carried between chunks
         air = filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], self.rate,
                                     scale=s["air_absorption"])
-        cut_air = air.cutoffs(band_distances())  # (N_BANDS, poles), inf: no filtering
-        occ = np.full((N_BANDS, 1), float(s["occlusion_cutoff_hz"]))
-        self.bus_gains = [filters.tpt_gain(cut_air[b], self.rate) for b in range(N_BANDS)]
-        self.bus_gains += [filters.tpt_gain(np.concatenate([cut_air[b], occ[b]]), self.rate) for b in range(N_BANDS)]
+        self.bus_air = [None if air.bypass(np.array([d])) else
+                        np.ascontiguousarray(kernels.svf_coefficients(air.params(np.array([d]))[0]))
+                        for d in band_distances()]  # (sections, 5) per band; None: no filtering
+        self.occ_gain = float(filters.tpt_gain(np.array([float(s["occlusion_cutoff_hz"])]), self.rate)[0])
         self.transmission = float(filters.db_to_gain(s["occlusion_gain_db"]))
-        self.states: dict[tuple[str, int], list[np.ndarray]] = {}  # (group, task) -> per bus (2, poles)
-        self.room_rolloff = ctx.room_rolloff
+        self.states: dict[tuple[str, int], dict[str, np.ndarray]] = {}  # (group, task) -> filter states
+        self.send = ctx.send
 
     # ---------------------------------------------------------------- geometry
 
@@ -349,8 +351,8 @@ class FarField:
 
     def _control(self, ids: list[int], parts: list[Part], j0: int, j1: int, c0: int, c1: int, spans):
         """Control arrays over control points j0..j1 for the voices ``ids``, vectorized over them:
-        emission index e, gains left, right and send (B, n), bus weights (B, n, buses), and which
-        voices sound at all (B,)."""
+        emission index e, gains left, right and send (B, n), lower band (B, n), bus weights
+        (B, n, 4), the weight of the band above (B, n), and which voices sound at all (B,)."""
         grid, geo, s = self.grid, self.geo, self.scene.settings
         J = np.arange(j0, j1 + 1)
         t = grid.times[J]
@@ -439,10 +441,10 @@ class FarField:
         lo, frac = band_weights(distance * air)
         w = np.stack([(1.0 - frac) * open_w, frac * open_w, (1.0 - frac) * occ_w, frac * occ_w], axis=2)
         gs = np.zeros((n, b))
-        if self.room_rolloff is not None:
+        if self.send is not None:
             send_db = np.array([(prm["reverb_send_db"] or 0.0) for prm in prms]) + s["reverb_send_db"]
             gs = common * 10.0 ** ((send_db + np.array([prm["gain_db"] for prm in prms])) / 20.0) * \
-                self._distance_gains(distance, prms, self.room_rolloff)
+                self._distance_gains(distance, prms, self.send.room_rolloff) * self.send.factor(distance)
             mode = np.array([prm["occlusion_mode"] == "occlusion" for prm in prms])
             gs = np.where(mode, gs * (open_w + occ_w), gs)
             sounds |= np.any(gs != 0.0, axis=0)
@@ -460,7 +462,7 @@ class FarField:
                     v.stats[key] = (min(st[0], lo_[col]), max(st[1], hi_[col])) if st else (lo_[col], hi_[col])
         return (np.ascontiguousarray(e.T), np.ascontiguousarray((g * gl).T), np.ascontiguousarray((g * gr).T),
                 np.ascontiguousarray(gs.T), np.ascontiguousarray(lo.T), np.ascontiguousarray(w.transpose(1, 0, 2)),
-                sounds)
+                np.ascontiguousarray(frac.T), sounds)
 
     def _ramp(self, on: np.ndarray) -> np.ndarray:
         """Gate (0/1 per control point) with raised-cosine ramps of CULL_RAMP_CTL on the 'on' side."""
@@ -535,17 +537,23 @@ class FarField:
         # bus filter states (the filters are linear, so filtering per task equals filtering the sum)
         tasks = [(g, t, members[t::TASKS]) for g, members in groups.items() for t in range(TASKS)]
 
+        occ = np.full((n, 1), self.occ_gain)
+
         def task(item):
             g, t, members = item
-            states = self.states.setdefault((g, t), [np.zeros((2, len(gains))) for gains in self.bus_gains])
-            if not members and not any(np.any(st) for st in states):
+            states = self.states.setdefault((g, t), {
+                "air": np.zeros((2 * N_BANDS, 2, filters.AIR_SECTIONS, 2)),  # per bus and channel
+                "occ": np.zeros((N_BANDS, 2, 1)),  # the occluded buses' low-pass
+                "send": np.zeros((N_BANDS, filters.AIR_SECTIONS, 2))})
+            if not members and not any(np.any(st) for st in states.values()):
                 return g, None, None, {}
             buses = np.zeros((2 * N_BANDS, n, 2))
-            send = np.zeros(n)
+            sends = np.zeros((N_BANDS, n))
             peaks = {}
             for a in range(0, len(members), BATCH):
                 batch = members[a:a + BATCH]
-                e, gl, gr, gs, lo, w, sounds = self._control([pt.voice for pt in batch], batch, j0, j1, c0, c1, spans)
+                e, gl, gr, gs, lo, w, fr, sounds = self._control([pt.voice for pt in batch], batch, j0, j1, c0, c1,
+                                                                 spans)
                 if not sounds.any():
                     continue
                 rows = np.nonzero(sounds)[0]
@@ -553,21 +561,31 @@ class FarField:
                 pk = np.zeros((len(rows), e.shape[1]))
                 kernels.far_mix(self.bufcat, self.v_start[ids], self.v_len[ids], self.v_period[ids],
                                 self.v_offset[ids], self.v_origin[ids], self.v_pitch[ids], self.v_phase[ids],
-                                e[rows], gl[rows], gr[rows], gs[rows], lo[rows], w[rows], N_BANDS,
-                                int(grid.samples[j0]), grid.step, c0, MIX_BLOCK, buses, send, pk)
+                                e[rows], gl[rows], gr[rows], gs[rows], lo[rows], w[rows], fr[rows], N_BANDS,
+                                int(grid.samples[j0]), grid.step, c0, MIX_BLOCK, buses, sends, pk)
                 for r, vi in enumerate(ids):
                     peaks[int(vi)] = pk[r]
             y = np.zeros((n, 2))
-            for b, gains in enumerate(self.bus_gains):
-                if not np.any(buses[b]) and not np.any(states[b]):
+            for b in range(2 * N_BANDS):
+                band, occluded = b % N_BANDS, b >= N_BANDS
+                ringing = np.any(states["air"][b]) or occluded and np.any(states["occ"][band])
+                if not np.any(buses[b]) and not ringing:
                     continue
-                if np.all(gains >= 1.0):
-                    y += buses[b]
-                    continue
-                gm = np.broadcast_to(gains[None, :], (n, len(gains)))
+                air = self.bus_air[band]
                 for ch in (0, 1):
-                    y[:, ch] += kernels.onepole_cascade(np.ascontiguousarray(buses[b, :, ch]), gm, states[b][ch],
-                                                        np.empty(n))
+                    x = np.ascontiguousarray(buses[b, :, ch])
+                    if air is not None:
+                        x = kernels.svf_cascade(x, air, states["air"][b, ch], np.empty(n))
+                    if occluded:
+                        x = kernels.onepole_cascade(x, occ, states["occ"][band, ch], np.empty(n))
+                    y[:, ch] += x
+            send = np.zeros(n)
+            for band in range(N_BANDS):
+                if not np.any(sends[band]) and not np.any(states["send"][band]):
+                    continue
+                air = self.bus_air[band]
+                send += sends[band] if air is None else kernels.svf_cascade(
+                    np.ascontiguousarray(sends[band]), air, states["send"][band], np.empty(n))
             return g, y, send, peaks
 
         mixed, sends, peaks = {}, {}, {}

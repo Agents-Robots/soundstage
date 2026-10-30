@@ -31,14 +31,50 @@ def test_far_mix_matches_reference(block):
     lo = rng.integers(0, n_bands - 1, (voices, count))
     wts = rng.uniform(0, 1, (voices, count, 4)) * (rng.uniform(size=(voices, count, 4)) > 0.3)
     wts[2, 5:8] = 0.0  # silent intervals
-    buses, send, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros(n), np.zeros((voices, count))
-    k.far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, n_bands, 0,
-              step, a, block, buses, send, peaks)
+    frac = rng.uniform(0, 1, (voices, count))
+    buses, sends, peaks = np.zeros((2 * n_bands, n, 2)), np.zeros((n_bands, n)), np.zeros((voices, count))
+    k.far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts, frac,
+              n_bands, 0, step, a, block, buses, sends, peaks)
     ref = k.ref_far_mix(bufs, buf_start, buf_len, period, offset, origin, pitch, phase, e_ctl, gl, gr, gs, lo, wts,
-                        n_bands, 0, step, a, n)
-    for got, want in zip((buses, send, peaks), ref):
+                        frac, n_bands, 0, step, a, n)
+    for got, want in zip((buses, sends, peaks), ref):
         assert np.allclose(got, want, atol=1e-9)
-    assert np.abs(buses).max() > 0.1 and np.abs(send).max() > 0.1
+    assert np.abs(buses).max() > 0.1 and np.abs(sends).max() > 0.1
+
+
+def test_svf_cascade_matches_the_bilinear_transform():
+    # constant parameters: the TPT sections equal the direct-form bilinear transform of H(s), in one
+    # call or chunk by chunk, with a parameter track or fixed
+    x = rng.standard_normal(3000)
+    params = np.array([[0.3, 0.6, 0.0, 0.05], [0.9, 1.2, 0.4, 0.2]])
+    want = k.ref_svf_cascade(x, np.broadcast_to(params, (len(x),) + params.shape))
+    coef = k.svf_coefficients(params)
+    whole = k.svf_cascade(x, coef, np.zeros((2, 2)), np.empty(len(x)))
+    st = np.zeros((2, 2))
+    parts = np.concatenate([k.svf_cascade(x[:1234], coef, st, np.empty(1234)),
+                            k.svf_cascade(x[1234:], coef, st, np.empty(len(x) - 1234))])
+    track = k.svf_cascade_track(x, 0, 1000, np.array([0.0, 10.0]), np.stack([coef, coef]), np.zeros((2, 2)),
+                                np.empty(len(x)))
+    assert np.allclose(whole, want, atol=1e-9)
+    assert np.array_equal(parts, whole) and np.allclose(track, whole, atol=1e-12)
+
+
+def test_svf_track_interpolates_between_control_points():
+    # the coefficients stepped per sample equal the per-sample interpolation, in one call or in chunks
+    x = rng.standard_normal(2000)
+    times = np.array([0.0, 0.4, 0.5, 1.3, 2.0])
+    params = np.stack([[[0.2 + 0.1 * i, 0.7, 0.0, 0.1 * i]] for i in range(5)])
+    coef = k.svf_coefficients(params)
+    whole = k.svf_cascade_track(x, 0, 1000, times, coef, np.zeros((1, 2)), np.empty(len(x)))
+    st = np.zeros((1, 2))
+    parts = np.concatenate([k.svf_cascade_track(x[:777], 0, 1000, times, coef, st, np.empty(777)),
+                            k.svf_cascade_track(x[777:], 777, 1000, times, coef, st, np.empty(len(x) - 777))])
+    tt = np.arange(len(x)) / 1000
+    per = np.stack([np.stack([np.interp(tt, times, coef[:, 0, q]) for q in range(5)], axis=1)], axis=1)
+    st, want = np.zeros((1, 2)), np.empty(len(x))
+    for i in range(len(x)):
+        k.svf_cascade(x[i:i + 1], np.ascontiguousarray(per[i]), st, want[i:i + 1])
+    assert np.allclose(whole, want, atol=1e-9) and np.allclose(parts, whole, atol=1e-12)
 
 
 def test_hermite_passes_through_samples():

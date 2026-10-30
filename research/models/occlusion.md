@@ -55,9 +55,12 @@ and its retarded emission point while it approached (the flyby's ship was "fully
 frames).
 
 Moving parts of instances (a keyed collection-instance car) are moved by their instancer's matrix
-when their matrix relative to it is the same at the three snapshots. A snapshot may lack the part
-where its instancer scales it below the minimum size: traffic is usually hidden at scale 0 while it
-jumps back to the start of its lane. Only the other parts are looked up per sample in the
+when their matrix relative to it is the same at every snapshot that has them (taken from the first
+one that has them). A snapshot may lack the part where its instancer scales it below the minimum
+size: traffic is usually hidden at scale 0 while it jumps back to the start of its lane, and a car
+may be at scale 0 at the start of the shot. Occluders come from every snapshot, so such a car still
+occludes once it appears; a plain object missing from a snapshot is skipped at the samples where it
+is hidden from rendering. Only the other parts are looked up per sample in the
 depsgraph's instances, and that lookup walks every instance of the scene, so it costs by the size
 of the scene, not by the number of moving parts: with a million instanced balconies, 1109 ms per
 visibility sample against 6 ms by the instancers' matrices, for 500 cars
@@ -161,8 +164,8 @@ to mark are found without guessing.
   high-frequency level is somewhere between that and the 4 kHz value.
 - Static/moving is decided from three frames; an object that moves only between them counts as
   static. Likewise a part of an instance that moves relative to its instancer only between them is
-  moved with its instancer. An instance missing from the first snapshot (scaled to zero there) does
-  not occlude during the shot.
+  moved with its instancer. An instance absent from all three snapshots (scaled to zero or hidden
+  at each of them) does not occlude.
 - The retarded positions and the Fresnel radii use the bake's `speed_of_sound`; a render with
   another `--set speed_of_sound` keeps the baked visibility.
 - One reverb environment per render: `occlusion` mode reduces the send but does not switch to the
@@ -185,7 +188,8 @@ to mark are found without guessing.
   ground plane is fully visible, while a barrier the line of sight clears by 1.05 m cuts the 250 Hz
   zone but not the 4 kHz zone; a box moving at 60 m/s past the camera is not occluded by itself; a
   moving collection instance occludes, moved by its instancer's matrix with the same visibility as
-  from the depsgraph's instances, also when it is scaled to zero at a snapshot, and a part animated
+  from the depsgraph's instances, also when it is scaled to zero at a snapshot, the first one
+  included (`test_instance_scaled_to_zero_at_the_first_snapshot_occludes_later`), and a part animated
   inside its instance is looked up there; a fog volume and an emissive light beam do not occlude, a
   glass wall does; the car carrying the camera does not occlude what is below it; a 100 m box around
   the camera does not occlude a source outside it; two buildings merged into one mesh leave the street

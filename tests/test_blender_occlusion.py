@@ -194,6 +194,37 @@ emitter("Src", [(1, (0, 20, 0)), (60, (0, 20, 0))])
     assert vis["Src:0"][0].min() == 1.0 and vis["Src:0"][-1].max() == 0.0
 
 
+def test_instance_scaled_to_zero_at_the_first_snapshot_occludes_later(tmp_path, sine, capfd):
+    # an instance missing from the first snapshot (scaled to zero at the start) still occludes once
+    # its instancer brings it in: its relative matrix comes from the first snapshot that has it
+    script = """
+w = box("DoorAsset", (0, 0, 0), (10, 1, 6))
+asset = bpy.data.collections.new("Door")
+for c in list(w.users_collection):
+    c.objects.unlink(w)
+asset.objects.link(w)
+e = bpy.data.objects.new("DoorInst", None)
+e.instance_type = "COLLECTION"; e.instance_collection = asset
+s.collection.objects.link(e)
+for f, x in ((1, -30), (60, 0)):
+    e.location = (x, 10, 0)
+    e.keyframe_insert("location", frame=f)
+for f, k in ((1, 0), (10, 0), (11, 1)):
+    e.scale = (k, k, k)
+    e.keyframe_insert("scale", frame=f)
+emitter("Src", [(1, (0, 20, 0)), (60, (0, 20, 0))])
+"""
+    manifest, vis = bake(tmp_path, script, sine)
+    assert "0 moving boxes looked up per sample" in capfd.readouterr().out
+    assert manifest["occlusion"]["occluders"]["moving"] == 1
+    walk = tmp_path / "walk.py"
+    walk.write_text(f"import sys; sys.path.insert(0, {str(REPO)!r})\n"
+                    "from soundstage.blender import occlusion; occlusion.BY_INSTANCER = False\n")
+    _, walked = bake(tmp_path, "", sine, run=[str(walk)])
+    assert np.array_equal(walked["Src:0"], vis["Src:0"])
+    assert vis["Src:0"][0].min() == 1.0 and vis["Src:0"][-1].max() == 0.0
+
+
 def test_ground_reflects_and_a_low_barrier_occludes(tmp_path, sine):
     _, vis = bake(tmp_path, """
 cam.location = (0, 0, 1.7)

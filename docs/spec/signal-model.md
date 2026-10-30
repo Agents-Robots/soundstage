@@ -204,14 +204,27 @@ relaxation), at `air_temperature_c` (20 °C), `air_humidity_pct` (50 %) and stan
 scaled by `A = air_absorption · source.air_absorption`. The loss over the propagation distance `d`
 is `A · α(f) · d` dB. At 20 °C, 50 % RH: about 0.005 dB/m at 1 kHz, 0.03 at 4 kHz, 0.1 at 8 kHz.
 
-Realization: four cascaded one-pole low-passes (TPT form) on the emission side. Their cutoffs are
-fitted once per render, by least squares on the loss in dB from 100 Hz to 20 kHz where the target
-loss is below 20 dB, on a log-spaced grid of effective distances `A·d` from 5 cm to 20 km
-(continuation from the previous grid point keeps the cutoffs smooth); at control rate the cutoffs
-are interpolated in log distance. Measured error: within 2.5 dB of ISO 9613-1 wherever the loss is
-below 20 dB; beyond that the filter keeps attenuating by more than 17.7 dB
-([E05](../../research/experiments/E05-air-absorption.md)). Where the loss at 20 kHz is below
-0.05 dB the stage passes the signal unchanged.
+Realization: two second-order sections on the emission side, each a low-pass with a pair of zeros
+on the frequency axis,
+
+```
+H_k(s) = (1 + c_k s + m_k s²) / (1 + 2 R_k s + s²)        s in units of the section's corner
+```
+
+in state-variable form (TPT, zero-delay feedback: `g = tan(π f_k / f_e)`, per sample
+`hp = (x − (2R + g) s₁ − s₂) / (1 + g (2R + g))`, `bp = g·hp + s₁`, `lp = g·bp + s₂`,
+`s₁ = bp + g·hp`, `s₂ = lp + g·bp`, `y = lp + c·bp + m·hp`). A fitted section has `c = 0` and the
+zeros at `z_k = 1/√m_k` times its corner (`R` in [0.3, 2], `z` in [1.02, 60]). The parameters are
+fitted once per render on a log-spaced grid of effective distances `A·d` from 5 cm to 20 km, by
+least squares on the loss in dB: from 50 Hz to 20 kHz the loss follows ISO 9613-1 where ISO is
+below 60 dB; elsewhere, up to 0.45 `f_e`, it must reach at least 60 dB (or ISO, if less). Each
+distance starts from the previous one's fit and is held near it (weight 0.3 dB per unit of log
+parameter), so the parameters change smoothly; at control rate they are interpolated in log
+distance (corner, zeros) and linearly (damping), and per sample linearly. Measured error at
+`f_e` = 96 kHz: within 0.94 dB of ISO where the loss is below 20 dB and within 2.4 dB from 20 to 60 dB
+(50 Hz – 16 kHz), at least 58 dB beyond ([E05](../../research/experiments/E05-air-absorption.md)).
+Where the loss at 20 kHz is below 0.05 dB the stage passes the signal unchanged; closer than the
+first fitted distance the sections are the identity (`c = 2R`, `m = 1`).
 
 ## Panning
 
@@ -304,10 +317,12 @@ by bisection on `1/f_c²`; ∞ where nothing is attenuated). Fully occluded, `G 
 `f_occ` drives a TPT one-pole per ear, after the read and before head shadow. Both apply to the
 direct sound; the reverb send gets them only with `occlusion_mode = "occlusion"`.
 
-All low-passes are one-poles in TPT (zero-delay feedback) form: `g = tan(π f_c / f_e)`,
-`G = g / (1 + g)`, per sample `v = G (x − s)`, `y = v + s`, `s = y + v`. `G` is computed at control
-rate and interpolated linearly per sample; it stays in (0, 1), so every intermediate filter is
-stable and modulation does not zipper.
+The occlusion and rear low-passes are one-poles in TPT (zero-delay feedback) form:
+`g = tan(π f_c / f_e)`, `G = g / (1 + g)`, per sample `v = G (x − s)`, `y = v + s`, `s = y + v`.
+`G` is computed at control rate and interpolated linearly per sample; it stays in (0, 1), so every
+intermediate filter is stable and modulation does not zipper. The air absorption's sections are
+TPT state-variable filters ([air absorption](#air-absorption)), equally free of zipper noise when
+their parameters move.
 
 ## Reverb send
 
@@ -317,14 +332,26 @@ gain ([model](../../research/models/reverb.md)):
 
 ```
 send = 10^((gain_db + reverb_send_db_source + reverb_send_db_scene) / 20)
-       · g_dist(d; distance_model, ref_distance, max_distance, rolloff = room_rolloff) · g_cone · y_c
+       · g_dist(d; distance_model, ref_distance, max_distance, rolloff = room_rolloff) · b(d) · g_cone · y_c
        (· G_occ and the occlusion low-pass, in occlusion mode)
+
+b(d) = exp(−ln(1000) · d / (c T))           d ≤ R            (reverb_send_law "revised", default)
+b(d) = b(R) · R / d                          d > R
+R    = reverb_radius_m, or c T / ln(1000)
+b(d) = 1                                                      (reverb_send_law "efx")
 ```
 
 `reverb_send_db_source` is 0 when null; `room_rolloff` is `reverb_room_rolloff`, or the preset's
-room rolloff factor (0 for nearly all presets: the reverberant level does not fall with distance,
-so the direct-to-reverberant ratio falls 6 dB per doubling). Beds send only with an explicit
-`reverb_send_db`, taken from their stereo mix.
+room rolloff factor (0 for nearly all presets). `T` is the environment's mid-frequency decay time:
+the preset's `decay_time`, or the T30 of an impulse-response file between 500 Hz and 2 kHz (`efx`
+when it cannot be measured). Within `R`, the reverberation a source excites has decayed by
+`60 · (d/c) / T` dB when its direct sound arrives (Barron and Lee's revised theory); beyond `R`, the
+listener's space receives the source's sound as the listener does, and its reverberation falls 6 dB
+per doubling of distance; the default `R` is where both fall equally fast per log distance, at
+−8.7 dB ([model](../../research/models/reverb.md), ADR 0014). With `efx` and room rolloff 0 the
+reverberant level does not fall with distance (the classical diffuse field; the direct-to-reverberant
+ratio falls 6 dB per doubling). Beds send only with an explicit `reverb_send_db`, taken from their
+stereo mix.
 
 The sum of all sends is convolved once per chunk (FFT overlap-add, tail carried to the next chunk)
 with a stereo impulse response:
@@ -344,7 +371,7 @@ with a stereo impulse response:
   below `lf_reference`. Length `late start + 1.1 · max(T)`, at most 15 s.
 - **File** (`reverb` = a path): WAV, FLAC, OGG or AIFF, resampled to `fs`, mono duplicated to
   stereo (first two channels of multichannel files), used as recorded (no normalization); room
-  rolloff 0 unless `reverb_room_rolloff` is set.
+  rolloff 0 unless `reverb_room_rolloff` is set; `T` measured on the file.
 
 The reverb return is added to the master and is its own stem `reverb`. **Pre-roll**: the sends of
 the impulse response's length before the first output sample (at most the baked padding) are
@@ -402,8 +429,8 @@ chunks, and a voice skips a chunk when every block of it allows that.
 
 1. Before setup, an upper bound per source and block from the baked positions: the straight-line
    distance at every baked sample, mapped to its reception time `t + d/c`;
-   `E ≤ 10^(gain_db/10) · g_dist(d)² · max(1, g_rear²) · ms_peak · T`, plus the reverb send with the
-   room rolloff, where `ms_peak` is the sample's highest 10 ms mean square and `T` the block length
+   `E ≤ 10^(gain_db/10) · g_dist(d)² · max(1, g_rear²) · ms_peak · T`, plus the reverb send with its
+   distance law, where `ms_peak` is the sample's highest 10 ms mean square and `T` the block length
    (one-shots only while they sound). Cone, occlusion, pan and filters only lower it. Group totals
    use the sample's mean square instead. Sources skipped in every block 20 dB below the budget
    (`BOUND_MARGIN_DB`) are not set up at all.
@@ -468,14 +495,16 @@ interpolated (the delay with Catmull-Rom). The buses are a distance band (none, 
 distance (linear in log distance) times its visibility v (open) and `(1 − v) · 10^(occlusion_gain_db/20)`
 (occluded). Each bus is filtered once per chunk by the air absorption of its band distance; the
 occluded buses also by the transmission low-pass at `occlusion_cutoff_hz`. The reverb send gets
-`g` with the room rolloff and no air absorption.
+`g` with the send's distance law and goes to one mono bus per distance band (the same two bands and
+weights, open and occluded together), filtered by the band's air absorption.
 
 With culling on, the skip before setup applies as usual; far voices are gated per decision block
 by the rule on the estimates (10-control-point ramps), and near voices, the loudest of their group,
 are not culled.
 
 Left out compared with the full chain: ITD, head shadow, the rear low-pass (the rear cue stays as
-its level), the per-band occlusion low-pass, the playback-rate clamp. At a jump (cut, teleport) the
+its level), the per-band occlusion low-pass (also the send's, in occlusion mode; its gain stays),
+the playback-rate clamp. At a jump (cut, teleport) the
 voice fades out and in over 8 control points instead of crossfading a held branch.
 
 **Visibility in the bake.** With `detail_voices` set, the bake ranks the sources of each group at
@@ -534,13 +563,14 @@ by ear.
 | ITD scale (hybrid) | 0.5 (tuned) | scene `itd_scale` |
 | Head shadow (hybrid) | 0.5 (tuned) | scene `head_shadow` |
 | Air absorption scale | 1 (ISO 9613-1) | scene/source `air_absorption` |
+| Air absorption filter | 2 sections with zeros; fit to ISO below 60 dB, at least 60 dB beyond | engine constants `filters.AIR_*` |
 | Rear cutoff / gain | 6000 Hz / −2 dB (tuned) | scene `rear_cutoff_hz`, `rear_gain_db` |
 | Occlusion transmission | −12 dB, low-pass 1500 Hz *(tune)* | scene `occlusion_gain_db`, `occlusion_cutoff_hz` |
 | Occlusion smoothing | 60 ms falling / 150 ms rising *(tune)* | engine constants `OCCLUSION_ATTACK_S`, `OCCLUSION_RELEASE_S` |
 | Visibility | 10 Hz, bands 250 / 1000 / 4000 Hz, 4 points each + direct path | scene `occlusion_rate`; bake constants |
 | Occluders | bounding boxes ≥ 2 m diagonal | scene `occluder_min_size`; object `sfx_occluder` |
 | Source size for visibility | 0.25 m | source `occlusion_radius` |
-| Reverb | none; send 0 dB, room rolloff from the preset | scene `reverb`, `reverb_send_db`, `reverb_room_rolloff`; source `reverb_send_db` |
+| Reverb | none; send 0 dB, room rolloff from the preset, send law `revised` with R = c T / ln(1000) | scene `reverb`, `reverb_send_db`, `reverb_room_rolloff`, `reverb_send_law`, `reverb_radius_m`; source `reverb_send_db` |
 | Limiter | look-ahead 5 ms, release 80 ms, 8× true peak | `mix.true_peak_limiter` |
 | Instances per tagged object | 32 closest | scene `instance_limit` |
 | Cut crossfade | 10 ms | engine constant |
@@ -558,6 +588,10 @@ by ear.
 - R. S. Woodworth, *Experimental Psychology*, 1938 (ITD formula).
 - ISO 9613-1:1993, attenuation of sound during propagation outdoors, part 1: absorption by the
   atmosphere.
+- V. Zavalishin, *The Art of VA Filter Design*, rev. 2.1.2, 2020 (TPT one-pole and state-variable
+  filters).
+- M. Barron, L.-J. Lee, "Energy relations in concert auditoriums. I", J. Acoust. Soc. Am. 84(2),
+  618–628, 1988 (the revised theory of reflected sound level over distance).
 - O. Niemitalo, *Polynomial Interpolators for High-Quality Resampling of Oversampled Audio*, 2001.
 - V. Zavalishin, *Preserving the LTI system topology in s- to z-plane transforms*, 2008.
 - OpenAL 1.1 specification, distance models and cones.

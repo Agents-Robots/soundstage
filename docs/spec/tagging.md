@@ -83,7 +83,9 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `occluder_min_size` | 2.0 m | Objects whose bounding-box diagonal is smaller do not occlude (bake). |
 | `reverb` | null | Environment: an EFX preset name (`hangar`, `city`, `forest`, `spacestation_hall`, … 113 in all, `soundstage presets`) or an impulse-response file (WAV/FLAC, used as recorded). null = no reverb. |
 | `reverb_send_db` | 0.0 | Send level of all sources (added to each source's `reverb_send_db`). |
-| `reverb_room_rolloff` | null | Distance rolloff of the send; null = the preset's room rolloff (0 for nearly all presets: constant reverberant level). |
+| `reverb_room_rolloff` | null | Distance rolloff of the send (EFX); null = the preset's room rolloff (0 for nearly all presets). |
+| `reverb_send_law` | `"revised"` | `revised`: the send also falls with distance, by 60 dB per `c·T60` within the radius (Barron and Lee) and 6 dB per doubling beyond it, so thousands of distant sources do not fill the reverb. `efx`: the room rolloff alone (constant reverberant level). |
+| `reverb_radius_m` | null | Radius of the listener's space for `revised`: within it the revised theory, beyond it spreading. null = `c·T60 / ln(1000)` (city streets 89 m, a hangar 499 m), where both fall equally fast; any other radius gives distant sources less reverb (smaller: a street in an open city; larger: one big hall around all sources). |
 | `read_speakers` | true | Read Blender Speaker objects as sources (bake). |
 | `instance_limit` | 32 | Per tagged object inside instances: keep at most this many instances, those that come closest to the camera; 0 = all (bake). |
 | `detail_voices` | 64 | Far field: per group, at most this many sources (ranked by level per 4 s chunk) get the full processing chain; the others are rendered more cheaply in the far field (no ITD, head shadow or rear low-pass; air absorption by distance band). Lower (16) is faster, null renders every source in full ([signal-model.md](signal-model.md#far-field)). |

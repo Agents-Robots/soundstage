@@ -20,6 +20,7 @@ that refine the implementation without changing the decision go in a `Notes` sec
 | [0008](0008-cinematic-air-physics.md) | Cinematic air physics with overridable constants | Accepted |
 | [0009](0009-processing-chain.md) | Per-source processing chain with replaceable models | Accepted |
 | [0010](0010-occlusion-fresnel-visibility-box-occluders.md) | Occlusion from Fresnel-zone visibility against bounding boxes, baked in Blender | Accepted |
-| [0011](0011-reverb-efx-presets-synthetic-ir.md) | Reverb: EFX presets synthesized into impulse responses, one send bus | Accepted |
+| [0011](0011-reverb-efx-presets-synthetic-ir.md) | Reverb: EFX presets synthesized into impulse responses, one send bus | Accepted (send law superseded by 0014) |
 | [0012](0012-speakers-and-instanced-tags-as-sources.md) | Speaker objects and tags inside instances are sources | Accepted |
 | [0013](0013-two-render-tiers.md) | Two render tiers: the full chain for the loudest sources, a far field for the rest | Accepted |
+| [0014](0014-reverb-send-falls-with-distance.md) | The reverb send falls with distance: the revised theory, then spreading | Accepted |

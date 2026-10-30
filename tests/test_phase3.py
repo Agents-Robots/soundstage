@@ -119,9 +119,28 @@ def test_direct_to_reverberant_ratio_falls_6db_per_doubling(make_scene, sine):
     drr = []
     for d in (5.0, 10.0, 20.0):
         res = render.render(make_scene([{"sample": sine, "ref_distance": 5.0}], [[0, d, 0]], frame_end=90,
-                                       settings={**PLAIN, "reverb": "concerthall"}), stems=True)
+                                       settings={**PLAIN, "reverb": "concerthall", "reverb_send_law": "efx"}),
+                            stems=True)
         drr.append(rms_db(res.stems["sfx"][2 * RATE:]) - rms_db(res.stems["reverb"][2 * RATE:]))
     assert np.diff(drr) == pytest.approx([-6.02, -6.02], abs=0.3)  # room rolloff 0: reverb level stays
+
+
+def test_reverb_send_follows_the_revised_theory_then_spreading(make_scene, sine):
+    # living room, T60 0.5 s: within c T / ln(1000) = 24.8 m the reverberation falls 60 dB per c T
+    # (Barron and Lee), beyond it 6 dB per doubling; both meet with the same slope
+    law = reverb.SendLaw(0.0, reverb.decay_times(reverb.preset("livingroom"))[1], None, 343.0)
+    assert law.radius == pytest.approx(343.0 * 0.5 / np.log(1000.0))
+    r = law.radius
+    slope = np.diff(np.log(law.factor(np.array([r * 0.999, r, r * 1.001])))) / np.log(1.001)
+    assert slope == pytest.approx([-1.0, -1.0], abs=0.002)
+    level = {}
+    for d in (10.0, 20.0, 50.0, 100.0):
+        res = render.render(make_scene([{"sample": sine}], [[0, d, 0]], frame_end=90,
+                                       settings={**PLAIN, "reverb": "livingroom"}), stems=True)
+        level[d] = rms_db(res.stems["reverb"][2 * RATE:])
+    for d1, d2 in ((10.0, 20.0), (20.0, 50.0), (50.0, 100.0)):
+        want = 20 * np.log10(law.factor(np.array([d2]))[0] / law.factor(np.array([d1]))[0])
+        assert level[d2] - level[d1] == pytest.approx(want, abs=0.3)
 
 
 def test_reverb_bus_chunks_equal_one_convolution():

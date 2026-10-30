@@ -48,7 +48,7 @@ flowchart LR
 | [E02](experiments/E02-loop-crossfade.md) | Loop seam crossfade law (Phase 1) | Equal power +2.9 dB on correlated loops, linear −2.9 dB on uncorrelated; correlation-adaptive flat on both |
 | [E03](experiments/E03-interpolators.md) | Fractional-delay interpolators | 4-point Hermite −27 dB at 10 kHz; 2× + pre-emphasis + optimal polynomial −85 to −110 dB to 20 kHz |
 | [E04](experiments/E04-preemphasis.md) | Pre-emphasis for the optimal-2× read | Droop −1.2 dB at 10 kHz, −4.9 dB at 20 kHz; 63 taps fix it |
-| [E05](experiments/E05-air-absorption.md) | ISO 9613-1 and its filter | Matches ISO 9613-2 Table 2; 4 fitted one-poles within 2.5 dB where audible (old model 6–13 dB off) |
+| [E05](experiments/E05-air-absorption.md) | ISO 9613-1 and its filter | Matches ISO 9613-2 Table 2; two sections with zeros (order 4) within 0.9 dB of ISO below 20 dB of loss and 2.4 dB to 60 dB, against 2.3 and 29 dB for 4 one-poles; 26 % cheaper; far field and full chain within 0.73 dB |
 | [E06](experiments/E06-ear-model.md) | Ear-model responses | Reference curves of head shadow, rear cue, pan laws, ITD for tuning |
 | [E07](experiments/E07-retarded-time.md) | Retarded-time solver | Fixed point: 1.8 % pitch error at Mach 0.5; Newton: exact to 1e-9 s up to Mach 0.95 |
 | [E08](experiments/E08-known-answers.md) | Phase 2 known answers | 343 m → 1.000000 s; 1111/909 and 1100/900 Hz; ITD 0.656 ms; clean cut |
@@ -61,7 +61,8 @@ flowchart LR
 | [E15](experiments/E15-option-costs.md) | Execution time per option and source count | Render ≈ 3.7 s + 190 ms per source, bake ≈ 7.3 s + 380 ms (60 s shot); `doppler_factor` ≠ 1 2.5×, `occlusion_rate` linear in the per-source bake cost, `frame_set` 35 ms at 16 000 objects |
 | [E16](experiments/E16-culling.md) | Culling against budget and source count | Default −40 dB: render 4–9 % and bake 3–6 % faster, error of the shot 4–10 dB below the budget; −20 dB: 1.3–1.7×; `doppler_factor` 0.5: 1.9–2.0×. Distant sources that fill an area carry a similar power share per octave of distance, so few can be skipped; memory (27 MB per source) is not reduced |
 | [E17](experiments/E17-lens-and-pan.md) | Where a source at the frame edge is heard, against the lens | Camera mode ignores the lens: frame edge heard at 9° with 50 mm (HD screen edge 16.5°), 2.3° with 200 mm; `pan_reference = screen`: 16.5° for every lens |
-| [E18](experiments/E18-traffic.md) | Thousands of flying cars with the far field (`detail_voices`) | 10 000 cars over 60 s at the default 64: render 173 s and 15.8 GB (every car in the full chain: 0.23 s and 35 MB per car); band levels within what other loop phases change, 0.7–1.2 dB at pitch 1 (p95); distance bands √2 apart; distant cars too bright in both tiers beyond 20 dB of air loss; direct-path visibility for far cars makes the bake 2.3–3.6× faster at no measurable render difference |
+| [E18](experiments/E18-traffic.md) | Thousands of flying cars with the far field (`detail_voices`) | 10 000 cars over 60 s at the default 64: render 173 s and 15.8 GB (every car in the full chain: 0.23 s and 35 MB per car); band levels within what other loop phases change, 0.7–1.2 dB at pitch 1 (p95); distance bands √2 apart; distant cars too bright in both tiers beyond 20 dB of air loss with the first air filter (fixed, E05); direct-path visibility for far cars makes the bake 2.3–3.6× faster at no measurable render difference |
+| [E19](experiments/E19-reverb-send.md) | Reverb send over distance with thousands of sources | EFX law (constant send): reverb 13–14 LU louder than 2000–10 000 cars, 94 % of it from cars beyond 100 m; revised law (Barron and Lee, then spreading): 3–4 LU below the cars, 1 % from beyond 1 km; far-field send with band air absorption matches the full chain within 0.2 dB up to 8 kHz (8–25 dB too bright before) |
 
 ## Conventions
 
@@ -72,7 +73,7 @@ flowchart LR
 - **Experiments are reproducible**: every number in an experiment page comes from a script in
   [experiments/scripts/](experiments/scripts/), run from the repository root in the venv
   (`.venv/bin/python research/experiments/scripts/eNN_*.py`); scripts print the tables and write
-  figures to [figures/](figures/). E01, E09, E11, E13, E15, E16 and E18 need Blender on `PATH`, E14 needs ffmpeg.
+  figures to [figures/](figures/). E01, E09, E11, E13, E15, E16 and E18 need Blender on `PATH` (E19 needs E18's scenes), E14 needs ffmpeg.
 - **Corrections stay visible**: when a measurement turns out wrong, the page says what was wrong and
   shows the corrected result, instead of silently replacing it.
 - **Papers**: [papers/](papers/README.md) lists every source with what it is used for;

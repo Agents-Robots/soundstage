@@ -67,6 +67,8 @@ changing the meaning of a key does, together with this spec.
     "reverb": "city",
     "reverb_send_db": 0.0,
     "reverb_room_rolloff": null,
+    "reverb_send_law": "revised",
+    "reverb_radius_m": null,
     "read_speakers": true,
     "occlusion_rate": 10.0,
     "occluder_min_size": 2.0,

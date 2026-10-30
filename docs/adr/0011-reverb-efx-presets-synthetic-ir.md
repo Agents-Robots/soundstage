@@ -1,6 +1,6 @@
 # 0011. Reverb: EFX presets synthesized into impulse responses, one send bus
 
-- Status: Accepted
+- Status: Accepted; the send's distance law superseded by [0014](0014-reverb-send-falls-with-distance.md)
 - Date: 2026-10-25
 - Ticket: #21
 

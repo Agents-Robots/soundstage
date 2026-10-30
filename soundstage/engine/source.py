@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from soundstage.engine import filters, propagation, signals
+from soundstage.engine import filters, propagation, reverb, signals
 from soundstage.engine.control import ControlGrid
 from soundstage.engine.geometry import Path, SceneGeometry
 from soundstage.engine.scene import Scene, Source
@@ -45,7 +45,7 @@ class RenderContext:
     interp: propagation.Interpolator
     panner: object
     rate: int
-    room_rolloff: float | None = None  # reverb send's distance rolloff; None: no reverb in this render
+    send: reverb.SendLaw | None = None  # the reverb send's distance law; None: no reverb in this render
     output_start: int | None = None  # first output sample; the grid may start earlier (reverb pre-roll)
 
     @property
@@ -64,7 +64,7 @@ class BedRenderer:
         self.dry = signals.DryGenerator(sample, p, rate, start, end, source.id)
         self.gain = float(filters.db_to_gain(p["gain_db"]))
         self.send = None
-        if ctx.room_rolloff is not None and p["reverb_send_db"] is not None:
+        if ctx.send is not None and p["reverb_send_db"] is not None:
             self.send = self.gain * float(filters.db_to_gain(p["reverb_send_db"] + ctx.scene.settings["reverb_send_db"]))
         self.info: dict = {}
 
@@ -145,13 +145,15 @@ class SpatialRenderer:
         gl, gr = ctx.panner.gains(path)
         self.gain_l, self.gain_r = g * gl, g * gr
 
-        # reverb send: the distance law with the environment's room rolloff (EFX), no pan or ear cues
+        # reverb send: the distance law with the environment's room rolloff (EFX) times the send law's
+        # factor (reverb.SendLaw), no pan or ear cues
         self.send = None
-        if ctx.room_rolloff is not None:
+        if ctx.send is not None:
             send_db = (p["reverb_send_db"] or 0.0) + s["reverb_send_db"]
             self.send = (float(filters.db_to_gain(p["gain_db"] + send_db)) * path.audible
                          * filters.distance_gain(path.distance, p["distance_model"], p["ref_distance"],
-                                                 p["max_distance"], ctx.room_rolloff)
+                                                 p["max_distance"], ctx.send.room_rolloff)
+                         * ctx.send.factor(path.distance)
                          * filters.cone_gain(path.cos_emit, p["cone_inner_deg"], p["cone_outer_deg"],
                                              p["cone_outer_gain_db"]))
             if occ_gain is not None and p["occlusion_mode"] == "occlusion":
@@ -161,7 +163,7 @@ class SpatialRenderer:
         te = np.maximum.accumulate(grid.times - self.delays.centre)
         air = filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], self.fe,
                                     scale=s["air_absorption"] * p["air_absorption"])
-        self.emission_stages = [filters.OnePoleStage(te, air.cutoffs(path.distance), self.fe)]
+        self.emission_stages = [filters.AirStage(te, air.params(path.distance), self.fe, air.bypass(path.distance))]
         if ctx.panner.rear_cue:
             self.emission_stages.append(filters.RearStage(te, path.rear, s["rear_cutoff_hz"], self.fe))
         self.ear_l, self.ear_r = ctx.panner.ear_stages(path, ctx.rate)

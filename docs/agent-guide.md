@@ -103,7 +103,10 @@ Then decide the **environment**:
   streets, `hangar`, `forest`, `mountains`, `spacestation_hall`, `sewerpipe` …) and set it in the
   tagging script (`tag.set_scene_settings(reverb="city")`) or at render time (`--set reverb=city`).
   If unsure, render two candidates and compare the reports (`groups.reverb.lufs_integrated`) and ask
-  the user.
+  the user. The send falls with distance by default (`reverb_send_law=revised`), so thousands of
+  distant sources do not fill the reverb; a shot that sounds too dry overall takes a higher
+  `reverb_send_db`, and `reverb_send_law=efx` keeps the reverberant level constant at any distance
+  (right for a few sources in one closed room).
 - **Occluders**: rendered meshes block sound by their bounding boxes (merged meshes by the boxes of
   their parts) automatically; light-only materials (fog, haze, light beams, holograms) and the camera's own
   vehicle are left out, glass blocks. Look for objects whose boxes are wrong and mark them in the

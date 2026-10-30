@@ -42,8 +42,12 @@ voice's weight is split between the two bands around its distance, linear in log
 moving car glides between bands without switching. Between two bands a voice is the sum of their
 filters, and their phases differ: minimum-phase filters with different losses have different
 phases. With bands an octave apart, the far field of 2000 cars in E18 was 0.8 and 1.3 dB low at
-3.2 and 6.4 kHz in the median, also with every pitch at 1; √2 apart, a voice halfway between two
-bands stays within 0.5 dB of the full chain up to 6.5 kHz. Occlusion is linear in the visibility v
+3.2 and 6.4 kHz in the median, also with every pitch at 1 (with the first air filter). With the
+current filter, a voice anywhere between two bands √2 apart stays within 0.73 dB of the full chain
+up to 6.5 kHz where the loss is below 20 dB, against 2.2 dB an octave apart
+([E05](../experiments/E05-air-absorption.md)). The reverb send is split the same way, into one mono
+bus per band filtered by the band's air absorption, so distant sources reach the reverb as dull as
+they are heard. Occlusion is linear in the visibility v
 (`g = v + (1 − v) T(f)`, [occlusion](occlusion.md)), so the same split into an open bus (v) and an
 occluded bus (`(1 − v)` times the transmission gain, low-passed once) is exact for a broadband v.
 
@@ -75,7 +79,8 @@ chain's resampled one (ρ = 0).
 | Ranking | the culling estimate per 4 s chunk, per group | Distance only ignores gain and sample level; the precise estimate (filters) needs the setup the far field avoids |
 | `detail_voices` | 64 per group | Scenes up to 64 sources per group render as before, sample for sample; E18 measures 16–128 |
 | Interpolator | optimal-2x (as the full chain) | A 4-point Hermite would save part of the read cost, but with the same read a far voice equals the full chain without filters to −60 dB (the tests rely on it), and the far field is already a small part of the render time |
-| Band spacing | √2: 20 bands from 25 m to 12.8 km | An octave (11 bands): the sum of two bands' filters, whose phases differ, made the far field 0.8–1.3 dB dull at 3–6 kHz (E18); closer bands cost more bus memory (16 tasks × 2 × bands × a chunk of stereo) and filtering |
+| Band spacing | √2: 20 bands from 25 m to 12.8 km | An octave (11 bands): the sum of two bands' filters, whose phases differ, made the far field 0.8–1.3 dB dull at 3–6 kHz (E18), up to 2.2 dB off the full chain with the current filter (E05); closer bands cost more bus memory (16 tasks × 2 × bands × a chunk of stereo) and filtering |
+| Reverb send | one mono bus per band, filtered by the band's air absorption | One mono send per group without air absorption (the first far field): the distant voices' sends kept their highs; with a constant send (law `efx`) the reverb return of 1000 cars was brighter than the full chain's (E19) |
 | Geometry rate | every 4 control points (4 ms), interpolated | Every control point: 4 × the far field's geometry cost, which was its largest part; the delay of a car changes slowly |
 | Jumps | fade out and in over 8 control points | The full chain's held branch needs per-voice state over the shot |
 | Bus filters per task | each of 16 fixed tasks per group filters its own buses | Filtering is linear, so the sum of filtered task buses equals the filtered sum; summing the buses of every task in the main thread was the bottleneck; a fixed task count keeps the output independent of the number of workers |
@@ -85,11 +90,11 @@ chain's resampled one (ρ = 0).
 ## Limits
 
 - **No ITD, head shadow or rear low-pass** in the far field; the rear cue stays as its level.
-- **Air absorption per band**: the response is a mix of the two neighbouring bands' filters: within
-  0.5 dB of the full chain up to 5 kHz at a band distance and up to 6.5 kHz halfway between two.
-  Both fits follow ISO 9613-1 where the loss is below 20 dB; beyond it the far field's (at the
-  output rate) is 0.5–2.5 dB duller above 6 kHz than the full chain's (at twice the rate), and both
-  much brighter than ISO (E18).
+- **Air absorption per band**: the response is a mix of the two neighbouring bands' filters:
+  within 0.73 dB of the full chain (fitted at twice the rate) and 0.91 dB of ISO 9613-1 up to
+  6.5 kHz where the loss is below 20 dB; from 20 to 60 dB both follow ISO within 2.8 dB to 16 kHz.
+  Above 16 kHz the far field's filters (at the output rate) take up to 7 dB more than ISO (E05).
+- **The send's occlusion low-pass** (`occlusion` mode) is left out; its broadband gain stays.
 - **One broadband visibility** per voice (the mean of the baked bands), and the transmission
   low-pass at its fixed cutoff instead of the per-source fitted one. Sources ranked beyond
   2 × `detail_voices` at a bake sample have the direct path only: 0 or 1, without the gradual
@@ -110,7 +115,7 @@ chain's resampled one (ρ = 0).
   path only (no partial values, the same in every band).
 - `tests/test_farfield.py`: a far voice equals the full chain without filters (error < −60 dB); air
   absorption at a band distance within 0.5 dB of the full chain up to 5 kHz, halfway between two
-  bands up to 6.5 kHz; Doppler 1111/909 Hz
+  bands within 0.8 dB up to 6.5 kHz; Doppler 1111/909 Hz
   within 0.5 %; a 343 m delay of 1.000 s and the side; tier switches without a level step or a click
   (both crossfade laws); a teleport without a click; renders identical across worker counts, stems
   summing to the master, near voices bounded.

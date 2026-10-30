@@ -112,16 +112,16 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     chunk = CHUNK_BLOCKS * step
     chunks = [(c0, min(c0 + chunk, n1)) for c0 in range(n0, n1, chunk)]
     cull_db, detail = s["cull_db"], s["detail_voices"]
-    room = env.room_rolloff if env else None
+    send_law = reverb.send_law(env, s["reverb_send_law"], s["reverb_radius_m"], float(s["speed_of_sound"]))
     t_cull = 0.0
     active, skipped = selected, []  # skipped: culled before setup
     spans = cull.blocks(chunks, int(round(cull.BLOCK_S * rate)))
     levels = None  # (bound, estimate) per source and decision block, from the baked positions
     if (cull_db is not None or detail is not None) and selected and chunks:
         t0 = time.perf_counter()
-        levels = cull.estimates(scene, selected, spans, room)
+        levels = cull.estimates(scene, selected, spans, send_law)
         if cull_db is not None:
-            before = cull.before_setup(scene, selected, spans, cull_db, room, levels)
+            before = cull.before_setup(scene, selected, spans, cull_db, send_law, levels)
             active = [src for src, k in zip(selected, before) if not k]
             skipped = [src for src, k in zip(selected, before) if k]
             levels = tuple(x[~before] for x in levels)
@@ -139,7 +139,7 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     r0 = n0 - pre
     grid = ControlGrid.covering(r0, n1, rate)
     ctx = RenderContext(scene=scene, grid=grid, geometry=SceneGeometry(scene, grid), interp=interp,
-                        panner=panning.PANNERS[s["panner"]](s), rate=rate, room_rolloff=room, output_start=n0)
+                        panner=panning.PANNERS[s["panner"]](s), rate=rate, send=send_law, output_start=n0)
     kernels.warmup()
     filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], ctx.emission_rate)  # fit once, cached
     n_workers = max(1, min(workers or os.cpu_count() or 1, len(active)))
@@ -311,7 +311,7 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
                 j1 = min(grid.index_of(min(c_end[k], n1)) + 4, grid.count - 1)
                 sub = ctx.geometry.sub(j0, j1 - j0 + 1)
                 c = RenderContext(scene=scene, grid=sub.grid, geometry=sub, interp=interp, panner=ctx.panner,
-                                  rate=rate, room_rolloff=room, output_start=max(n0, c_start))
+                                  rate=rate, send=send_law, output_start=max(n0, c_start))
                 return build(src, c)[0]
 
             made = list(pool.map(make, range(len(todo))))

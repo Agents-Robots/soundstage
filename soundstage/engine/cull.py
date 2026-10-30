@@ -23,6 +23,7 @@ import numpy as np
 
 from soundstage.engine import signals
 from soundstage.engine.control import ControlGrid
+from soundstage.engine.reverb import SendLaw
 from soundstage.engine.scene import Scene, Source
 from soundstage.levels import BOUND_MARGIN_DB, distance_gain, skip_mask
 
@@ -76,11 +77,12 @@ def _per_chunk(r: np.ndarray, value: np.ndarray, edges_s: np.ndarray, reduce: st
 
 
 def estimates(scene: Scene, sources: list[Source], spans: list[tuple[int, int, int]],
-              room_rolloff: float | None) -> tuple[np.ndarray, np.ndarray]:
+              send: SendLaw | None) -> tuple[np.ndarray, np.ndarray]:
     """Upper bound and estimate of each source's energy per decision block, (sources, blocks) each,
     from the baked positions alone (no setup): the straight-line distance mapped to its reception
-    time, distance law, gain, send, and the sample's highest 10 ms (bound) or mean (estimate) mean
-    square, while the source sounds. Cone, occlusion, pan and filters can only lower them."""
+    time, distance law, gain, send (``send``: its distance law, None without a reverb), and the
+    sample's highest 10 ms (bound) or mean (estimate) mean square, while the source sounds. Cone,
+    occlusion, pan and filters can only lower them."""
     s, rate = scene.settings, scene.sample_rate
     t = np.asarray(scene.seconds(scene.frames), dtype=np.float64)
     lpos = scene.listener_matrix[:, :3, 3]
@@ -101,10 +103,10 @@ def estimates(scene: Scene, sources: list[Source], spans: list[tuple[int, int, i
             continue
         d = np.linalg.norm(scene.src_pos[:, src.track] - lpos, axis=1)
         pw = g2 * rear * distance_gain(d, p["distance_model"], p["ref_distance"], p["max_distance"], p["rolloff"]) ** 2
-        if room_rolloff is not None:
+        if send is not None:
             send_db = (p["reverb_send_db"] or 0.0) + s["reverb_send_db"]
-            pw = pw + 10.0 ** ((p["gain_db"] + send_db) / 10.0) * distance_gain(
-                d, p["distance_model"], p["ref_distance"], p["max_distance"], room_rolloff) ** 2
+            pw = pw + 10.0 ** ((p["gain_db"] + send_db) / 10.0) * (distance_gain(
+                d, p["distance_model"], p["ref_distance"], p["max_distance"], send.room_rolloff) * send.factor(d)) ** 2
         pw = pw * act
         r = t + d / c
         bound[i] = ms_peak * _per_chunk(r, pw, edges_s, "max") * lengths
@@ -113,11 +115,11 @@ def estimates(scene: Scene, sources: list[Source], spans: list[tuple[int, int, i
 
 
 def before_setup(scene: Scene, sources: list[Source], spans: list[tuple[int, int, int]], budget_db: float,
-                 room_rolloff: float | None, levels: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
+                 send: SendLaw | None, levels: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
     """Sources (bool, one per source) whose upper bound stays ``BOUND_MARGIN_DB`` below the budget
     in every decision block: they are skipped before setup. Beds are never skipped. ``levels``:
     the result of ``estimates`` when already computed."""
-    bound, estimate = levels if levels is not None else estimates(scene, sources, spans, room_rolloff)
+    bound, estimate = levels if levels is not None else estimates(scene, sources, spans, send)
     spatial = np.array([src.spatial for src in sources], dtype=bool)
     skip = skip_mask(bound, [src.group for src in sources], budget_db - BOUND_MARGIN_DB, cullable=spatial,
                      totals=estimate)

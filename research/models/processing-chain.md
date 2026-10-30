@@ -15,7 +15,7 @@ flowchart LR
     end
     subgraph emission["emission side (mono, 2× output rate)"]
         D["dry timeline<br/>(loops and one-shots)"] --> PE["pre-emphasis<br/>(fractional delay)"]
-        PE --> AIR["air absorption<br/>4 one-poles"]
+        PE --> AIR["air absorption<br/>2 sections with zeros"]
         AIR --> REAR["rear cue shelf"]
         REAR --> DL[("delay line")]
     end
@@ -26,7 +26,7 @@ flowchart LR
         OCC --> HS["head shadow"]
         HS --> G["× gain · distance · cone · rear · occlusion<br/>× pan law"]
         DL --> SR["centre read (no ITD)"]
-        SR --> SG["× gain · send · distance (room rolloff) · cone<br/>(occlusion in occlusion mode)"]
+        SR --> SG["× gain · send · distance (room rolloff, send law) · cone<br/>(occlusion in occlusion mode)"]
     end
     V["visibility per band<br/>(baked)"] --> OCC
     V --> G
@@ -44,7 +44,7 @@ flowchart LR
 | Tracks, kinks, teleport detection | [trajectories](trajectories.md) | `engine/geometry.py` (`Track`, `ListenerTrack`, `piece_starts`, `kinks`) |
 | Retarded delay | [retarded time](retarded-time.md) | `geometry.SceneGeometry.retarded` |
 | Dry signal, loop seams, voices | [loops and one-shots](loops-and-one-shots.md) | `engine/signals.py` (`DryGenerator`), `source._voices` |
-| Air absorption | [air absorption](air-absorption.md) | `filters.AirAbsorption`, `filters.OnePoleStage` |
+| Air absorption | [air absorption](air-absorption.md) | `filters.AirAbsorption`, `filters.AirStage`, `kernels.svf_cascade_track` |
 | Rear cue | [rear cue](rear-cue.md) | `filters.RearStage`, `filters.rear_gain` |
 | Read delays | [Doppler and delay](doppler-and-delay.md) | `propagation.read_delays` |
 | Fractional-delay read, pre-emphasis | [fractional delay](fractional-delay.md) | `propagation.INTERPOLATORS`, `kernels.read_*`, `kernels.optimal2x_preemphasis` |
@@ -56,7 +56,7 @@ flowchart LR
 | Filter structures | [time-varying filters](time-varying-filters.md) | `engine/kernels.py` |
 | Cuts and teleports | [cuts and teleports](cuts-and-teleports.md) | `source._Branch`, `control.ControlGrid` (jump-aware) |
 | Occlusion | [occlusion](occlusion.md) | bake: `blender/occlusion.py`; engine: `filters.occlusion_filter`, `filters.fit_onepole_cutoff`, `filters.GridOnePoleStage` |
-| Reverb send and bus | [reverb](reverb.md) | `source.SpatialRenderer` (send), `reverb.ReverbBus`, `reverb.synthesize` |
+| Reverb send and bus | [reverb](reverb.md) | `source.SpatialRenderer` (send), `reverb.SendLaw`, `reverb.ReverbBus`, `reverb.synthesize` |
 | Stems, normalization, limiter, report | [mixing and loudness](mixing-and-loudness.md) | `render.render` (buses), `mix.finish`, `mix.true_peak_limiter`, `report.metrics` |
 
 Beds (`spatial: false`) skip everything except gain and fades; they feed the reverb only with an

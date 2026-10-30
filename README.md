@@ -32,7 +32,8 @@ are skipped within an error budget, which saves a few percent at the default and
 with many silent voices ([E16](research/experiments/E16-culling.md)). Shots with thousands of
 sources render the loudest 64 per group through the full chain and the rest in a cheaper far
 field: 10 000 flying cars, each with its engine, render over 60 s in under 3 minutes and 16 GB
-([E18](research/experiments/E18-traffic.md)). Panning follows the picture: what is in the frame
+([E18](research/experiments/E18-traffic.md)); their reverb send falls with distance, so distant
+traffic does not fill the reverb ([E19](research/experiments/E19-reverb-send.md)). Panning follows the picture: what is in the frame
 is heard at its place on the screen, through the camera lens and its zooms
 ([E17](research/experiments/E17-lens-and-pan.md)). Binaural and ambisonic output, animated
 parameters and random variation follow by need (see the [roadmap](docs/roadmap.md)).

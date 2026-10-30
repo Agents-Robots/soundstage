@@ -156,7 +156,10 @@ more with fewer near voices (so from the far voices). Two causes:
 | 1131 | −22.9 / −18.8 / −18.8 | −78.7 / −34.7 / −33.8 | −148.0 / −46.2 / −43.7 |
 
   Neither is the reference there: both tiers let distant cars sound much brighter than the air
-  would.
+  would. These runs used the first air filter (four one-poles fitted below 20 dB of loss). It has
+  since been replaced by two sections with zeros that follow ISO down to 60 dB of loss, the same in
+  both tiers within 0.73 dB ([E05](E05-air-absorption.md), issue #36); the render cases are being
+  run again with it.
 
 ## Results: bake
 
@@ -205,8 +208,8 @@ three snapshots of the occluder setup.
   `detail_voices` lowers it at 0.17–0.20 s of render and 55–110 MB per near voice.
 - The bake follows the tiers: the direct path for the far cars costs nothing measurable in the
   render, and makes the bake of thousands of cars 2–4 times faster.
-- Distant traffic is too bright in both tiers: the air-absorption fits stop following ISO 9613-1
-  beyond 20 dB of loss, and the far field's fit is 0.5–2.5 dB duller there than the full chain's.
+- Distant traffic was too bright in both tiers: the first air-absorption fits stopped following
+  ISO 9613-1 beyond 20 dB of loss. The current filter follows it to 60 dB ([E05](E05-air-absorption.md)).
 - In a scene with millions of instances, moving occluders must be placed without walking the
   instances: by their instancer's matrix it takes 6 ms per visibility sample instead of 1.1 s with
   a million balconies.

@@ -52,6 +52,7 @@ Without an open copy (cited by reference only):
 | R. Schultz-Amling et al. (Fraunhofer IIS), "Acoustical Zooming Based on a Parametric Sound Field Representation", AES 128th Convention, London, 2010, paper 8120 | Spatial audio following the visual zoom ([survey](../survey.md#camera-lens-and-sound-direction)) |
 | ISO/IEC 23008-3, MPEG-H 3D Audio | Screen-related remapping of objects to the playback screen ([survey](../survey.md#camera-lens-and-sound-direction)) |
 | Z. Maekawa, "Noise reduction by screens", Applied Acoustics 1(3):157–173, 1968 | Barrier attenuation from the Fresnel number, an alternative for occlusion ([occlusion](../models/occlusion.md)) |
+| M. Barron, L.-J. Lee, "Energy relations in concert auditoriums. I", J. Acoust. Soc. Am. 84(2):618–628, 1988 | The revised theory: reflected sound level falls with source distance ([reverb](../models/reverb.md), ADR 0014) |
 | OpenAL Soft, `include/AL/efx-presets.h` (LGPL) | The 113 EFX reverb presets, converted by `tools/efx_presets.py` into `soundstage/engine/data/efx_presets.json` ([reverb](../models/reverb.md)) |
 
 Equations in the PDFs are often images: render the page with `pdftoppm -f N -l N -r 110 -png

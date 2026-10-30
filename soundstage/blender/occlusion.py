@@ -194,17 +194,27 @@ class Occluders:
             util.set_frame(scene, f)
             depsgraph = bpy.context.evaluated_depsgraph_get()
             snaps.append(_snapshot(depsgraph, min_size_m / scale, materials))
-            # instancers: also those of the first snapshot's instances, which a later one may lack (scaled to 0)
-            names = {k[0] for k in snaps[-1] if k[0] is not None} | {k[0] for k in snaps[0] if k[0] is not None}
-            parents.append({n: np.array(bpy.data.objects[n].evaluated_get(depsgraph).matrix_world) for n in names
-                            if n in bpy.data.objects})
+            # instancers: also those of earlier snapshots' instances, which this one may lack (scaled to 0)
+            parents.append(_instancers(set().union(*(_owners(sn) for sn in snaps)), depsgraph))
             cam = util.listener_object(scene, listener)
             cams.append(np.array(cam.evaluated_get(depsgraph).matrix_world) if cam else None)
-        first = snaps[0]
+        # instancers first seen at a later snapshot (their instance scaled to 0 at the start): their
+        # matrices at the earlier ones, one more frame change each where there are any
+        late = set().union(*(_owners(sn) for sn in snaps))
+        for f, par in zip(frames, parents):
+            need = {n for n in late if n not in par}
+            if need:
+                util.set_frame(scene, f)
+                par.update(_instancers(need, bpy.context.evaluated_depsgraph_get()))
+        # every snapshot's occluders, each with its entry from the first snapshot that has it
+        first = {}
+        for sn in snaps:
+            for key, entry in sn.items():
+                first.setdefault(key, entry)
         static, moving, carried = [], [], []
         for key, (m, local, _, _) in first.items():
             mats = [s[key][0] if key in s else None for s in snaps]
-            if all(x is not None and np.allclose(x, m, atol=1e-4) for x in mats[1:]):
+            if all(x is not None and np.allclose(x, m, atol=1e-4) for x in mats):
                 static.append(key)
             elif _carried(mats, cams, local):
                 carried.append(key)  # travels with the listener: its vehicle or cockpit, part of the listener
@@ -270,6 +280,8 @@ class Occluders:
         mats = np.full((len(self.moving_order), 4, 4), np.nan)  # NaN: not present at this frame
         evaluated: dict = {}
         for i, ob in self.moving_objects:
+            if ob.hide_render:
+                continue  # hidden at this frame, as in _snapshot (it may first appear later)
             if ob.name not in evaluated:
                 evaluated[ob.name] = np.array(ob.evaluated_get(depsgraph).matrix_world)
             mats[i] = evaluated[ob.name]
@@ -345,21 +357,33 @@ class Occluders:
         return hit
 
 
+def _owners(snap: dict) -> set:
+    """Instancer names of a snapshot's instances."""
+    return {k[0] for k in snap if k[0] is not None}
+
+
+def _instancers(names: set, depsgraph) -> dict:
+    """Evaluated world matrices of the instancer objects ``names``."""
+    return {n: np.array(bpy.data.objects[n].evaluated_get(depsgraph).matrix_world) for n in names
+            if n in bpy.data.objects}
+
+
 def _relative(key: tuple, snaps: list[dict], parents: list[dict], min_size_bu: float) -> np.ndarray | None:
-    """The instance's matrix relative to its instancer (from the first snapshot, which has the key)
-    when it is the same at every snapshot, else None. A snapshot may lack the instance where its
-    instancer makes it smaller than the minimum size: traffic scaled to zero while it jumps back."""
-    m, local, mode = snaps[0][key][:3]
-    rel = None
+    """The instance's matrix relative to its instancer (from the first snapshot that has the key)
+    when it is the same at every snapshot that has it, else None. A snapshot may lack the instance
+    where its instancer makes it smaller than the minimum size: traffic scaled to zero while it jumps
+    back, or before it first appears."""
+    i0 = next(i for i, snap in enumerate(snaps) if key in snap)
+    m, local, mode = snaps[i0][key][:3]
+    p0 = parents[i0].get(key[0])
+    if p0 is None or abs(np.linalg.det(p0[:3, :3])) < 1e-12:  # flattened: cannot tell
+        return None
+    rel = np.linalg.inv(p0) @ m
     for snap, par in zip(snaps, parents):
         p = par.get(key[0])
         if p is None:
             return None
-        if rel is None:
-            if abs(np.linalg.det(p[:3, :3])) < 1e-12:  # flattened: cannot tell
-                return None
-            rel = np.linalg.inv(p) @ m
-        elif key in snap:
+        if key in snap:
             if not np.allclose(p @ rel, snap[key][0], rtol=1e-5, atol=1e-4):
                 return None
         elif _counted(local, p @ rel, mode, min_size_bu):
