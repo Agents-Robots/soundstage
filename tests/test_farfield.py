@@ -79,6 +79,23 @@ def test_far_air_absorption_between_bands(make_scene, noise, tiers, distance):
     assert np.abs(diff).max() < 0.8
 
 
+@pytest.mark.parametrize("speed", [80.0, -80.0])
+def test_far_air_absorption_follows_the_doppler_shift(make_scene, noise, tiers, speed):
+    # the air absorbs at the received (shifted) frequency: the full chain, which filters before the
+    # delay line, scales its corners by the playback rate and matches the far field, which filters
+    # after the read (without: 12-13 dB apart at 6.4 kHz, E05 section 6); up to 6.5 kHz the loss
+    # reaches 30-55 dB here, where the fits stay within 2.4-2.8 dB of ISO (E05)
+    tiers(lambda i, c: False)
+    t = np.arange(151)[:, None, None] / 30
+    pos = np.array([[[0.0, 500.0, 0.0]]]) - np.array([[[0.0, speed, 0.0]]]) * t
+    scene = make_scene([{"sample": noise}], pos, frame_end=150, settings={**PLAIN, "air_absorption": 1.0})
+    full, lod = _pair(scene)
+    f, pa = welch(full.audio[RATE:4 * RATE, 0], RATE, nperseg=4096)
+    _, pb = welch(lod.audio[RATE:4 * RATE, 0], RATE, nperseg=4096)
+    band = (f > 500) & (f < 6500)
+    assert np.abs(10 * np.log10(pb[band] / pa[band])).max() < 2.0
+
+
 def test_far_field_beside_a_bed(make_scene, noise, tiers):
     # a non-spatial source is always near; its renderer has no distance statistics for the report
     tiers(lambda i, c: False)

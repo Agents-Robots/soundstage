@@ -163,7 +163,9 @@ class SpatialRenderer:
         te = np.maximum.accumulate(grid.times - self.delays.centre)
         air = filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], self.fe,
                                     scale=s["air_absorption"] * p["air_absorption"])
-        self.emission_stages = [filters.AirStage(te, air.params(path.distance), self.fe, air.bypass(path.distance))]
+        # at the received frequency: the corners follow the Doppler shift (playback rate)
+        self.emission_stages = [filters.AirStage(te, air.received(air.params(path.distance), self.delays.rate), self.fe,
+                                                 air.bypass(path.distance))]
         if ctx.panner.rear_cue:
             self.emission_stages.append(filters.RearStage(te, path.rear, s["rear_cutoff_hz"], self.fe))
         self.ear_l, self.ear_r = ctx.panner.ear_stages(path, ctx.rate)

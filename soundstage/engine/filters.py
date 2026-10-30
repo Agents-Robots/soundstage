@@ -193,6 +193,15 @@ class AirAbsorption:
             out[active, s, 3] = np.exp(np.interp(u, grid, np.log(tab[:, s, 3])))
         return out
 
+    def received(self, params: np.ndarray, rate: np.ndarray) -> np.ndarray:
+        """``params`` (n, S, 4) for a filter on the emission side that acts as ``params`` does at the
+        received frequency: corners divided by the playback rate (n,), the Doppler factor from the
+        emitted to the received frequency. The air absorbs the wave at its frequency in the air."""
+        out = params.copy()
+        corner = np.arctan(params[..., 0]) / np.maximum(np.asarray(rate, dtype=np.float64), 1e-6)[:, None]
+        out[..., 0] = np.tan(np.minimum(corner, 0.49 * np.pi))
+        return out
+
     def bypass(self, distance: np.ndarray) -> bool:
         """Whether every distance is closer than the first fitted one (the stage passes the signal)."""
         finite = ~np.isnan(self.table[:, 0, 0])
