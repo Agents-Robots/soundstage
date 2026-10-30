@@ -31,7 +31,7 @@ culling is implemented: voices that do not matter (silent, or far below the rest
 are skipped within an error budget, which saves a few percent at the default and halves renders
 with many silent voices ([E16](research/experiments/E16-culling.md)). Shots with thousands of
 sources render the loudest 64 per group through the full chain and the rest in a cheaper far
-field: 10 000 flying cars, each with its engine, render over 60 s in under 3 minutes and 17 GB
+field: 10 000 flying cars, each with its engine, render over 60 s in under 3 minutes and 12 GB
 ([E18](research/experiments/E18-traffic.md)); their reverb send falls with distance, so distant
 traffic does not fill the reverb ([E19](research/experiments/E19-reverb-send.md)). Panning follows the picture: what is in the frame
 is heard at its place on the screen, through the camera lens and its zooms
@@ -86,13 +86,13 @@ memory follows the near voices, not the sources:
 
 | | per source | per near voice (at most about 2 × `detail_voices` at once) | 10 000 cars, default |
 |---|---|---|---|
-| render | 15 ms | 0.17–0.20 s, 63–110 MB | 2.9 min, 17 GB |
+| render | 15 ms | 0.17–0.21 s, 23–34 MB | 2.9 min, 12 GB |
 | bake | 0.14–0.17 s | | 25 min |
 
 The bake gives the sources ranked beyond 2 × `detail_voices` the direct path only for their
 visibility; with every path it took 91 min for the same 10 000 cars. `--set detail_voices=null`
-renders every source through the full chain (0.23 s and 40 MB per car here; 2000 cars took 7.6 min
-and 81 GB).
+renders every source through the full chain (0.22 s and 25 MB per car here; 2000 cars took 7.4 min
+and 52 GB).
 
 **Render options**, most expensive first (effect relative to the defaults, at 100 sources):
 

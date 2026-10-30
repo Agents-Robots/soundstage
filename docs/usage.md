@@ -218,11 +218,11 @@ setting from the scene settings to skip visibility rays of sources far below the
 default) run the full chain; the others run the far field, which keeps each source's level, pitch,
 Doppler, delay and side but shares air absorption and occlusion filtering per distance band, and
 leaves out the interaural delay, head shadow and rear low-pass. For a 60 s shot, a far source costs
-about 15 ms of render and almost no memory; a near voice 0.17–0.20 s and 63–110 MB at its peak. 10 000
-flying cars over 60 s render in under 3 minutes with 17 GB
+about 15 ms of render and almost no memory; a near voice 0.17–0.21 s and 23–34 MB at its peak. 10 000
+flying cars over 60 s render in under 3 minutes with 12 GB
 ([E18](../research/experiments/E18-traffic.md)). The render prints the far share and the most near
 voices alive at once. `--set detail_voices=16` is faster; `--set detail_voices=null` renders every
-source in full (0.23 s and 40 MB per source). The bake reads `detail_voices` from the scene
+source in full (0.22 s and 25 MB per source). The bake reads `detail_voices` from the scene
 settings too and gives the sources ranked beyond twice that the direct path only for their
 visibility, which makes the bake of thousands of sources 2–4 times faster; render with the same
 setting you baked with (the render warns otherwise).

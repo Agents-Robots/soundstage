@@ -61,8 +61,9 @@ one job per node.
 
 ## Results: render time and memory
 
-These are the runs with the air filter of 7e92f98 (two sections with zeros, E05); the first runs
-(c81a028, four one-poles) are kept in `out/e18/results_c81a028.jsonl` on the machines that ran them.
+Runs at 6f62301: near voices hold only their dry signal (#32, [E20](E20-render-memory.md)), the
+full chain absorbs at the received frequency (#40). The runs before are kept in
+`out/e18/results_7e92f98.jsonl` and `results_c81a028.jsonl` on the machines that ran them.
 
 ![render time, memory and band level difference](../figures/e18_scaling.png)
 
@@ -70,25 +71,29 @@ Render time (s) and peak memory (GB), 60 s shot, scenes baked with every path:
 
 | cars | null (every car near) | 16 | 32 | 64 (default) | 128 |
 |---|---|---|---|---|---|
-| 500 | 115 / 21.2 | 31 / 6.0 | 37 / 8.1 | 48 / 13.9 | 62 / 16.7 |
-| 1000 | 228 / 41.1 | 38 / 6.5 | 45 / 10.6 | 57 / 17.4 | 80 / 26.0 |
-| 2000 | 457 / 81.0 | 51 / 8.3 | 59 / 11.9 | 71 / 19.1 | 95 / 31.6 |
-| 5000 | | 91 / 10.3 | 98 / 14.1 | 110 / 20.9 | 136 / 35.0 |
-| 10 000 | | 152 / 10.7 | 166 / 12.5 | 174 / 16.7 | 197 / 25.8 |
+| 500 | 116 / 14.1 | 30 / 4.2 | 38 / 4.5 | 50 / 6.8 | 61 / 8.6 |
+| 1000 | 224 / 26.5 | 37 / 5.0 | 44 / 6.4 | 56 / 8.3 | 79 / 11.3 |
+| 2000 | 446 / 51.9 | 50 / 6.5 | 58 / 7.4 | 70 / 9.5 | 95 / 13.3 |
+| 5000 | | 88 / 8.1 | 97 / 9.4 | 110 / 11.4 | 137 / 15.8 |
+| 10 000 | | 152 / 9.2 | 165 / 9.9 | 172 / 11.5 | 199 / 14.1 |
 
 - With every car through the full chain, time and memory grow with the number of cars: about
-  0.23 s and 40 MB per car (2000 cars: 457 s, 81 GB). The first runs needed 35 MB per car: the air
-  filter's coefficients per control point take 6–7 MB more per voice over a 60 s shot (#32).
+  0.22 s and 25 MB per car (2000 cars: 446 s, 52 GB). At 7e92f98 a car needed 40 MB: its loop
+  renderer kept the resampled sample, its cycle and the prefiltered cycle in float64, and the air
+  stage its parameters beside the coefficients; it now keeps the prefiltered cycle in float32 and
+  the coefficients only ([E20](E20-render-memory.md)). The render times stayed within 2 %.
 - With the far field, the render time is a part per car plus a part per near voice. A
   least-squares fit over `detail_voices` 16–128 against the most near voices alive at once gives
-  0.17–0.20 s per near voice, on a base that grows from 25 s at 500 cars to 149 s at 10 000: about
-  15 ms per far car, 1/15 of the full chain. 10 000 cars at the default 64 render in 174 s with
-  16.7 GB (first runs: 173 s, 15.8 GB).
+  0.17–0.21 s per near voice, on a base that grows from 26 s at 500 cars to 148 s at 10 000: about
+  15 ms per far car, 1/15 of the full chain. 10 000 cars at the default 64 render in 172 s with
+  11.5 GB (7e92f98: 174 s, 16.7 GB).
 - Memory follows the near voices alive at once, not the number of cars. They peak at about
   2 × `detail_voices` (hysteresis 1.5 and renderers overlapping at chunk boundaries). The same fit
-  gives 63–110 MB per near voice at the peak, on a base of 4–8 GB that grows with the number of
-  cars (their positions).
+  gives 23–34 MB per near voice at the peak (7e92f98: 63–110 MB), on a base of 3–9 GB that grows
+  with the number of cars (their positions).
 - The setup (positions, estimates, tiers) takes 12 s at 10 000 cars; the rest is audio.
+- Runs that shared a node with another job took 3–40 % longer (and as much more CPU time); the
+  times above are from runs alone on their node.
 
 ## Results: difference to the full render
 
@@ -215,11 +220,11 @@ three snapshots of the occluder setup.
 
 ## What to take from it
 
-- The default `detail_voices` 64 renders 10 000 cars over 60 s in under 3 min and 17 GB on a 16-core
-  node, against 0.23 s and 40 MB per car through the full chain.
+- The default `detail_voices` 64 renders 10 000 cars over 60 s in under 3 min and 12 GB on a 16-core
+  node, against 0.22 s and 25 MB per car through the full chain.
 - The far field's difference to the full render is at or below what other random loop phases
   change, except for the left/right balance of dense traffic at `detail_voices` 64 or less. Raising
-  `detail_voices` lowers it at 0.17–0.20 s of render and 63–110 MB per near voice.
+  `detail_voices` lowers it at 0.17–0.21 s of render and 23–34 MB per near voice.
 - A moving source must be absorbed at its received frequency. Before #40 the full chain used the
   emitted one and the far field sounded 0.6–1.3 dB duller than it at 3–6 kHz in dense traffic;
   now 0.25–0.4 dB.
