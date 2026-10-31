@@ -6,7 +6,8 @@ file names; it is linked into a gap-free numbered sequence in a temporary direct
 holding the previous image, and read by ffmpeg at the exact (rational) frame rate, so video frame k
 is picture frame ``first + k``. The audio is trimmed or delayed by a whole number of samples, so
 that its sample at picture frame N is the mix's sample of frame N, padded with silence if the
-picture runs longer, to exactly the picture's length. A video must have the mix's frame rate.
+picture runs longer, to exactly the picture's length. A video must run at the mix's frame rate
+(within half a frame of drift over its length).
 Runs in the repo venv; needs ffmpeg and ffprobe (``--ffmpeg``, ``$SOUNDSTAGE_FFMPEG`` or ``PATH``).
 """
 
@@ -26,6 +27,9 @@ import soundfile as sf
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".exr", ".bmp", ".webp"}
 NUMBERED = re.compile(r"(.*?)(\d+)(\.\w+)")
+MAX_RATE_DRIFT_FRAMES = 0.5
+"""A video is accepted when its frame rate and the mix's drift apart by less than this over its
+length (a 29.97 fps file may report 555974/18551 instead of 30000/1001: 4 µs over 87 s)."""
 
 
 class PreviewError(Exception):
@@ -152,8 +156,10 @@ def preview(wav: str | Path, output: str | Path, *, frames: str | Path | None = 
             if not video.is_file():
                 raise PreviewError(f"{video} not found")
             n_frames, video_fps = probe_video(ff, video)
-            if video_fps != rate_fps:
-                raise PreviewError(f"{video.name} runs at {float(video_fps):g} fps, the mix at {float(rate_fps):g} fps")
+            drift = abs(float(video_fps) - float(rate_fps)) * n_frames / float(rate_fps)  # frames, at the end
+            if drift > MAX_RATE_DRIFT_FRAMES:
+                raise PreviewError(f"{video.name} runs at {float(video_fps):.6f} fps, the mix at {float(rate_fps):.6f} "
+                                   f"fps: {drift:.1f} frames apart at the end of the video")
             first = first_mix_frame if video_start_frame is None else int(video_start_frame)
             last, held = first + n_frames - 1, 0
             picture = ["-i", str(video)]

@@ -125,3 +125,24 @@ def test_cli_default_output_name(tmp_path):
     wav = mix(tmp_path / "shot.wav", 25, 1, 10, bursts=[])
     assert main(["preview", str(wav), "--frames", str(seq), "--width", "32"]) == 0
     assert (tmp_path / "shot_preview.mp4").is_file()
+
+
+def test_video_rate_off_by_a_rounding_error_is_accepted(tmp_path, monkeypatch):
+    # issue #41: a 29.97 fps file whose rate probes as 555974/18551 (4 us over 87 s) must mux;
+    # a file at another rate must still be refused
+    seq = frames(tmp_path / "seq", range(1, 31))
+    fps = 30000 / 1001
+    plain = mix(tmp_path / "silent.wav", fps, 1, 30, bursts=[], report=False)
+    pv.preview(plain, tmp_path / "video.mp4", frames=seq, fps=fps, start_frame=1, width=0)
+    wav = mix(tmp_path / "mix.wav", fps, 1, 30, bursts=[15])
+    real = pv.probe_video
+
+    def probe(ffmpeg, path, rate=Fraction(555974, 18551)):
+        return real(ffmpeg, path)[0], rate
+
+    monkeypatch.setattr(pv, "probe_video", probe)
+    res = pv.preview(wav, tmp_path / "p.mp4", video=tmp_path / "video.mp4", width=0)
+    assert res.picture_frames == (1, 30)
+    monkeypatch.setattr(pv, "probe_video", lambda f, p: probe(f, p, Fraction(25)))
+    with pytest.raises(pv.PreviewError, match="frames apart"):
+        pv.preview(wav, tmp_path / "q.mp4", video=tmp_path / "video.mp4", width=0)

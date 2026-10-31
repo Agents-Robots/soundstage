@@ -151,7 +151,9 @@ the deliverables are the WAVs.
   The number in the file name is the Blender frame. Gaps (a partly rendered shot) hold the previous
   image, so the timing stays right. Images are linked into a gap-free sequence in a temporary
   directory and read at the exact rational frame rate (29.97 → 30000/1001).
-- `--video FILE` must have the mix's frame rate; with `--width 0` its video stream is copied.
+- `--video FILE` must run at the mix's frame rate: a file whose rate differs by a rounding error
+  (a 29.97 fps file reported as 555974/18551) is accepted as long as the two rates drift apart by
+  less than half a frame over its length; with `--width 0` its video stream is copied.
 - Picture and sound are aligned by frame number: the MP4 starts at the first picture frame, the
   mix is trimmed (or delayed with silence) by a whole number of samples so that the sound of frame
   N plays with picture frame N, and padded with silence if the picture runs longer. The MP4 is as
