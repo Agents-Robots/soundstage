@@ -25,3 +25,8 @@ AGENTS.local.md
 .DS_Store
 ._*
 research/papers/pdf/
+
+# Tools
+.ruff_cache/
+.worktrees/
+.claude/

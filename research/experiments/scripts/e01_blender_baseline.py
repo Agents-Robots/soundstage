@@ -21,7 +21,7 @@ import numpy as np  # noqa: E402
 import soundfile as sf  # noqa: E402
 from scipy.signal import hilbert  # noqa: E402
 
-from common import REPO, RATE, save, table  # noqa: E402
+from common import RATE, REPO, save, table  # noqa: E402
 
 TAGS = """
 import os, sys, bpy

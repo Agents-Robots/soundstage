@@ -18,29 +18,34 @@ too: Blender's own Speaker objects are read as sources.
 scene script ──▶ Blender (tags sounds) ──▶ bake (camera + object paths) ──▶ render ──▶ stereo WAV ──▶ Resolve
 ```
 
-**Status:** Phases 0 to 3 are implemented (baseline, MVP, physics, environment and mixing).
-Working end to end: loudness by distance, sound travelling at 343 m/s (distant events are heard
-late), Doppler from source and camera motion, left/right placement with a small interaural delay
-and head shadow, air absorption, a cue for sources behind the camera, directivity cones, clean
-camera cuts, loops and one-shots; occlusion behind buildings and vehicles (quieter, duller, low
-frequencies bending around edges); reverb from 113 named environments (hangar, city street,
-forest, space station …); Speaker objects and tags in instanced assets; stems per group for
-Fairlight, a loudness report, optional normalization and true-peak limiting, a debug plot; an MP4
-preview for checking sync. 50 sources over 5 minutes render in about a minute. From Phase 4,
-culling is implemented: voices that do not matter (silent, or far below the rest of their group)
-are skipped within an error budget, which saves a few percent at the default and halves renders
-with many silent voices ([E16](research/experiments/E16-culling.md)). Shots with thousands of
-sources render the loudest 64 per group through the full chain and the rest in a cheaper far
-field: 10 000 flying cars, each with its engine, render over 60 s in under 3 minutes and 12 GB
-([E18](research/experiments/E18-traffic.md)); their reverb send falls with distance, so distant
-traffic does not fill the reverb ([E19](research/experiments/E19-reverb-send.md)). Panning follows the picture: what is in the frame
-is heard at its place on the screen, through the camera lens and its zooms
-([E17](research/experiments/E17-lens-and-pan.md)). Binaural and ambisonic output, animated
-parameters and random variation follow by need (see the [roadmap](docs/roadmap.md)).
+## What it does
+
+- **Placement**: loudness by distance (OpenAL distance models), constant-power panning with a
+  small interaural delay and head shadow, a cue for sources behind the camera, directivity cones.
+  Panning follows the picture: a source at the frame edge is heard at the screen edge whatever
+  the lens, and zooms move sounds with the picture ([E17](research/experiments/E17-lens-and-pan.md)).
+- **Propagation**: sound travels at 343 m/s, so distant events are heard late; Doppler from the
+  motion of sources and camera (exact retarded time, not an approximation); air absorption after
+  ISO 9613-1; clean camera cuts.
+- **Environment**: occlusion behind buildings and vehicles, baked by ray casting in Blender
+  (quieter, duller, low frequencies bending around edges); reverb from 113 named environments
+  (hangar, city street, forest, space station …) or an impulse response, with a send that falls
+  with distance so distant traffic does not fill the reverb.
+- **Scale**: thousands of sources. The loudest 64 of each group run the full chain, the rest a
+  cheaper far field; culling skips what is inaudible within an error budget. 10 000 flying cars,
+  each with its engine, render 60 s in under 3 minutes and 12 GB ([E18](research/experiments/E18-traffic.md)).
+- **Output**: 48 kHz float WAV aligned to the first frame, stems per group for Fairlight, a
+  loudness report (LUFS, true peak), optional normalization and true-peak limiting, a debug plot,
+  an MP4 preview for sync checks.
+- **Reproducible**: tags live in scripts, the bake is headless, renders are bit-identical for the
+  same inputs, every model is documented with its measurements ([research](research/README.md)).
+
+Not yet: binaural and ambisonic output, animated parameters, random variation of one-shots
+([roadmap](docs/roadmap.md)).
 
 ## Try it
 
-Requires Linux, Python 3.12+ and Blender 5.x on `PATH`.
+Requires Linux, Python 3.12+ and Blender 5.x on `PATH`; ffmpeg for previews.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
@@ -133,6 +138,11 @@ this was within 17 % of the measured time.
 - [Requirements](docs/requirements.md) and [roadmap](docs/roadmap.md)
 - [Architecture](docs/architecture.md) and the [specifications](docs/spec/): [tagging](docs/spec/tagging.md), [scene format](docs/spec/scene-format.md), [signal model](docs/spec/signal-model.md), [command line](docs/spec/cli.md)
 - [Research](research/README.md): survey of existing tools, one page per acoustic model with its choices, reproducible experiments, papers; and the [decision records](docs/adr/README.md)
-- [AGENTS.md](AGENTS.md) for coding agents working on this repo
+- [AGENTS.md](AGENTS.md) for coding agents working on this repo, [CONTRIBUTING.md](CONTRIBUTING.md) for people
 
-Work is tracked in this repository's GitHub issues.
+## Status
+
+Phases 0 to 3 of the [roadmap](docs/roadmap.md) are implemented (baseline, placement, physics,
+environment and mixing); Phase 4 items (culling, the far field, screen-relative panning) are added
+as shots need them. The unit tests run on every push; the end-to-end tests need Blender. Work is
+tracked in this repository's [issues](https://github.com/Agents-Robots/soundstage/issues).

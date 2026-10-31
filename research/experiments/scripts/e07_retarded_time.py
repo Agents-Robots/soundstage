@@ -6,9 +6,10 @@ and the frequency error that the delay error causes (via the playback rate 1 - d
 
 import numpy as np  # noqa: E402
 
-from common import RATE, scene, table  # noqa: E402
 from soundstage.engine.control import ControlGrid  # noqa: E402
 from soundstage.engine.geometry import SceneGeometry  # noqa: E402
+
+from common import RATE, scene, table  # noqa: E402
 
 C, Y = 343.0, 20.0
 

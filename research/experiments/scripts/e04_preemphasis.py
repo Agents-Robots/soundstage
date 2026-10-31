@@ -11,10 +11,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from e03_interpolators import error_db  # noqa: E402
+
+from soundstage.engine import kernels as k  # noqa: E402
 
 from common import RATE, save, table  # noqa: E402
-from e03_interpolators import error_db  # noqa: E402
-from soundstage.engine import kernels as k  # noqa: E402
 
 
 def response(f_rel: np.ndarray) -> np.ndarray:

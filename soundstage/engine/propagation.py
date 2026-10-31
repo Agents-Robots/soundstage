@@ -17,8 +17,8 @@ Spec: docs/spec/signal-model.md#propagation-delay-doppler-itd; decisions: ADR 00
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 

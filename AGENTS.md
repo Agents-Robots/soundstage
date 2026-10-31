@@ -56,6 +56,7 @@ ticket, not in a document.
 ```bash
 .venv/bin/pytest                                   # all tests; Blender tests skip without blender on PATH
 .venv/bin/pytest -m "not blender"                  # unit tests only (fast)
+.venv/bin/ruff check .                             # lint (configuration in pyproject.toml)
 .venv/bin/python tools/make_test_samples.py        # generate samples/*.wav
 .venv/bin/soundstage scan <blend> --out scan.json  # cameras and sound-source candidates
 .venv/bin/soundstage bake <blend> --run sounds.py --out <dir>   # headless Blender → scene.json + scene.npz

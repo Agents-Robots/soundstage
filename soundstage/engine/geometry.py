@@ -232,9 +232,8 @@ class SceneGeometry:
         self.t = grid.times
         self.p, self.rot, self.segment = self.listener.pose(self.t)
         self.frame = None  # (tan left, tan right) of the frame edges per control point, for screen panning
-        frame = getattr(scene, "listener_frame", None)
-        if s["pan_reference"] == "screen" and frame is not None:
-            self.frame = tuple(np.interp(self.t, self.times, frame[:, i]) for i in (0, 1))
+        if s["pan_reference"] == "screen" and scene.listener_frame is not None:
+            self.frame = tuple(np.interp(self.t, self.times, scene.listener_frame[:, i]) for i in (0, 1))
         self._tracks: dict[int, tuple[Track, Track | None]] = {}
 
     def sub(self, j0: int, count: int) -> SceneGeometry:
@@ -253,11 +252,10 @@ class SceneGeometry:
     def tracks(self, track: int) -> tuple[Track, Track | None]:
         if track not in self._tracks:
             pos = self.scene.src_pos[:, track]
-            extra = [self.scene.seconds(f) for k, f in getattr(self.scene, "src_cuts", np.zeros((0, 2)))
-                     if int(k) == track]
+            extra = [self.scene.seconds(f) for k, f in self.scene.src_cuts if int(k) == track]
             starts = piece_starts(self.times, pos, self.max_speed, extra)
             fwd = None
-            if getattr(self.scene, "src_fwd", None) is not None:
+            if self.scene.src_fwd is not None:
                 fwd = Track(self.times, self.scene.src_fwd[:, track], starts, kind="linear")
             self._tracks[track] = (Track(self.times, pos, starts), fwd)
         return self._tracks[track]

@@ -14,8 +14,9 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import resample
 
-from common import RATE, render, sample, save, scene, sine, table
 from soundstage.engine import mix, report
+
+from common import RATE, render, sample, save, scene, sine, table
 
 TMP = Path(tempfile.mkdtemp(prefix="e14_"))
 

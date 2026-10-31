@@ -12,8 +12,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from common import RATE, save, table  # noqa: E402
 from soundstage.engine import kernels as k  # noqa: E402
+
+from common import RATE, save, table  # noqa: E402
 
 
 def error_db(read, f: float, oversample: int, prefilter=None) -> float:

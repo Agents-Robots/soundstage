@@ -30,7 +30,8 @@ import sys
 import time
 from pathlib import Path
 
-from e15_option_costs import EMPTY, SCENE_SCRIPT, scene_dir as e15_scene_dir, soundstage_cmd, timed
+from e15_option_costs import EMPTY, SCENE_SCRIPT, soundstage_cmd, timed
+from e15_option_costs import scene_dir as e15_scene_dir
 
 REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "out" / "e16"

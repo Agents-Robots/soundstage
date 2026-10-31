@@ -40,7 +40,7 @@ def normalize_gain(audio: np.ndarray, rate: int, target_lufs: float) -> float:
     return 1.0 if not np.isfinite(lufs) else float(10.0 ** ((target_lufs - lufs) / 20.0))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _interpolator(factor: int) -> np.ndarray:
     """Oversampling low-pass at the original Nyquist: 32 taps per phase, Kaiser beta 8 (flat within
     0.01 dB to 20 kHz at 48 kHz, images above 28 kHz down 69 dB)."""
@@ -122,6 +122,9 @@ def write_wav(path: str | Path, audio: np.ndarray, rate: int, *, pcm24: bool = F
     else:
         with sf.SoundFile(path, "w", rate, audio.shape[1] if audio.ndim == 2 else 1, subtype="FLOAT") as f:
             # no PEAK chunk: libsndfile stamps it with the time of writing, so files would differ (NFR-2)
-            sf._snd.sf_command(f._file, SFC_SET_ADD_PEAK_CHUNK, sf._ffi.NULL, 0)
+            try:
+                sf._snd.sf_command(f._file, SFC_SET_ADD_PEAK_CHUNK, sf._ffi.NULL, 0)
+            except AttributeError:  # another soundfile build: the file is still correct, only its bytes vary
+                pass
             f.write(audio.astype(np.float32))
     return path

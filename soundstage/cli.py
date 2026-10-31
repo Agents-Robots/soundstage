@@ -207,7 +207,7 @@ def render_frames(text: str | None, scene) -> tuple[int, int] | None:
 
 def cmd_render(a: argparse.Namespace) -> int:
     from soundstage.blender import schema
-    from soundstage.engine import mix, report, render
+    from soundstage.engine import mix, render, report
     from soundstage.engine.scene import SceneError, load_scene, parse_overrides
 
     try:
@@ -219,10 +219,10 @@ def cmd_render(a: argparse.Namespace) -> int:
     except (SceneError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    plot = None
+    plot_module = None
     if a.plot:
         try:
-            from soundstage.engine import plot
+            from soundstage.engine import plot as plot_module
         except ImportError as e:
             print(f"error: --plot needs matplotlib (pip install 'soundstage[plot]'): {e}", file=sys.stderr)
             return 1
@@ -242,7 +242,7 @@ def cmd_render(a: argparse.Namespace) -> int:
         mix.write_wav(out, result.audio, result.rate, pcm24=a.pcm24)
         for group, audio in result.stems.items() if a.stems else ():
             mix.write_wav(mix.stem_path(out, group), audio, result.rate, pcm24=a.pcm24)
-        plotted = plot.write_plot(out.with_suffix(".plot.png"), scene, result) if plot else None
+        plotted = plot_module.write_plot(out.with_suffix(".plot.png"), scene, result) if plot_module else None
         if a.report:
             report.write_report(out.with_suffix(".report.json"), rep)
     except (OSError, RuntimeError) as e:  # soundfile reports unwritable files as RuntimeError

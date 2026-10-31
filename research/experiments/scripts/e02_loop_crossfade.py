@@ -11,8 +11,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from common import RATE, save, table  # noqa: E402
 from soundstage.engine import signals  # noqa: E402
+
+from common import RATE, save, table  # noqa: E402
 
 FADE = int(0.05 * RATE)
 

@@ -14,8 +14,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from common import RATE, save, table  # noqa: E402
 from soundstage.engine import filters, panning  # noqa: E402
+
+from common import RATE, save, table  # noqa: E402
 
 A, C = 0.0875, 343.0
 

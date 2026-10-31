@@ -563,7 +563,7 @@ def cmd_analyse(a: argparse.Namespace) -> None:
                     f"N={n}: setup {st[b][n]:.2f} s, dsp {dsp[b][n]:.2f} s, other {med[b][n] - st[b][n] - dsp[b][n]:.2f} s"
                     for n in dsp[b]))
     if any(r["stage"] == "pb" for r in rows):
-        print("\n## interactions (Plackett-Burman, N = %d)\n" % PB_SOURCES)
+        print(f"\n## interactions (Plackett-Burman, N = {PB_SOURCES})\n")
         print(pb_analysis(rows, medians(rows, "render")))
     mem = medians(rows, "render", "maxrss_mb")
     if ("base", "baseline") in mem:

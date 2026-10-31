@@ -9,8 +9,9 @@ import numpy as np
 from scipy.fft import next_fast_len
 from scipy.signal import butter, istft, sosfilt, sosfiltfilt, spectrogram, stft
 
-from common import RATE, render, rms_db, sample, save, scene, sine, table
 from soundstage.engine import reverb
+
+from common import RATE, render, rms_db, sample, save, scene, sine, table
 
 FILM = ("generic", "room", "concerthall", "hangar", "city", "alley", "forest", "mountains", "underwater",
         "sewerpipe", "spacestation_hall", "spacestation_alcove", "factory_hall", "castle_hall")

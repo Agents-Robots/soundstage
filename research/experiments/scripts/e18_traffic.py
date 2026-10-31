@@ -41,7 +41,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-
 from e15_option_costs import EMPTY, soundstage_cmd, timed
 
 REPO = Path(__file__).resolve().parents[3]
