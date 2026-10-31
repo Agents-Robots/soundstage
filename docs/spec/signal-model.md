@@ -220,7 +220,9 @@ least squares on the loss in dB: from 50 Hz to 20 kHz the loss follows ISO 9613-
 below 60 dB; elsewhere, up to 0.45 `f_e`, it must reach at least 60 dB (or ISO, if less). Each
 distance starts from the previous one's fit and is held near it (weight 0.3 dB per unit of log
 parameter), so the parameters change smoothly; at control rate they are interpolated in log
-distance (corner, zeros) and linearly (damping), and per sample linearly. Each control point's
+distance (corner, zeros) and linearly (damping), and per sample linearly (`g`, `2R + g`, `c`, `m`;
+the implicit-solve factor `1 / (1 + g (2R + g))` is recomputed from them at every sample, so the
+section stays consistent however fast the corner moves). Each control point's
 corners are divided by its playback rate `r` (`g' = tan(min(atan(g) / r, 0.49 π))`): the stage runs on
 the emitted signal, and the air absorbs at the received, Doppler-shifted frequency. Measured error at
 `f_e` = 96 kHz: within 0.94 dB of ISO where the loss is below 20 dB and within 2.4 dB from 20 to 60 dB

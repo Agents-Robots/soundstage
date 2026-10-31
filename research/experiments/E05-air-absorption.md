@@ -91,10 +91,14 @@ an octave apart, 2.2 dB.
 
 The emission-side stage alone, a source moving from 10 m to 2 km over 60 s at 96 kHz: 12.8 ns per
 sample with four one-poles (per-sample table search and interpolation), 9.5 ns with two sections
-whose coefficients are stepped by per-sample increments (no division). A full-chain render of 48
-moving sources over 20 s on one worker: 12.65 s with air absorption, 11.82 s without (+7.0 %).
-Interpolating the sections' `h = 1/(1 + g k)` with the other coefficients instead of computing it
-keeps `h (1 + g k)` within 4.6·10⁻⁸ of 1.
+whose coefficients are stepped by per-sample increments, `h = 1/(1 + g k)` interpolated like the
+others (no division; it stayed within 4.6·10⁻⁸ of consistent for that motion). A full-chain render
+of 48 moving sources over 20 s on one worker: 12.65 s with air absorption, 11.82 s without (+7.0 %).
+
+Since #42 (section 7) the kernel recomputes `h` from the stepped `g` and `k` at every sample.
+Measured again in one run: 11.6 ns per sample against 14.0 ns for the four one-poles (the machine
+was slower that day than for the numbers above; the division costs about 2 ns per sample, a
+quarter of the stage and about 2 % of a full-chain render).
 
 ## 6. Doppler
 
@@ -116,6 +120,27 @@ and the full chain gave an approaching source too little loss and a receding one
 #40). With the corners scaled, the tiers agree for moving sources as for a standing one, within
 1.4 dB at 30 dB of loss.
 
+## 7. Close pass with exaggerated Doppler (#42)
+
+A noise loop passing a static listener at 1.4 m and 52.8 m/s, rendered at `doppler_factor` 1 and
+2. Near the pass the distance and the playback rate change fast, so the sections' Doppler-scaled
+corners (section 6) move far between two control points (1 ms); the largest change of a corner
+and the render's peak:
+
+| `doppler_factor` | corner step per control point | peak (dBFS) |
+|---|---|---|
+| 1 | 11 % | −2.9 |
+| 2 | 25 % | −3.4 |
+
+With `h` interpolated like the other coefficients (the first version, dc20edf) the render at
+`doppler_factor` 2 diverged to a peak of 5·10¹⁸ (+375 dBFS) within 30 ms of the closest approach,
+and a real shot with the same geometry reached 3·10³⁸ and non-finite samples (issue #42); at 1.75
+it reached 10²². An interpolated `h` no longer solves the section's implicit equation for the
+interpolated `g` and `k`, and for a 25 % corner step the mismatch is enough to make the section
+unstable; no step size is safe in principle. `air_absorption = 0` rendered clean, the panner, head
+shadow and ITD made no difference, which located the cause. The kernel now recomputes `h` at every
+sample (section 5 for the cost), and `tests/test_filters.py` renders this pass.
+
 ## Conclusion
 
 The implementation of ISO 9613-1 is correct. Two second-order sections with a pair of zeros each,
@@ -129,4 +154,5 @@ bright beyond ([air absorption](../models/air-absorption.md), issue #36).
 ```bash
 .venv/bin/python research/experiments/scripts/e05_air_absorption.py             # all sections
 .venv/bin/python research/experiments/scripts/e05_air_absorption.py --doppler   # section 6 alone
+.venv/bin/python research/experiments/scripts/e05_air_absorption.py --pass      # section 7 alone
 ```

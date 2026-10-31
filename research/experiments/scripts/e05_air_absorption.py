@@ -34,8 +34,9 @@ import numba  # noqa: E402
 import numpy as np  # noqa: E402
 from scipy.optimize import least_squares  # noqa: E402
 
-from common import RATE, render, sample, save, scene, table  # noqa: E402
 from soundstage.engine import farfield, filters, kernels  # noqa: E402
+
+from common import RATE, render, sample, save, scene, table  # noqa: E402
 
 TABLE_2 = {
     (10, 70): [0.1, 0.4, 1.0, 1.9, 3.7, 9.7, 32.8, 117],
@@ -214,27 +215,51 @@ def _timed(fn) -> float:
     return time.perf_counter() - t0
 
 
-def stage_cost() -> tuple[float, float, float]:
-    """ns per emission sample: four one-poles (earlier) and two sections, a source moving from 10 m
-    to 2 km over 60 s (control points every 1 ms); and how far the per-sample interpolated
-    coefficient h strays from 1 / (1 + g k) of the interpolated g and k (relative, largest)."""
+def stage_cost() -> tuple[float, float]:
+    """ns per emission sample: four one-poles (earlier) and two sections (h recomputed per sample),
+    a source moving from 10 m to 2 km over 60 s (control points every 1 ms)."""
     n = 60 * RATE_E
     times = np.arange(0.0, 60.0005, 0.001)
     d = np.geomspace(10.0, 2000.0, len(times))
     x = np.random.default_rng(1).standard_normal(n)
     coef = np.ascontiguousarray(kernels.svf_coefficients(filters.AirAbsorption(20, 50, RATE_E).params(d)))
-    u = np.linspace(0.0, 1.0, 97)[None, :, None]  # within each control interval, at the emission rate
-    g = coef[:-1, None, :, 0] + (coef[1:, None, :, 0] - coef[:-1, None, :, 0]) * u
-    k = coef[:-1, None, :, 1] + (coef[1:, None, :, 1] - coef[:-1, None, :, 1]) * u
-    h = coef[:-1, None, :, 2] + (coef[1:, None, :, 2] - coef[:-1, None, :, 2]) * u
-    stray = float(np.abs(h * (1.0 + g * k) - 1.0).max())
     gains = np.ascontiguousarray(np.tile(np.linspace(0.9, 0.2, len(times))[:, None], (1, 4)))
     out = []
     for run in (lambda: onepole_track(x, 0, RATE_E, times, gains, np.zeros(4), np.empty(n)),
                 lambda: kernels.svf_cascade_track(x, 0, RATE_E, times, coef, np.zeros((2, 2)), np.empty(n))):
         run()  # compile
         out.append(min(_timed(run) for _ in range(3)) / n * 1e9)
-    return (*out, stray)
+    return out[0], out[1]
+
+
+def close_pass() -> list[list]:
+    """A noise loop passing a static listener at 1.4 m and 52.8 m/s (issue #42), rendered at
+    doppler_factor 1 and 2: the largest change of a section's corner between two control points
+    (per cent), and the render's peak (dBFS). Diverged to 1e18 while h was interpolated."""
+    from soundstage.engine import geometry, panning, propagation, signals
+    from soundstage.engine.control import ControlGrid
+    from soundstage.engine.source import RenderContext, make_renderers
+
+    noise = sample("e05_noise.wav", np.random.default_rng(1).standard_normal(2 * RATE) * 0.3)
+    fps, frame_end = 30, 240
+    t = np.arange(frame_end + 1) / fps  # the baked frames of common.scene
+    pos = np.zeros((len(t), 1, 3))
+    pos[:, 0, 0] = 52.8 * (t - 4.0)
+    pos[:, 0, 1] = 1.4
+    rows = []
+    for k in (1.0, 2.0):
+        sc = scene([{"sample": noise, "mode": "loop", "id": "s"}], pos, frame_end=frame_end,
+                   settings={"reverb": None, "doppler_factor": k})
+        grid = ControlGrid.covering(0, sc.length_samples(), RATE)
+        ctx = RenderContext(scene=sc, grid=grid, geometry=geometry.SceneGeometry(sc, grid),
+                            interp=propagation.interpolator_for("standard"),
+                            panner=panning.PANNERS["hybrid"](sc.settings), rate=RATE, send=None, output_start=0)
+        r = make_renderers(ctx, sc.sources[0], signals.load_sample(noise, ctx.emission_rate))[0]
+        g = r.emission_stages[0].coef[..., 0]
+        step = float(np.abs(np.diff(np.log(g), axis=0)).max())
+        y = render.render(sc).audio
+        rows.append([f"{k:g}", f"{100 * (math.exp(step) - 1):.0f} %", f"{20 * np.log10(np.abs(y).max()):.1f}"])
+    return rows
 
 
 def render_cost() -> tuple[float, float]:
@@ -293,6 +318,9 @@ def main() -> None:
     if "--doppler" in sys.argv:
         print_doppler()
         return
+    if "--pass" in sys.argv:
+        print_close_pass()
+        return
     octave = np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000])
     centres = 1000 * 10 ** (np.arange(-12, 10, 3) / 10)  # exact band centres
     for freqs, label in ((octave, "nominal band frequencies"), (centres, "exact band centres")):
@@ -340,14 +368,14 @@ def main() -> None:
           "|difference| in dB where the loss is below 20 dB, 100 Hz - 6.5 kHz, 25 m - 3 km:\n")
     print(table(["band spacing", "far - full chain", "far - ISO", "full chain - ISO"], rows))
 
-    old, new, stray = stage_cost()
+    old, new = stage_cost()
     on, off = render_cost()
     print(f"\n5. Cost: the emission-side stage takes {old:.2f} ns per sample with four one-poles (earlier) "
           f"and {new:.2f} ns with two sections; the full chain (48 sources, 20 s, one worker) "
-          f"{on:.2f} s with air absorption and {off:.2f} s without (+{100 * (on / off - 1):.1f} %). "
-          f"Interpolating h with the other coefficients keeps h (1 + g k) within {stray:.1e} of 1.")
+          f"{on:.2f} s with air absorption and {off:.2f} s without (+{100 * (on / off - 1):.1f} %).")
 
     print_doppler()
+    print_close_pass()
 
     air = filters.AirAbsorption(20, 50, RATE_E)
     f = np.geomspace(50, 20000, 400)
@@ -370,6 +398,11 @@ def print_doppler() -> None:
     print("\n6. Doppler: far field minus full chain (dB), and what a full chain absorbing at the emitted frequency "
           "f / r would make of it (r: the Doppler factor):\n")
     print(table(["source", "1 kHz", "3.2 kHz", "6.4 kHz", "predicted 1 kHz", "3.2 kHz", "6.4 kHz"], doppler()))
+
+
+def print_close_pass() -> None:
+    print("\n7. Close pass (1.4 m at 52.8 m/s): largest corner change per control point and the render's peak:\n")
+    print(table(["doppler_factor", "corner step", "peak dBFS"], close_pass()))
 
 
 if __name__ == "__main__":

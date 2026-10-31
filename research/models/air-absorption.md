@@ -31,7 +31,7 @@ flowchart LR
     B --> C["least-squares fit of 2 sections with zeros<br/>to the loss in dB: follow ISO below 60 dB,<br/>at least 60 dB beyond<br/>(warm start, held near the previous distance)"]
     C --> D["table: distance → section parameters<br/>(once per render, cached)"]
     D --> E["control rate: parameters for d = c τ<br/>(interpolated in log distance)"]
-    E --> F["emission side: 2 TPT state-variable sections,<br/>coefficients stepped per sample"]
+    E --> F["emission side: 2 TPT state-variable sections,<br/>coefficients stepped per sample, h recomputed"]
 ```
 
 The loss in dB grows with `f²` at high frequencies and in proportion to the distance: the
@@ -72,8 +72,8 @@ signal unchanged.
 | Filter | 2 second-order sections with a pair of zeros each, fitted per distance | One one-pole at the 3 dB point of the f² law (original spec): 18 dB error below 20 dB of loss. 4 one-poles fitted below 20 dB (the first engine): within 2.3 dB there, but up to 29 dB too bright from 20 to 60 dB (distant traffic sounds bright). One-poles fitted to 60 dB: 4/8/12 poles leave 7.3/3.8/3.0 dB below 20 dB and 15/8.6/5.6 dB above. Sections without zeros: 6 of them (order 12) to match what 2 sections with zeros do. 3 sections with zeros: 0.6 / 0.3 dB, one more section per voice. Octave-band EQ (as some game engines): coarse steps between bands. STFT filtering with the exact curve: accurate at any distance, but block-based and harder to combine with per-sample modulation. ([E05](../experiments/E05-air-absorption.md)) |
 | Fit region | Follow ISO below 60 dB of loss; at least 60 dB beyond | Below 20 dB only (the first engine): where the loss exceeds 20 dB the filter was free, and a thousand distant cars summed their too-bright highs (E18). Beyond 60 dB the exact loss does not matter; asking for it would cost accuracy where it does. |
 | Smoothness | Warm start along distance, held near the previous fit | Independent fits jump between equivalent parameter sets. |
-| Structure in time | TPT state-variable sections, coefficients stepped per sample | Direct-form biquads with interpolated coefficients: intermediate sets can be unstable. Recomputing `h` per sample: a division per sample and section for a deviation below 10⁻⁷. |
-| Cost | Same order as before | The stage takes 9.5 ns per emission sample against 12.8 ns for the 4 one-poles (no per-sample division or table search); air absorption adds 7 % to a full-chain render. |
+| Structure in time | TPT state-variable sections, `g`, `k`, `c`, `m` stepped per sample, `h = 1/(1 + g k)` recomputed per sample | Direct-form biquads with interpolated coefficients: intermediate sets can be unstable. Interpolating `h` too (the first version, no division per sample): within 10⁻⁷ of consistent for ordinary motion, but a close pass with exaggerated Doppler moves the corner 24 % per control point and the section diverged (#42, [E05](../experiments/E05-air-absorption.md) section 7). |
+| Cost | Same order as before | The stage takes about 10 ns per emission sample against 12.8 ns for the 4 one-poles (no per-sample table search); air absorption adds 7 % to a full-chain render. |
 | Placement | Emission side, mono, corners scaled by the playback rate | After the read per ear: twice the work for the same response. Unscaled on the emission side (the first engine): absorbs at the emitted frequency, up to 13 dB off at 6.4 kHz for a source at 80 m/s. |
 
 **Doppler.** Absorption acts at the frequency of the wave in the air: the emitted frequency

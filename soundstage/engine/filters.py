@@ -281,7 +281,7 @@ class AirStage:
         """|H|^2 (len(idx), B) at control points ``idx`` (for the culling estimate)."""
         if self.bypass:
             return np.ones((len(idx), len(freqs_hz)))
-        g, k, _, c, m = (self.coef[idx][..., q] for q in range(5))
+        g, k, c, m = (self.coef[idx][..., q] for q in range(4))
         return section_power(_warped(freqs_hz, self.rate), np.stack([g, 0.5 * (k - g), c, m], axis=-1)).prod(axis=1)
 
 

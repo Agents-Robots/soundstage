@@ -33,6 +33,8 @@ CHUNK_BLOCKS = 4_000
 """Control blocks per chunk (4 s at 48 kHz)."""
 
 AUDIBLE_DBFS = -60.0
+OVERLOAD_GAIN = 10.0
+"""A master peak above this (+20 dBFS) is reported: no mix wants it, a diverging render shows here."""
 CULL_FADE_S = 0.010
 """Fade into and out of a chunk skipped by culling, rendered inside the skipped chunk."""
 
@@ -174,7 +176,8 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
         b0 = (c0 - n0) // step
         starts = np.arange(0, c1 - c0, step)
         bp = np.maximum.reduceat(np.abs(contrib).max(axis=1), starts)
-        np.maximum.at(frame_peak[i], block_frame[b0: b0 + len(starts)], bp)
+        with np.errstate(invalid="ignore"):  # a NaN contribution leaves NaN in the peaks, reported below
+            np.maximum.at(frame_peak[i], block_frame[b0: b0 + len(starts)], bp)
 
     def voice_part(r, plan: np.ndarray | None, ci: int | None, c0: int, c1: int):
         """One voice over [c0, c1) (chunk ci; None: reverb pre-roll) under the culling plan: the
@@ -425,6 +428,19 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     master *= master_gain
     for b in buses.values():
         b *= master_gain
+    bad = ~np.isfinite(master).all(axis=1)
+    if bad.any():  # a sample with non-finite values, or a diverging filter: keep the file usable
+        where = np.nonzero(bad)[0]
+        warnings.append(f"{len(where)} non-finite output samples ({(where[0] + n0) / rate:.2f}-"
+                        f"{(where[-1] + n0) / rate:.2f} s after the first frame) replaced by silence: a sample "
+                        "file with non-finite values, or a render that diverged (please report it with the scene)")
+        master[bad] = 0.0
+        for b in buses.values():
+            b[~np.isfinite(b).all(axis=1)] = 0.0
+    peak = float(np.abs(master).max()) if master.size else 0.0
+    if peak > OVERLOAD_GAIN:
+        warnings.append(f"master peak {filters.gain_to_db(peak):+.1f} dBFS, far above full scale: check the gains, "
+                        "or a render that diverged (please report it with the scene)")
     t_dsp = time.perf_counter()
 
     before_bake: list[tuple[float, str]] = []
@@ -434,8 +450,12 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
     chunk_s = np.array([(c1 - c0) / rate for c0, c1 in chunks])
     total_s = (n1 - n0) / rate
     culled_whole = 0
+    non_finite: list[str] = []
     for i, src in enumerate(active):
         fp = frame_peak[i] * master_gain  # the source's peaks as they are in the output
+        if not np.isfinite(fp).all():
+            non_finite.append(src.id)
+            fp = np.where(np.isfinite(fp), fp, 0.0)
         audible = int(np.sum((fp > threshold) & fb_ok)) if n_blocks else 0
         st = {
             "id": src.id,
@@ -488,6 +508,8 @@ def render(scene: Scene, frames: tuple[int, int] | None = None, solo: list[str] 
                          "active_frames": _active_frames(src, length, scene, fa, fb),
                          "peak_dbfs": round(float(filters.gain_to_db(0.0)), 2), "audible_frames": 0,
                          "culled_s": round(total_s, 2)}
+    if non_finite:
+        warnings.append(f"non-finite samples came from {', '.join(non_finite)}")
     if before_bake:
         worst, worst_id = max(before_bake)
         warnings.append(f"{len(before_bake)} source(s) need positions from before the baked range (up to "

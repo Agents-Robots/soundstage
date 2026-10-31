@@ -12,7 +12,6 @@ from soundstage.engine.scene import load_scene
 
 from conftest import RATE, peak_index, rms_db
 
-
 PLAIN = {"panner": "amplitude", "air_absorption": 0.0}  # distance gain and pan only
 
 
@@ -115,3 +114,15 @@ def test_zoom_moves_a_source_in_the_stereo_image(make_scene, sine):
     camera = render.render(load_scene(sc.path, {"pan_reference": "camera"})).audio
     assert rms_db(camera[4800:14400, 1]) - rms_db(camera[4800:14400, 0]) == pytest.approx(
         rms_db(camera[-14400:-4800, 1]) - rms_db(camera[-14400:-4800, 0]), abs=0.05)
+
+
+def test_non_finite_samples_are_silenced_and_reported(make_scene, wav):
+    # a sample file with NaN (or a render that diverges) must not poison the WAV or the report (#42)
+    x = 0.5 * np.sin(2 * np.pi * 1000 * np.arange(RATE) / RATE)
+    x[RATE // 2: RATE // 2 + 100] = np.nan
+    bad = wav("bad.wav", x)
+    res = render.render(make_scene([{"sample": bad, "mode": "once", "frame": 1}], [[0, 10, 0]], frame_end=60))
+    assert np.isfinite(res.audio).all()
+    assert any("non-finite" in w for w in res.warnings)
+    assert metrics(res.audio, RATE)["peak_dbfs"] is not None
+    assert metrics(np.full((RATE, 2), np.nan), RATE)["peak_dbfs"] is None  # JSON has no NaN

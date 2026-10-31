@@ -23,8 +23,8 @@ from soundstage.engine.scene import Scene
 
 
 def _db(value: float) -> float | None:
-    """dB value rounded for JSON; None for silence."""
-    return None if value <= 0 else round(float(gain_to_db(value)), 2)
+    """dB value rounded for JSON; None for silence (or a non-finite value: JSON has no NaN)."""
+    return None if not np.isfinite(value) or value <= 0 else round(float(gain_to_db(value)), 2)
 
 
 def _k_weighted(audio: np.ndarray, rate: int) -> np.ndarray:

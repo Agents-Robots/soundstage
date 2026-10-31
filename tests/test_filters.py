@@ -152,3 +152,19 @@ def test_shelf_stage_chunks_equal_one_call():
     st = filters.ShelfStage(grid, b0, b1, a1)
     parts = np.concatenate([st.process(x[:400], 0, 400), st.process(x[400:], 400, 1000)])
     assert np.array_equal(parts, whole)
+
+
+def test_close_pass_with_exaggerated_doppler_stays_bounded(make_scene, wav):
+    # issue #42: a source passing at 1.4 m with doppler_factor 2 moves the air sections' corners by a
+    # quarter per control point; the sections must stay stable (they diverged to 1e18 while the
+    # implicit-solve factor h was interpolated instead of recomputed per sample)
+    noise = wav("noise.wav", np.random.default_rng(7).standard_normal(RATE * 2) * 0.3)
+    fps, substeps, frame_end = 30, 4, 240
+    t = np.arange(frame_end * substeps + 1) / (substeps * fps)  # the baked samples of make_scene
+    pos = np.zeros((len(t), 1, 3))
+    pos[:, 0, 0] = 52.8 * (t - 4.0)
+    pos[:, 0, 1] = 1.4
+    sc = make_scene([{"sample": noise, "mode": "loop"}], pos, frame_end=frame_end, substeps=substeps,
+                    settings={"reverb": None, "doppler_factor": 2.0})
+    y = render.render(sc).audio
+    assert np.isfinite(y).all() and np.abs(y).max() < 2.0

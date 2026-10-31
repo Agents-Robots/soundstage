@@ -7,7 +7,7 @@ away gets duller continuously). Done naively, parameter updates cause zipper noi
 
 | Filter | Structure | Parameter path |
 |---|---|---|
-| Air absorption (2 sections) | TPT state-variable filter, output `lp + c·bp + m·hp` | fitted (g, R, c, m) → `g, k = 2R + g, h = 1/(1 + g k), c, m` at control rate; all five stepped linearly per sample |
+| Air absorption (2 sections) | TPT state-variable filter, output `lp + c·bp + m·hp` | fitted (g, R, c, m) → `g, k = 2R + g, c, m` at control rate, stepped linearly per sample; `h = 1/(1 + g k)` recomputed per sample |
 | Rear cue | TPT one-pole low-pass, mixed with the dry signal | fixed `G`; the mix weight interpolated linearly per sample |
 | Head shadow | First-order section with fixed pole | `α` → `b0, b1` at control rate; interpolated linearly per sample; `a1` constant |
 | Occlusion low-pass (per ear) | TPT one-pole low-pass | fitted cutoff → `G` at control rate; `G` interpolated linearly per sample |
@@ -34,11 +34,14 @@ y  = lp + c·bp + m·hp
 ```
 
 the bilinear transform of `(1 + c s + m s²) / (1 + 2R s + s²)`. Its states are again the
-integrators', so it is stable for every positive `g` and `R` and modulates without zipper noise.
-`h` is interpolated with the other coefficients instead of recomputed (no division per sample);
-between two control points it stays within 5·10⁻⁸ of `1/(1 + g k)` for a source moving from 10 m to
-2 km in a minute ([E05](../experiments/E05-air-absorption.md)), and the kernel steps the
-coefficients by adding a per-sample increment.
+integrators', so it is stable for every positive `g` and `R` and modulates without zipper noise,
+as long as `h` is `1/(1 + g k)` of the `g` and `k` in use: the kernel steps `g`, `k`, `c` and `m`
+by per-sample increments between two control points and recomputes `h` from them at every sample.
+The first version interpolated `h` like the other coefficients (no division per sample); that
+stayed within 5·10⁻⁸ of `1/(1 + g k)` for a source moving from 10 m to 2 km in a minute, but a
+source passing the listener at 1.4 m with `doppler_factor` 2 moves its corner by 24 % per control
+point, and the inconsistent `h` made the section diverge
+([E05](../experiments/E05-air-absorption.md), section 7; #42).
 
 ## Choices
 

@@ -48,7 +48,7 @@ flowchart LR
 | [E02](experiments/E02-loop-crossfade.md) | Loop seam crossfade law (Phase 1) | Equal power +2.9 dB on correlated loops, linear −2.9 dB on uncorrelated; correlation-adaptive flat on both |
 | [E03](experiments/E03-interpolators.md) | Fractional-delay interpolators | 4-point Hermite −27 dB at 10 kHz; 2× + pre-emphasis + optimal polynomial −85 to −110 dB to 20 kHz |
 | [E04](experiments/E04-preemphasis.md) | Pre-emphasis for the optimal-2× read | Droop −1.2 dB at 10 kHz, −4.9 dB at 20 kHz; 63 taps fix it |
-| [E05](experiments/E05-air-absorption.md) | ISO 9613-1 and its filter | Matches ISO 9613-2 Table 2; two sections with zeros (order 4) within 0.9 dB of ISO below 20 dB of loss and 2.4 dB to 60 dB, against 2.3 and 29 dB for 4 one-poles; 26 % cheaper; far field and full chain within 0.73 dB |
+| [E05](experiments/E05-air-absorption.md) | ISO 9613-1 and its filter | Matches ISO 9613-2 Table 2; two sections with zeros (order 4) within 0.9 dB of ISO below 20 dB of loss and 2.4 dB to 60 dB, against 2.3 and 29 dB for 4 one-poles; 26 % cheaper; far field and full chain within 0.73 dB; a close pass at `doppler_factor` 2 moves a corner 25 % per control point, which an interpolated `h` did not survive (#42) |
 | [E06](experiments/E06-ear-model.md) | Ear-model responses | Reference curves of head shadow, rear cue, pan laws, ITD for tuning |
 | [E07](experiments/E07-retarded-time.md) | Retarded-time solver | Fixed point: 1.8 % pitch error at Mach 0.5; Newton: exact to 1e-9 s up to Mach 0.95 |
 | [E08](experiments/E08-known-answers.md) | Phase 2 known answers | 343 m → 1.000000 s; 1111/909 and 1100/900 Hz; ITD 0.656 ms; clean cut |

@@ -340,11 +340,11 @@ def onepole_cascade(x, gains, state, out):
 
 
 def svf_coefficients(params: np.ndarray) -> np.ndarray:
-    """(g, R, c, m) (..., 4) -> what the TPT state-variable kernels use per section (..., 5):
-    g, k = 2R + g, h = 1 / (1 + g k), c, m."""
+    """(g, R, c, m) (..., 4) -> what the TPT state-variable kernels use per section (..., 4):
+    g, k = 2R + g, c, m. The kernels compute h = 1 / (1 + g k) themselves: interpolating h with g
+    and k makes the section inconsistent, and unstable where the corner moves fast (#42)."""
     g, r, c, m = (params[..., i] for i in range(4))
-    k = 2.0 * r + g
-    return np.stack([g, k, 1.0 / (1.0 + g * k), c, m], axis=-1)
+    return np.stack([g, 2.0 * r + g, c, m], axis=-1)
 
 
 @_jit
@@ -363,25 +363,28 @@ def _svf(v, g, k, h, c, m, state, s):
 
 @_jit
 def svf_cascade(x, coef, state, out):
-    """Cascade of TPT state-variable sections with fixed coefficients ``coef`` (S, 5)
+    """Cascade of TPT state-variable sections with fixed coefficients ``coef`` (S, 4)
     (``svf_coefficients``); ``state`` (S, 2)."""
     n_sec = coef.shape[0]
+    h = np.empty(n_sec)
+    for s in range(n_sec):
+        h[s] = 1.0 / (1.0 + coef[s, 0] * coef[s, 1])
     for i in range(x.shape[0]):
         v = x[i]
         for s in range(n_sec):
-            v = _svf(v, coef[s, 0], coef[s, 1], coef[s, 2], coef[s, 3], coef[s, 4], state, s)
+            v = _svf(v, coef[s, 0], coef[s, 1], h[s], coef[s, 2], coef[s, 3], state, s)
         out[i] = v
     return out
 
 
 @_jit
 def svf_cascade_track(x, a, rate, times, coef, state, out):
-    """Cascade of TPT state-variable sections whose coefficients (n_ctl, S, 5) (``svf_coefficients``)
+    """Cascade of TPT state-variable sections whose coefficients (n_ctl, S, 4) (``svf_coefficients``)
     are given at increasing ``times`` (s) and interpolated linearly at the sample times (a + i) / rate
-    (stepped per sample between two control points); held outside ``times``."""
+    (stepped per sample between two control points, h recomputed per sample); held outside ``times``."""
     n, n_sec = times.shape[0], coef.shape[1]
-    cur = np.empty((n_sec, 5))
-    step = np.empty((n_sec, 5))
+    cur = np.empty((n_sec, 4))
+    step = np.empty((n_sec, 4))
     j = 0
     i = 0
     total = x.shape[0]
@@ -394,7 +397,7 @@ def svf_cascade_track(x, a, rate, times, coef, state, out):
                     ((a + end) / rate >= times[n - 1]) == (tt >= times[n - 1]):
                 end += 1
             for s in range(n_sec):
-                for q in range(5):
+                for q in range(4):
                     cur[s, q] = coef[jj, s, q]
                     step[s, q] = 0.0
         else:
@@ -409,15 +412,16 @@ def svf_cascade_track(x, a, rate, times, coef, state, out):
             while end < total and (a + end) / rate <= times[j + 1]:
                 end += 1
             for s in range(n_sec):
-                for q in range(5):
+                for q in range(4):
                     d = coef[j + 1, s, q] - coef[j, s, q]
                     cur[s, q] = coef[j, s, q] + d * f
                     step[s, q] = d * df
         for ii in range(i, end):
             v = x[ii]
             for s in range(n_sec):
-                v = _svf(v, cur[s, 0], cur[s, 1], cur[s, 2], cur[s, 3], cur[s, 4], state, s)
-                for q in range(5):
+                g, k = cur[s, 0], cur[s, 1]
+                v = _svf(v, g, k, 1.0 / (1.0 + g * k), cur[s, 2], cur[s, 3], state, s)
+                for q in range(4):
                     cur[s, q] += step[s, q]
             out[ii] = v
         i = end
@@ -525,8 +529,8 @@ def warmup() -> None:
     flags = np.zeros(4, dtype=np.uint8)
     control_linear(buf[:2], flags, 0, 48, 0, np.empty(2))
     control_cubic(buf[:2], flags, 0, 48, 0, np.empty(2))
-    svf_cascade(buf[:2], np.ones((1, 5)), np.zeros((1, 2)), np.empty(2))
-    svf_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1, 5)), np.zeros((1, 2)), np.empty(2))
+    svf_cascade(buf[:2], np.ones((1, 4)), np.zeros((1, 2)), np.empty(2))
+    svf_cascade_track(buf[:2], 0, 48000, np.arange(2.0), np.ones((2, 1, 4)), np.zeros((1, 2)), np.empty(2))
     rear_shelf_track(buf[:2], 0, 48000, np.arange(2.0), one, 0.5, np.zeros(1), np.empty(2))
     follow(one, 0.5, 0.5, np.empty(2))
 

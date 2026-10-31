@@ -326,7 +326,9 @@ Fields:
   `--set`, Phase 4 keys that are ignored, an empty `--solo`/`--mute` selection, a group named
   `reverb` sharing the reverb stem, sources never audible (not listed for sources culling skipped
   entirely; they count in `culling`), playback rate clamped (near- or supersonic motion), sound
-  emitted before the baked range (padding too short).
+  emitted before the baked range (padding too short), non-finite output samples (replaced by
+  silence; a sample file with such values, or a render that diverged) and a master peak above
+  +20 dBFS.
 
 ## Exit criteria for agents
 

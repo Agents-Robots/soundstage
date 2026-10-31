@@ -70,7 +70,7 @@ def test_svf_track_interpolates_between_control_points():
     parts = np.concatenate([k.svf_cascade_track(x[:777], 0, 1000, times, coef, st, np.empty(777)),
                             k.svf_cascade_track(x[777:], 777, 1000, times, coef, st, np.empty(len(x) - 777))])
     tt = np.arange(len(x)) / 1000
-    per = np.stack([np.stack([np.interp(tt, times, coef[:, 0, q]) for q in range(5)], axis=1)], axis=1)
+    per = np.stack([np.stack([np.interp(tt, times, coef[:, 0, q]) for q in range(4)], axis=1)], axis=1)
     st, want = np.zeros((1, 2)), np.empty(len(x))
     for i in range(len(x)):
         k.svf_cascade(x[i:i + 1], np.ascontiguousarray(per[i]), st, want[i:i + 1])
