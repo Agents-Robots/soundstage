@@ -76,7 +76,7 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `substeps` | 4 | Sub-frames per frame (bake). |
 | `pad_seconds` | 3.0 | Padding before and after the shot (covers ~1 km of propagation; the bake warns if a source is farther away in travel time) (bake). |
 | `listener` | null | Object name to use instead of the active camera (bake). |
-| `quality` | `"standard"` | Fractional-delay interpolation: `standard` (2× oversampled, 6-point polynomial) or `high` (anti-aliased windowed sinc, slower; for extreme Doppler). |
+| `quality` | `"standard"` | Fractional-delay interpolation: `standard` (2× oversampled, 6-point polynomial) or `high` (anti-aliased windowed sinc at the output rate: band-limits extreme Doppler; slightly slower below about 30 sources, 20–25 % faster above, [E15](../../research/experiments/E15-option-costs.md)). |
 | `occlusion_gain_db` | −12.0 | Transmission through an occluder: gain of a fully occluded source at low frequencies. |
 | `occlusion_cutoff_hz` | 1500 | Transmission low-pass: a fully occluded source is a further −3 dB here. |
 | `occlusion_rate` | 10.0 | Visibility samples per second in the bake; 0 = no visibility (bake). |
