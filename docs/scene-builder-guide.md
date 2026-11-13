@@ -52,6 +52,10 @@ def build_car(name, collection):
 - **One-shots** belong to the code that animates the event: when the script keyframes a door to
   open at frame 240, it adds `tag.add_sound(door, "door_open.wav", mode="once", frame=240)` in the
   same place. Repeating events take a list of frames.
+- **Motion keys** set the Doppler shift: keys inserted from a script are Bezier whatever the
+  preference says, so a move between two keys eases in and out and is up to 1.5 times faster in the
+  middle. Set `interpolation = "LINEAR"` on the keys (`examples/flyby.py`) where a speed is meant,
+  and end a moving loop's sound (`end_frame` plus `fade_out`) before the object stops.
 - **Beds** (room tone, wind, music): `spatial=False`, on any object (a scene root empty),
   `group="ambience"`.
 - **Groups** become stems: use a few meaningful ones (`engines`, `traffic`, `crowd`, `sfx`,

@@ -14,6 +14,9 @@ Output (48 kHz, 24-bit PCM unless stated):
 - ``impact.wav``: low thump plus decaying noise burst, 1.5 s.
 - ``whoosh.wav``: swelling band-limited noise, 1.6 s.
 - ``ambience_stereo.wav``: low decorrelated stereo noise bed, 8 s, seamless loop.
+- ``noise_white.wav``: white noise, 4 s, seamless loop.
+- ``white_burst.wav``: white-noise burst, 0.1 s (sharp onset, for localization).
+- ``white_burst_long.wav``: white-noise burst, 0.8 s.
 
 Usage: ``.venv/bin/python tools/make_test_samples.py [--out samples/]``.
 """
@@ -93,6 +96,10 @@ def make(out: Path) -> list[Path]:
     left = periodic_noise(8 * RATE, rng, lambda f: pink(f) * np.exp(-f / 4000))
     right = periodic_noise(8 * RATE, rng, lambda f: pink(f) * np.exp(-f / 4000))
     files["ambience_stereo.wav"] = (normalize(np.stack([left, right], axis=1), -12), RATE)
+
+    files["noise_white.wav"] = (normalize(periodic_noise(4 * RATE, rng, lambda f: np.where(f > 20, 1.0, 0.0)), -3), RATE)
+    files["white_burst.wav"] = (normalize(fade(rng.standard_normal(int(0.1 * RATE)), 0.002, 0.03), -3), RATE)
+    files["white_burst_long.wav"] = (normalize(fade(rng.standard_normal(int(0.8 * RATE)), 0.005, 0.05), -3), RATE)
 
     out.mkdir(parents=True, exist_ok=True)
     written = []

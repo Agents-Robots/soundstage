@@ -94,6 +94,12 @@ Found while building the bake; they matter for anything that walks a large scene
 - **Materials tell what is solid**: a volume-only material (fog, haze) or a surface made only of
   Emission/Transparent shaders (light beams, holograms) is not something sound bounces off; the
   occluder snapshot reads the material output's linked inputs.
+- **New keys are Bezier in a script**: `keyframe_insert` ignores the preference for new keys
+  (`preferences.edit.keyframe_new_interpolation_type`) in background mode (5.3), so two keys ease
+  in and out and a source meant to pass at 34.3 m/s peaks at about 1.5 times that, with the Doppler
+  shift to match. Set the interpolation on the inserted key itself, through
+  `bpy_extras.anim_utils.action_get_channelbag_for_slot(...).fcurves`, as `examples/flyby.py` and
+  `examples/showcase/build.py` do, and check the speed from `matrix_world` per frame.
 
 ## Verification
 

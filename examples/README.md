@@ -7,6 +7,7 @@ Script-built example scenes and tagging scripts.
 | `flyby.py` | Builds the flyby scene from scratch: a camera dollies forward, a ship passes left to right at 30 m/s, a beacon on the left, a crate falls and lands at frame 180. 30 fps, frames 1-240. |
 | `flyby_sounds.py` | Tags for the flyby scene, applied at bake time with `--run` (the pattern for existing animations). |
 | `sounds_template.py` | Template tagging script to copy next to your own animation ([agent guide](../docs/agent-guide.md)). |
+| `showcase/` | Feature showcase: one chapter per feature with simple shapes and synthetic sounds, each shown off and on; build, bake, per-pass render and known-answer checks ([README](showcase/README.md)). |
 
 ```bash
 blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend

@@ -1,0 +1,217 @@
+# Recorded sounds of the showcase (sounds/README.md, "Recorded", requirement A7).
+#
+# Every entry is CC0. fetch.py downloads the file named by `page` and `download`, checks its
+# SHA-256 and its licence on the page, and applies `process` to write the sounds in `names`.
+# Freesound HQ previews are MP3 at 128 kbit/s (the A6 exception for engines; footsteps lose
+# nothing audible below 16 kHz either, fireworks are heard from 500 m, where the air takes
+# everything above 8 kHz, and tennis hits from 40 m; the accordion, the basketball and the claps
+# carry most of their energy below 8 kHz).
+
+[[recording]]
+names = ["car_engine"]
+page = "https://freesound.org/s/438001/"
+title = "G13-19-Car Steady 30 MPH.wav"
+author = "craigsmith"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "1245ece17abf138c4703b38db8fcb849ab513ec49ef5b62b86f9a31f3841a24d"
+note = "A car at a steady 30 mph; the steadiest 12 s (level spread 1.1 dB)."
+process = { kind = "loop", start = 52.5, length = 12.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["car_idle"]
+page = "https://freesound.org/s/874840/"
+title = "Hyundai Elantra Sport Idle Exhaust Loop Medium"
+author = "loganzsound"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "d65c8c93eabe0ae833fd6532409d98b78e51db75d7de2ee3a6b427d6f0df0a46"
+note = "Idle at the exhaust; stereo with identical channels, mixed to mono."
+process = { kind = "loop", start = 29.0, length = 12.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["footstep_1", "footstep_2", "footstep_3", "footstep_4"]
+page = "https://freesound.org/s/480676/"
+title = "R27-45-Footsteps on Hard Surface.wav"
+author = "craigsmith"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "6ab764ffaf6a26ba2e6bec76574725174b2c980cd450bd85b2fb53bd8467610c"
+note = "Four single steps of similar level, each cut 3 ms before its onset."
+process = { kind = "oneshots", onsets = [1.538, 3.017, 5.563, 7.270], length = 0.45, fade_out = 0.1 }
+
+[[recording]]
+names = ["firework_bang_1"]
+page = "https://freesound.org/s/336005/"
+title = "Sharp Explosion 2 (of 5)"
+author = "Rudmer_Rotteveel"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "1195b6f5570062445251a97f4e86dae5146d2eaf42ce516eebed78e060846ba6"
+note = "One small aerial firework, isolated by the author; the most low end of the three. Onset 2.5 ms into the file: cut at its start."
+process = { kind = "oneshots", onsets = [0.003], length = 1.0, fade_out = 0.2 }
+
+[[recording]]
+names = ["firework_bang_2"]
+page = "https://freesound.org/s/336011/"
+title = "Sharp Explosion 4 (of 5)"
+author = "Rudmer_Rotteveel"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "27178a5d0b8e87b8b4ba9b64230282a415ef9649ad04abb477be9148c8d3c6f4"
+note = "Same night and recorder as firework_bang_1."
+process = { kind = "oneshots", onsets = [0.0071], length = 1.03, fade_out = 0.2 }
+
+[[recording]]
+names = ["firework_bang_3"]
+page = "https://freesound.org/s/336006/"
+title = "Sharp Explosion 1 (of 5)"
+author = "Rudmer_Rotteveel"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "b79ab41580cdffe1082488b2936b7c54551f13e620d201662265cbf334c41586"
+note = "Same night; the shortest decay (-60 dB after 0.55 s). Two samples at full scale in the download. Onset 2.7 ms into the file: cut at its start."
+process = { kind = "oneshots", onsets = [0.003], length = 0.69, fade_out = 0.15 }
+
+[[recording]]
+names = ["race_engine"]
+page = "https://freesound.org/s/481726/"
+title = "R20-37-Constant Fast Car Engine.wav"
+author = "craigsmith"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "9bed1900efc5403f5311396668cd5b135541a8c605128b8d7c00c42d989254a0"
+note = "A large car's engine at constant fast revs (fundamental 100 Hz), not a racing engine: no CC0 racing or sports engine holds steady revs (revs, dyno sweeps, gear changes only). Sections raise its pitch. Level spread 1.9 dB over the 12 s."
+process = { kind = "loop", start = 1.0, length = 12.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["train_roll"]
+page = "https://freesound.org/s/177720/"
+title = "Thailand passenger train 1st class cabin roomtone train moving1 upper bunk.flac"
+author = "kyles"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "e57fe6f4d0644d6db8da903221b71a2623a32927f39b1184a78a7c0cd9bd52c1"
+note = "Inside a moving passenger train, no voices in the 12 s used; level spread 1.4 dB. Heard from inside, as the camera in the cab is."
+process = { kind = "loop", start = 68.0, length = 12.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["crossing_bell"]
+page = "https://freesound.org/s/370824/"
+title = "Railway/Level Crossing Sond Effect"
+author = "mpaol2023"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "5144882343b4e4961e8a910289ffc5985ca19427fb3d14c226865f07fb849730"
+note = "Level-crossing bell, 2.42 strikes per second, no train; rumble below 300 Hz 41 dB under the bell. The loop is ten strike periods (4.129 s) from 38 ms before a strike, so the seam falls between strikes."
+process = { kind = "loop", start = 2.1, length = 4.129, crossfade = 0.2 }
+
+[[recording]]
+names = ["tennis_hit_1", "tennis_hit_2"]
+page = "https://freesound.org/s/338122/"
+title = "Tennis Ball being hit"
+author = "jacklilley"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "d191b611e27905a8ed4dc80a6170422ae1535f8bacf8ca008b0608e1abe82076"
+note = "A rally outdoors; two hits with the same body (strongest peak 604 Hz, half the energy below 1 kHz), 40 dB down within 130 ms, no reverb tail. The bounce 0.33 s before each hit is left out."
+process = { kind = "oneshots", onsets = [7.8549, 11.7376], length = 0.25, fade_out = 0.1 }
+
+[[recording]]
+names = ["jet_whine"]
+page = "https://freesound.org/s/187734/"
+title = "Idle F-22 Jet Plane.flac"
+author = "qubodup"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "f641ae18986953c738845bd63b524936b3c1a5c7f752ca993075cd6e490e25f6"
+note = "A fighter idling before take-off: half the energy between 2 and 5 kHz, tones at 1.38, 2.31, 2.63 and 4.02 kHz drifting 0.6 %; level spread 0.7 dB over the loop."
+process = { kind = "loop", start = 7.2, length = 10.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["jet_roar"]
+page = "https://freesound.org/s/534856/"
+title = "Jet Engine"
+author = "m_cel"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "57594534f5f3805f9a83063d121c0d52b91459764b5ae208954719c2edea3473"
+note = "A jet engine on a test stand: 99 % of the energy below 1 kHz, no tones; level spread 1.3 dB. The whole steady part of the file (8 s)."
+process = { kind = "loop", start = 1.2, length = 8.0, crossfade = 0.5 }
+
+[[recording]]
+names = ["accordion_loop"]
+page = "https://freesound.org/s/426938/"
+title = "Serbian accordion Improvisation"
+author = "EKVelika"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "43afc467d890df7e2c08cd0c2b44b3c742aacbda54e6384f50fbb81e1466d9bc"
+note = "One accordion, played close and solo (Balkan improvisation, right hand only: nothing below 200 Hz, 99 % of the energy between 200 Hz and 8 kHz); level spread 2.8 dB over the loop. A reverberant tail 23 dB below the playing (T60 about 4.7 s) shows after the last note of the file; in continuous playing it lies under the notes. No steady beat, so no bar line: the seam falls inside a held chord (295, 592, 883, 1776 Hz) that sounds on both sides of it, the end side 3 dB louder."
+process = { kind = "loop", start = 27.28, length = 10.38, crossfade = 0.2 }
+
+[[recording]]
+names = ["basketball_1"]
+page = "https://freesound.org/s/319785/"
+title = "Basketball 3"
+author = "zmobie"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "b45ca11ed51ef9e1a83de81f165074583913c03f6015dfcb1e29bb3e68ae628f"
+note = "One bounce, recorded in a small shed: body at 109 Hz (77 % of the energy below 300 Hz), the ball's ring as lines between 2 and 6 kHz; -40 dB after 76 ms, -60 dB after 0.2 s, no broadband room tail."
+process = { kind = "oneshots", onsets = [0.0054], length = 0.35, fade_out = 0.1 }
+
+[[recording]]
+names = ["basketball_2"]
+page = "https://freesound.org/s/319761/"
+title = "Basketball 4"
+author = "zmobie"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "b40d0a996d8f0e139ffd1a47fbdc68c416c9f3e6bb25cd5f18aaee081557cd92"
+note = "Same ball and shed as basketball_1: body at 110 Hz, -40 dB after 82 ms, -60 dB after 0.21 s."
+process = { kind = "oneshots", onsets = [0.0052], length = 0.33, fade_out = 0.1 }
+
+[[recording]]
+names = ["basketball_3"]
+page = "https://freesound.org/s/319783/"
+title = "Basketball 8"
+author = "zmobie"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "be5dbcb1823bbc2643bbe79a2b98f03136cc2c580e1138a331ade9d481d7372b"
+note = "Same ball and shed: body at 108 Hz, the shortest of the three (-40 dB after 60 ms, -60 dB after 0.14 s)."
+process = { kind = "oneshots", onsets = [0.0061], length = 0.235, fade_out = 0.08 }
+
+[[recording]]
+names = ["handclap_1"]
+page = "https://freesound.org/s/537735/"
+title = "Clap 01"
+author = "steeltowngaming"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "84583b6da6ff40072b7b5044221f4617283296c3fea3cefbf018fd8dd5766e30"
+note = "One clap, close, dynamic microphone, mono: 83 % of the first 100 ms between 1 and 3 kHz, strongest at 2 kHz. Down 27 dB after 10 ms, then a small-room tail decaying at 330 dB/s (-60 dB after 0.11 s)."
+process = { kind = "oneshots", onsets = [0.0957], length = 0.2, fade_out = 0.08 }
+
+[[recording]]
+names = ["handclap_2"]
+page = "https://freesound.org/s/537733/"
+title = "Clap 03"
+author = "steeltowngaming"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "3ba4cf3b92453de3fd8b0bcedfcce61a899217e2641fb02c931c3ba576aaa6dc"
+note = "The same hands, microphone and room as handclap_1: 77 % between 1 and 3 kHz, strongest at 1.26 kHz; -60 dB after 0.11 s. The hands' approach (40 ms rising to -40 dB) is left out."
+process = { kind = "oneshots", onsets = [0.1138], length = 0.2, fade_out = 0.08 }
+
+[[recording]]
+names = ["crowd_bed"]
+page = "https://freesound.org/s/360699/"
+title = "Large_crowd_from_above_stereo.wav"
+author = "eguobyte"
+licence = "CC0 1.0"
+download = "freesound-hq-preview"
+sha256 = "76c5cabb6faa09590f60265edd58f808eb387c3c67556a0886aed6bf60b0d838"
+note = "About a thousand people chatting, XY stereo from 6 m above and beside the crowd in a large hall (a bed, so its room is accepted); no distinct voice, no cheering, no music. Over the 30 s used: level spread 1.5 dB, loudest 0.4 s 1.3 dB above the median; L/R correlation 0.72, mono sum 0.7 dB below the channels; 0.1 % of the energy below 100 Hz, 65 % between 300 Hz and 1 kHz, no tonal line. Of the CC0 stadium and cheering recordings measured, the steadiest (freesound 63587, an arena) spreads 3.0 dB over 20 s with the channels nearly identical (correlation 0.93); the others 5 to 8 dB. Stereo kept (A3)."
+process = { kind = "loop", start = 56.0, length = 30.0, crossfade = 1.0, stereo = true }
