@@ -127,8 +127,10 @@ number (gap-free symlinked sequence, whole-sample audio offset). No DSP; runs in
    optional plot.
 
 Chunking keeps memory bounded (a 5-minute stereo float64 bus is ~230 MB; 50 sources at once would
-not fit comfortably) and makes partial renders (`--frames`) cheap. The delay line keeps every
-emission sample a later read may still need (a cut to a farther camera reads further back).
+not fit comfortably) and makes partial renders (`--frames`) cheap. Each segment between jumps has
+its own delay line and emission-side filters (a cut to a farther camera reads further back, and
+those samples need the new camera's air absorption and rear cue); a line keeps every emission
+sample a later read in its segment may still need.
 
 ## Performance model
 

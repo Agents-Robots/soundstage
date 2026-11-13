@@ -57,7 +57,11 @@ reception side (per ear, f_s):
 ```
 
 Emission-side parameters are functions of the path; they are placed on emission time
-`t_e = t − τ_read` (made monotonic where a jump makes it go back). The reverb send is taken from
+`t_e = t − τ_read`. They depend on where the sound is received (distance, rear factor), so each
+segment between jumps has its own emission stages and delay line, started from the dry timeline
+with a 50 ms warm-up before the first sample its reads need: after a cut to a farther camera the
+read goes back in emission time, and those samples are filtered for the new camera. Within a
+segment `t_e` is made monotonic. The reverb send is taken from
 the centre read before panning; occlusion is applied per ear after the read.
 
 All spatial parameters use the **retarded** source position `s(t − τ_c)`: the sound is heard from

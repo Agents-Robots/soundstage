@@ -5,6 +5,7 @@ import pytest
 
 from soundstage.engine import render
 from soundstage.engine.control import ControlGrid
+from soundstage.engine.filters import iso9613_alpha
 from soundstage.engine.geometry import SceneGeometry
 
 from conftest import RATE, frequency, listener_at, rms_db
@@ -47,6 +48,35 @@ def test_camera_cut_switches_cleanly(make_scene, sine):
     assert rms_db(far) - rms_db(near) == pytest.approx(20 * np.log10(1 / 100) - 20 * np.log10(1 / 5), abs=0.3)
     assert frequency(out[cut + 600: cut + 3000]) == pytest.approx(1000, rel=0.002)  # no glide after the cut
     assert _no_steps(out[cut - 2000: cut + 2000], np.abs(near).max())
+
+
+def _band_db(x, lo, hi):
+    f = np.fft.rfftfreq(len(x), 1 / RATE)
+    p = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
+    sel = (f >= lo) & (f < hi)
+    return 10 * np.log10(p[sel].sum()), f[sel], p[sel]
+
+
+@pytest.mark.parametrize("first", [1, 31])
+def test_air_absorption_follows_a_cut_to_a_farther_camera(make_scene, wav, first):
+    """After the cut the read goes back in emission time; those samples get the new camera's air
+    absorption (#43), also when the render starts on the cut."""
+    noise = wav("noise.wav", np.random.default_rng(1).standard_normal(4 * RATE) * 0.1)
+    frames = np.arange(1, 62, dtype=float)
+    cam = np.zeros((len(frames), 3))
+    cam[frames >= 31, 1] = -595.0  # 10 m from the source, then 600 m
+    out = {}
+    for air in (0.0, 1.0):
+        scene = make_scene([{"sample": noise, "distance_model": "none"}], [[0, 10, 0]],
+                           settings={"panner": "amplitude", "air_absorption": air}, listener=listener_at(cam), cuts=(31,))
+        y = render.render(scene, frames=(first, 60)).audio[:, 0]
+        a = scene.sample_of(31) - scene.sample_of(first)
+        out[air] = y[a + int(0.1 * RATE): a + int(0.9 * RATE)]  # all of it emitted before the cut
+    dry, f, p = _band_db(out[0.0], 3600, 4400)
+    wet = _band_db(out[1.0], 3600, 4400)[0]
+    want = 10 * np.log10(np.sum(p * 10 ** (-iso9613_alpha(f) * 600 / 10)) / p.sum())
+    assert want < -15
+    assert wet - dry == pytest.approx(want, abs=1.0)
 
 
 def test_source_teleport_away_leaves_a_gap_then_fades_in(make_scene, sine):

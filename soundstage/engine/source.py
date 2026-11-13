@@ -2,8 +2,11 @@
 
 ``SpatialRenderer``: emission side (dry timeline at the emission rate, pre-emphasis for the
 interpolator, air absorption and rear low-pass) feeding a delay line; reception side (per-ear read
-delays, fractional-delay read, ear stages, gains and pan). At jumps (cuts, teleports) a branch
-with every parameter held at its value before the jump is read as well and crossfaded out over
+delays, fractional-delay read, ear stages, gains and pan). The emission side depends on where the
+sound is received (distance, rear factor), so each segment between jumps (cuts, teleports) has its
+own emission stages and delay line: after a cut to a farther camera the read goes back in emission
+time, to samples that must be filtered for the new camera, not the old one. At a jump a branch with
+every parameter held at its value before the jump reads the old line and is crossfaded out over
 10 ms. ``BedRenderer``: non-spatial sources, gain and fades only. Both render output samples
 ``[a, b)`` chunk by chunk, keep their state in between, and return the stereo contribution and the
 mono reverb send (None without a reverb or for beds without ``reverb_send_db``). A spatial renderer
@@ -91,23 +94,21 @@ class _Branch:
         self.ear_r = [st.held(index) for st in r.ear_r]
         self.tau_c = float(d.centre[index])
         self.send = float(r.send[index]) if r.send is not None else None
+        self.line = r.line  # the delay line of the segment before the jump
 
     def render(self, r: SpatialRenderer, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
         t = np.arange(a, b) / r.rate
         ones = np.ones(b - a)
-        yl = r.line.read(r.interp, (t - self.tau_l) * r.fe, ones)
-        yr = r.line.read(r.interp, (t - self.tau_r) * r.fe, ones)
+        yl = self.line.read(r.interp, (t - self.tau_l) * r.fe, ones)
+        yr = self.line.read(r.interp, (t - self.tau_r) * r.fe, ones)
         for st in self.ear_l:
             yl = st.process(yl, a, b)
         for st in self.ear_r:
             yr = st.process(yr, a, b)
         send = None
         if self.send is not None:
-            send = r.line.read(r.interp, (t - self.tau_c) * r.fe, ones) * self.send
+            send = self.line.read(r.interp, (t - self.tau_c) * r.fe, ones) * self.send
         return np.stack([yl * self.gain_l, yr * self.gain_r], axis=1), send
-
-    def position(self, r: SpatialRenderer, n: int) -> float:
-        return (n / r.rate - max(self.tau_l, self.tau_r)) * r.fe
 
 
 class SpatialRenderer:
@@ -159,15 +160,16 @@ class SpatialRenderer:
             if occ_gain is not None and p["occlusion_mode"] == "occlusion":
                 self.send = self.send * occ_gain
 
-        # emission side: parameters on emission time
-        te = np.maximum.accumulate(grid.times - self.delays.centre)
+        # emission side: parameters on emission time, one set of stages per segment between jumps
         air = filters.AirAbsorption(s["air_temperature_c"], s["air_humidity_pct"], self.fe,
                                     scale=s["air_absorption"] * p["air_absorption"])
         # at the received frequency: the corners follow the Doppler shift (playback rate)
-        self.emission_stages = [filters.AirStage(te, air.received(air.params(path.distance), self.delays.rate), self.fe,
-                                                 air.bypass(path.distance))]
-        if ctx.panner.rear_cue:
-            self.emission_stages.append(filters.RearStage(te, path.rear, s["rear_cutoff_hz"], self.fe))
+        self.air_params = air.received(air.params(path.distance), self.delays.rate)
+        self.air_bypass = air.bypass(path.distance)
+        self.rear_cutoff_hz = s["rear_cutoff_hz"] if ctx.panner.rear_cue else None
+        self.segments = np.concatenate([[0], np.asarray(path.jumps, dtype=np.int64), [grid.count]])
+        # all control points at once, for the culling estimate (``power``)
+        self.emission_stages = self._emission_stages(0, grid.count)
         self.ear_l, self.ear_r = ctx.panner.ear_stages(path, ctx.rate)
         self.send_stages = []
         if occ_cutoff is not None and np.isfinite(occ_cutoff).any():
@@ -183,12 +185,13 @@ class SpatialRenderer:
         prefilter = ctx.interp.prefilter() if ctx.interp.prefilter else None
         self.dry = signals.DryGenerator(sample, p, self.fe, start, end, source.id, prefilter)
 
-        # delay line: keep every emission sample a future read may need (a cut can jump back)
+        # delay line of a segment: keep every emission sample a later read in the segment may need
         need = (grid.times - np.maximum(self.delays.left, self.delays.right)) * self.fe
-        self.keep = np.minimum.accumulate(need[::-1])[::-1]
-        first = int(math.floor(self.keep[0])) - ctx.interp.halfwidth - int(WARMUP_S * self.fe)
-        self.line = propagation.DelayLine(self._produce, first, int(PRODUCE_BLOCK_S * self.fe))
+        self.keep = need.copy()
+        for j0, j1 in zip(self.segments[:-1], self.segments[1:]):
+            self.keep[j0:j1] = np.minimum.accumulate(need[j0:j1][::-1])[::-1]
         self.jump_starts = {int(grid.samples[j - 1]): int(j - 1) for j in path.jumps if j >= 1}
+        self._open(0)
         self.branches: list[_Branch] = []
         self.next: int | None = None  # output sample where the state continues (None: fresh)
         self.info = self._info(scene)
@@ -208,11 +211,30 @@ class SpatialRenderer:
             t = t_emit + geo.delay_at(track, t)
         return geo.delay_at(track, t)
 
-    def _produce(self, a: int, b: int) -> np.ndarray:
-        x = self.dry.window(a, b)
-        for st in self.emission_stages:
-            x = st.process(x, a, b)
-        return x
+    def _emission_stages(self, j0: int, j1: int) -> list:
+        """Emission stages (fresh state) for control points [j0, j1)."""
+        te = np.maximum.accumulate(self.grid.times[j0:j1] - self.delays.centre[j0:j1])
+        stages = [filters.AirStage(te, self.air_params[j0:j1], self.fe, self.air_bypass)]
+        if self.rear_cutoff_hz is not None:
+            stages.append(filters.RearStage(te, self.path.rear[j0:j1], self.rear_cutoff_hz, self.fe))
+        return stages
+
+    def _open(self, index: int) -> None:
+        """A new delay line, with its own emission stages warmed up over ``WARMUP_S``, for the segment
+        of control point ``index``, from the emission sample the read at that point needs."""
+        k = int(np.searchsorted(self.segments, index, side="right")) - 1
+        self.segment_first = int(self.segments[k])
+        stages = self._emission_stages(self.segment_first, int(self.segments[k + 1]))
+        step = int(math.ceil(self.grid.step / self.rate * self.fe))  # reads up to one step before the point
+        first = int(math.floor(self.keep[index])) - step - self.interp.halfwidth - int(WARMUP_S * self.fe)
+
+        def produce(a: int, b: int) -> np.ndarray:
+            x = self.dry.window(a, b)
+            for st in stages:
+                x = st.process(x, a, b)
+            return x
+
+        self.line = propagation.DelayLine(produce, first, int(PRODUCE_BLOCK_S * self.fe))
 
     def _main(self, a: int, b: int) -> np.ndarray:
         g, d, jumps = self.grid, self.delays, self.path.jumps
@@ -269,9 +291,8 @@ class SpatialRenderer:
         """Continue at output sample ``a`` after a gap (culling): a new delay line and cleared filter
         states, warmed up over ``WARMUP_S`` of output before ``a``."""
         s = max(a - int(WARMUP_S * self.rate), self.grid.start)
-        first = int(math.floor(self.keep[self.grid.index_of(s)])) - self.interp.halfwidth - int(WARMUP_S * self.fe)
-        self.line = propagation.DelayLine(self._produce, first, int(PRODUCE_BLOCK_S * self.fe))
-        for st in (*self.emission_stages, *self.ear_l, *self.ear_r, *self.send_stages):
+        self._open(self.grid.index_of(s))
+        for st in (*self.ear_l, *self.ear_r, *self.send_stages):
             st.state[:] = 0.0
         self.branches = []
         self.next = s
@@ -281,6 +302,10 @@ class SpatialRenderer:
     def render(self, a: int, b: int) -> tuple[np.ndarray, np.ndarray | None]:
         if a != self.next and (self.next is not None or a - self.grid.start > int(WARMUP_S * self.rate)):
             self._restart(a)
+        elif self.next is None:  # the grid starts a few steps early: a jump there is already past
+            past = [j for n, j in self.jump_starts.items() if n < a]
+            if past:
+                self._open(max(past) + 1)
         out = np.empty((b - a, 2))
         send_out = np.empty(b - a) if self.send is not None else None
         cuts = sorted(n for n in self.jump_starts if a < n < b)
@@ -288,6 +313,7 @@ class SpatialRenderer:
         for u, v in zip(edges[:-1], edges[1:]):
             if u in self.jump_starts:
                 self.branches.append(_Branch(u, self.jump_starts[u], self))
+                self._open(self.jump_starts[u] + 1)
             y, ys = self._main(u, v)
             for br in self.branches:
                 o0, o1 = max(u, br.start), min(v, br.end)
@@ -302,9 +328,7 @@ class SpatialRenderer:
             if send_out is not None:
                 send_out[u - a:v - a] = ys
         self.branches = [br for br in self.branches if br.end > b]
-        keep = self.keep[min(self.grid.index_of(b), len(self.keep) - 1)]
-        for br in self.branches:
-            keep = min(keep, br.position(self, b))
+        keep = self.keep[max(min(self.grid.index_of(b), len(self.keep) - 1), self.segment_first)]
         self.line.trim(int(math.floor(keep)) - self.interp.halfwidth - 2)
         self.next = b
         return out, send_out
