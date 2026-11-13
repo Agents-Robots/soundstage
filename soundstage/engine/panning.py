@@ -3,8 +3,8 @@
 - Pan laws (registry ``PAN_LAWS``, setting ``pan_law``): ``sine`` (phi = (lambda+1) pi/4) and
   ``power`` (g^2 = (1 +- lambda)/2, Blender's speakers). Both constant power.
 - Panners (registry ``PANNERS``, setting ``panner``): ``amplitude`` (pan law only) and ``hybrid``
-  (pan law, Woodworth ITD scaled by ``itd_scale``, Brown-Duda head shadow per ear scaled by
-  ``head_shadow``, rear cue). A panner supplies per-ear delays, per-ear stages and gains from the
+  (pan law with the level difference limited to ``ild_limit_db`` off-screen, Woodworth ITD scaled
+  by ``itd_scale``, Brown-Duda head shadow per ear scaled by ``head_shadow``, rear cue). A panner supplies per-ear delays, per-ear stages and gains from the
   path (ADR 0009); ``binaural`` follows in Phase 4.
 - Screen-relative panning (setting ``pan_reference = "screen"``, the default): the lateral sine is remapped so
   that a source in the frame is heard, on loudspeakers at +-30 deg, where a viewer sees it on a
@@ -76,6 +76,29 @@ def screen_lateral(q: np.ndarray, tan_left: np.ndarray, tan_right: np.ndarray, e
     return lam * horizontal / r_e
 
 
+def limited_lateral(lateral: np.ndarray, knee: float, limit: float) -> np.ndarray:
+    """Lateral sine for the pan gains with the channel level difference limited: unchanged up to
+    ``knee`` (the screen edge), then linear in the lateral sine to ``limit`` at +-1. A limit below the
+    knee scales the whole range by ``limit`` instead."""
+    if limit >= 1.0:
+        return lateral
+    a = np.abs(lateral)
+    if limit < knee:
+        return lateral * limit
+    return np.sign(lateral) * np.where(a <= knee, a, knee + (limit - knee) * (a - knee) / (1.0 - knee))
+
+
+def ild_limits(law, limit_db: float | None, edge_deg: float) -> tuple[float, float]:
+    """(knee, limit) of ``limited_lateral``: the lateral sines at which ``law`` puts the screen edge
+    (tangent law on loudspeakers at +-30 deg) and gives a level difference of ``limit_db``."""
+    if limit_db is None:
+        return 1.0, 1.0
+    k = np.tan(np.radians(edge_deg)) / np.tan(np.radians(SPEAKER_DEG))
+    f = 10.0 ** (-limit_db / 20.0)
+    knee, limit = _law_inverse(law, np.array([k, (1.0 - f) / (1.0 + f)]))
+    return float(knee), float(limit)
+
+
 def woodworth_itd(lateral: np.ndarray, head_radius: float, speed_of_sound: float, scale: float) -> np.ndarray:
     """ITD in seconds, positive when the source is on the right (right ear leads)."""
     theta = np.arcsin(np.clip(lateral, -1.0, 1.0))
@@ -96,13 +119,25 @@ class AmplitudePanner:
     def ear_stages(self, path, rate: int) -> tuple[list, list]:
         return [], []
 
+    def pan_gains(self, lateral: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        return self.law(lateral)
+
     def gains(self, path) -> tuple[np.ndarray, np.ndarray]:
-        return self.law(path.lateral)
+        return self.pan_gains(path.lateral)
 
 
 class HybridPanner(AmplitudePanner):
     name = "hybrid"
     rear_cue = True
+
+    def __init__(self, settings: dict):
+        super().__init__(settings)
+        self.knee, self.limit = ild_limits(self.law, settings["ild_limit_db"], settings["screen_edge_deg"])
+
+    def pan_gains(self, lateral: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """The pan law with the level difference limited (ADR 0007): on headphones a source at the
+        side is otherwise in one ear only."""
+        return self.law(limited_lateral(lateral, self.knee, self.limit))
 
     def itd(self, path) -> np.ndarray | None:
         s = self.settings

@@ -53,6 +53,7 @@ changing the meaning of a key does, together with this spec.
     "panner": "hybrid",
     "pan_law": "sine",
     "itd_scale": 0.5,
+    "ild_limit_db": 12.0,
     "head_shadow": 0.5,
     "head_radius": 0.0875,
     "rear_cutoff_hz": 6000.0,

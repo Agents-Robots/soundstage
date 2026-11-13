@@ -29,8 +29,11 @@ def test_source_in_front_is_centred_at_minus_3db(make_scene, sine):
 
 
 def test_source_on_the_right_is_louder_right(make_scene, sine):
-    out = render.render(make_scene([{"sample": sine}], [[10, 1, 0]])).audio
+    out = render.render(make_scene([{"sample": sine}], [[10, 1, 0]], settings=PLAIN)).audio
     assert rms_db(out[:, 1]) - rms_db(out[:, 0]) > 20
+    # hybrid (default): the pan's level difference is limited to 12 dB, the head shadow adds to it
+    out = render.render(make_scene([{"sample": sine}], [[10, 1, 0]])).audio
+    assert 12 < rms_db(out[:, 1]) - rms_db(out[:, 0]) < 20
 
 
 def test_one_shot_onset_and_output_length(make_scene, click):

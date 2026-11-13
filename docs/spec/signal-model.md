@@ -246,9 +246,29 @@ power:            g_L = sqrt((1 − λ) / 2),   g_R = sqrt((1 + λ) / 2)      (B
 Both keep `g_L² + g_R² = 1` (centre −3.01 dB each). `power` is softer at the sides (−18 dB for
 the far channel at 76°, against −32 dB for `sine`).
 
-**`hybrid`** (default): the amplitude pan above, plus ITD scaled by `itd_scale` (default 0.5,
-tuned: full ITD across speakers causes comb filtering in mono downmixes), plus a head-shadow
-filter per ear scaled by `head_shadow` (default 0.5, tuned).
+**`hybrid`** (default): the amplitude pan above with its level difference limited to `ild_limit_db`
+(default 12 dB, tuned), plus ITD scaled by `itd_scale` (default 0.5, tuned: full ITD across
+speakers causes comb filtering in mono downmixes), plus a head-shadow filter per ear scaled by
+`head_shadow` (default 0.5, tuned).
+
+Level-difference limit: the pan law sends a source at ±90° entirely into one channel; on
+headphones the far ear is then 40–55 dB down, which is uncomfortable as the source passes the side
+(a real head gives a few dB at low frequencies, about 20 dB at high ones). The pan gains of
+`hybrid` are taken at a remapped lateral sine `λ_p`, with `λ_S = law⁻¹(tan S / tan 30°)` the
+screen edge (below) and `λ_M = law⁻¹((1 − f)/(1 + f))`, `f = 10^(−ild_limit_db/20)`:
+
+```
+|λ| ≤ λ_S:   λ_p = λ                                              sources in the frame keep their pan
+|λ| > λ_S:   λ_p = sign λ · (λ_S + (λ_M − λ_S) · (|λ| − λ_S) / (1 − λ_S))
+λ_M < λ_S:   λ_p = λ_M · λ                                         (a limit below the screen edge's)
+```
+
+With the defaults (`sine`, `S` = 16.5°): `λ_S` = 0.604 (9.8 dB at the frame edge), `λ_M` = 0.687
+(12 dB at ±90°). ITD and head shadow keep the unlimited `λ`; the head shadow adds up to about 7 dB
+of treble difference at the side. The far field pans with the same gains. `ild_limit_db = null`
+turns the limit off. Tuned by ear on headphones: the showcase section `around` with the far ear at
+−48 dB at the side against −12 dB (#46). On loudspeakers a source at the side is now heard at about
+19° instead of at the loudspeaker (tangent law), just outside the 16.5° of the frame edge.
 
 Head shadow (Brown & Duda 1998 spherical-head model), per ear, with `θ_e` the angle between that
 ear's axis (+X for right, −X for left) and the source direction (`cos θ_R = λ`, `cos θ_L = −λ`):
@@ -569,6 +589,7 @@ by ear.
 | Air temperature / humidity | 20 °C / 50 % | scene `air_temperature_c`, `air_humidity_pct` |
 | Head radius `a` | 0.0875 m | scene `head_radius` |
 | ITD scale (hybrid) | 0.5 (tuned) | scene `itd_scale` |
+| Level-difference limit (hybrid) | 12 dB at ±90° (tuned) | scene `ild_limit_db` |
 | Head shadow (hybrid) | 0.5 (tuned) | scene `head_shadow` |
 | Air absorption scale | 1 (ISO 9613-1) | scene/source `air_absorption` |
 | Air absorption filter | 2 sections with zeros; fit to ISO below 60 dB, at least 60 dB beyond | engine constants `filters.AIR_*` |

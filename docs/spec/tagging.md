@@ -68,6 +68,7 @@ A dict on the scene. Missing keys take the default. Command-line `--set key=valu
 | `pan_reference` | `"screen"` | `screen`: sources in the frame are panned to where a viewer sees them on the screen, through the lens (zooms move them); off-screen directions are stretched to the sides; distance, delay, Doppler and occlusion are unchanged ([signal-model.md](signal-model.md#panning)); needs a scene baked with format version 2, otherwise panning follows the camera with a warning. `camera`: direction relative to the camera, independent of the lens (as in games and Blender's speakers). |
 | `screen_edge_deg` | 16.5 | With `pan_reference = "screen"`: the angle from the centre at which the viewer sees the left and right screen edges; the frame edge is panned to be heard there on loudspeakers at ±30°. 16.5° is a 16:9 screen at 3 picture heights (HD); about 25 for a large TV or close viewing, 29 at most. |
 | `itd_scale` | 0.5 | Fraction of the physical interaural time difference used by `hybrid`. |
+| `ild_limit_db` | 12.0 | Largest level difference between the channels from `hybrid`'s pan law, reached at ±90°; sources in the frame keep their pan. Without it a source at the side is in one ear only, which is uncomfortable on headphones. null = no limit (as `amplitude`). |
 | `head_shadow` | 0.5 | Strength of the head-shadow filter in `hybrid` (0 = off, 1 = full spherical-head model). |
 | `head_radius` | 0.0875 m | Listener head radius. |
 | `rear_cutoff_hz` | 6000 | Low-pass cutoff for a source directly behind the camera. |

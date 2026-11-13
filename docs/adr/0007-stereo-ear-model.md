@@ -15,7 +15,9 @@ itself.
 ## Decision
 
 - Default panner `hybrid`:
-  - constant-power amplitude pan from the lateral angle;
+  - constant-power amplitude pan from the lateral angle, its level difference limited off-screen
+    to `ild_limit_db` (default 12 dB at ±90°; added after #46: unlimited, a source at the side was
+    in one ear only on headphones);
   - interaural time difference (Woodworth), scaled by `itd_scale` (default 0.5) to limit comb
     filtering on speakers and in mono downmixes;
   - head-shadow shelf per ear (Brown–Duda spherical head), scaled by `head_shadow` (default 0.5);

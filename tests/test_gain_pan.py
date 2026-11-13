@@ -144,3 +144,33 @@ def test_screen_panning_without_a_frame_follows_the_camera():
     q = _directions(np.array([-60.0, 10.0, 45.0]))
     lat = panning.screen_lateral(q, np.full(3, np.nan), np.full(3, np.nan), 16.5, panning.sine_law, geometry.R_MIN)
     assert lat == pytest.approx(geometry.derived(q)["lateral"])
+
+
+def _hybrid(**settings) -> panning.HybridPanner:
+    return panning.HybridPanner({"pan_law": "sine", "ild_limit_db": 12.0, "screen_edge_deg": 16.5, **settings})
+
+
+def test_hybrid_limits_the_level_difference_at_the_side():
+    p = _hybrid()
+    gl, gr = p.pan_gains(np.array([-1.0, 1.0]))
+    assert filters.gain_to_db(gr / gl) == pytest.approx([-12.0, 12.0], abs=0.01)
+    assert np.allclose(gl ** 2 + gr ** 2, 1.0)
+
+
+def test_hybrid_limit_keeps_the_frame_and_is_monotonic():
+    p = _hybrid()
+    lat = np.linspace(-1, 1, 2001)
+    gl, gr = p.pan_gains(lat)
+    ratio = (gr - gl) / (gr + gl)
+    assert np.all(np.diff(ratio) > 0)
+    inside = np.abs(lat) <= p.knee
+    assert _heard_deg(lat[inside], p.pan_gains) == pytest.approx(_heard_deg(lat[inside], panning.sine_law))
+    assert _heard_deg(np.array([p.knee]), p.pan_gains)[0] == pytest.approx(16.5, abs=0.05)  # the frame edge
+
+
+def test_hybrid_limit_below_the_frame_edge_scales_and_none_turns_it_off():
+    gl, gr = _hybrid(ild_limit_db=6.0).pan_gains(np.array([0.0, 0.5, 1.0]))
+    db = filters.gain_to_db(gr / gl)
+    assert db[0] == pytest.approx(0.0) and 0 < db[1] < db[2] and db[2] == pytest.approx(6.0, abs=0.01)
+    lat = np.linspace(-0.99, 0.99, 11)
+    assert np.allclose(_hybrid(ild_limit_db=None).pan_gains(lat), panning.sine_law(lat))

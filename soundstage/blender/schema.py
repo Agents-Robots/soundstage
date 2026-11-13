@@ -90,6 +90,7 @@ SCENE_SETTINGS: dict[str, Field] = {
     "pan_reference": Field("choice", "screen", choices=PAN_REFERENCES, phase=4),  # camera: ignore the lens
     "screen_edge_deg": Field("float", 16.5, min=1.0, max=29.0, phase=4),  # viewer's angle to the screen edge
     "itd_scale": Field("float", 0.5, min=0.0, max=1.0, phase=2),
+    "ild_limit_db": Field("float", 12.0, min=0.0, nullable=True, phase=2),  # hybrid; None: no limit
     "head_shadow": Field("float", 0.5, min=0.0, max=1.0, phase=2),
     "head_radius": Field("float", 0.0875, min=0.01, max=1.0, phase=2),
     "rear_cutoff_hz": Field("float", 6000.0, min=20.0, max=20000.0, phase=2),

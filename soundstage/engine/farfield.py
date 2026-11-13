@@ -436,7 +436,7 @@ class FarField:
                                     for band in range(sc.src_visibility.shape[2])], axis=1)
                     open_w[:, col] = self._follow(v, vis).mean(axis=1)
         occ_w = (1.0 - open_w) * self.transmission
-        gl, gr = self.law(lateral)
+        gl, gr = self.ctx.panner.pan_gains(lateral)
         air = np.array([prm["air_absorption"] for prm in prms])
         lo, frac = band_weights(distance * air)
         w = np.stack([(1.0 - frac) * open_w, frac * open_w, (1.0 - frac) * occ_w, frac * occ_w], axis=2)
