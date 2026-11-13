@@ -69,19 +69,35 @@ def frame_edges(listener, scene) -> tuple[float, float]:
     return min(xs) / -z, max(xs) / -z
 
 
-def padding_warnings(spatial: list[dict], listener_matrix, src_pos, speed_of_sound: float,
-                     pad_seconds: float) -> list[str]:
-    """One warning if sources are farther away (in travel time) than the padding covers."""
+def padding_warnings(spatial: list[dict], frames, listener_matrix, src_pos, speed_of_sound: float, frame_start: float,
+                     fps: float, pad_seconds: float) -> list[str]:
+    """One warning if sound heard from ``frame_start`` on was emitted earlier than the padding covers.
+
+    Per source, the sound heard at each baked sample was emitted its travel time earlier (from the
+    position at the sample: close enough for a warning). The padding has to reach back to the
+    earliest such emission before ``frame_start`` that falls while the source is active (from its
+    ``frame``, the first trigger of a one-shot, to its ``end_frame``); a source that starts at or
+    after ``frame_start`` needs none. Distances to the cameras of other shots do not count.
+    """
     if not spatial:
         return []
-    delay = np.linalg.norm(src_pos - listener_matrix[:, None, :3, 3], axis=2).max(axis=0) / speed_of_sound
-    over = np.nonzero(delay > pad_seconds)[0]
+    heard = frames >= frame_start
+    tau = np.linalg.norm(src_pos[heard] - listener_matrix[heard][:, None, :3, 3], axis=2) / speed_of_sound
+    emitted = frames[heard][:, None] - tau * fps
+    starts, ends = [], []
+    for s in spatial:
+        f = s.get("frame")
+        starts.append(-np.inf if f is None else min(f) if isinstance(f, list) else float(f))
+        ends.append(np.inf if s.get("end_frame") is None or s["mode"] != "loop" else float(s["end_frame"]))
+    early = (emitted < frame_start) & (emitted >= np.array(starts)) & (emitted <= np.array(ends))
+    need = np.where(early, (frame_start - emitted) / fps, 0.0).max(axis=0)
+    over = np.nonzero(need > pad_seconds)[0]
     if not len(over):
         return []
-    worst = int(over[np.argmax(delay[over])])
-    return [f"padding {pad_seconds:.2f} s is shorter than the travel time of {len(over)} source(s) (up to "
-            f"{delay[worst]:.2f} s, {spatial[worst]['id']}); bake with --pad {math.ceil(delay[worst] * 10) / 10:g} "
-            "for exact delays and Doppler at the start of the shot"]
+    worst = int(over[np.argmax(need[over])])
+    return [f"padding {pad_seconds:.2f} s is shorter than the travel time of {len(over)} source(s) heard from before "
+            f"the first frame (up to {need[worst]:.2f} s, {spatial[worst]['id']}); bake with --pad "
+            f"{math.ceil(need[worst] * 10) / 10:g} for exact delays and Doppler at the start of the shot"]
 
 
 def resolve_sample_path(sample: str, samples_root: str) -> str:
@@ -293,7 +309,8 @@ def bake(args: argparse.Namespace) -> None:
         src_cuts=np.zeros((0, 2)),
         **({"vis_frames": np.array(vis_frames), "src_visibility": np.array(vis, dtype=np.float32)} if vis else {}),
     )
-    for w in padding_warnings(spatial, listener_matrix, src_pos, settings["speed_of_sound"], pad / fps):
+    for w in padding_warnings(spatial, frames, listener_matrix, src_pos, settings["speed_of_sound"], frame_start, fps,
+                              pad / fps):
         log(f"WARNING {w}")
         warnings.append(w)
     manifest = {

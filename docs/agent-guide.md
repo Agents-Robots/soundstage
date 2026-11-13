@@ -136,8 +136,9 @@ its motion implies (Doppler), its visibility range and, below the table, the obj
 each occluded source most. If a source that should be heard is blocked by something that does not
 block sound (a railing, trees, a helper mesh, a part whose box closes an opening), mark that object
 in the tagging script (`sfx_occluder = False` or `"mesh"`) and bake again. Keep the defaults (`--substeps 4 --pad 3`) when
-you can: sub-frames keep fast motion smooth, and the padding must cover the travel time of the
-farthest source (the bake warns otherwise, with the `--pad` it needs). The bake costs one scene
+you can: sub-frames keep fast motion smooth, and the padding must cover the travel time of sound that is
+heard from the first frame on but was emitted before it (the bake warns otherwise, with the `--pad`
+it needs; sources that start with a later shot need none). The bake costs one scene
 evaluation per sub-frame; for very heavy scenes `--substeps 2` is fine for objects slower than
 about 50 m/s, but never drop the padding below what the warning asks for. Visibility adds ray casts
 per occluding source every 0.1 s; with many sources and moving occluders, lower it with

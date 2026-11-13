@@ -212,3 +212,40 @@ bpy.ops.wm.save_as_mainfile(filepath={str(tmp_path / "switch.blend")!r})
     assert list(arrays["cuts"]) == [100.0]
     assert any(w.startswith("padding 0.00 s") for w in manifest["warnings"])
     assert main(["render", str(out / "scene.json"), "-o", str(tmp_path / "mix.wav")]) == 0
+
+
+def test_padding_warning_counts_only_sound_emitted_before_the_first_frame(flyby, tmp_path):
+    """#44: a source on a second set, 2000 m from the first shot's camera, that starts with its own
+    shot needs no padding. A source playing from before the first frame does: heard by the second
+    camera (1657 m away) at frame 50, its sound left it 1657 / 343 - 49 / 30 = 3.20 s before frame 1."""
+    build = tmp_path / "sets.py"
+    build.write_text(f"""
+import sys
+sys.path.insert(0, {str(REPO)!r})
+import bpy
+from soundstage.blender import tag
+bpy.ops.wm.read_factory_settings(use_empty=True)
+s = bpy.context.scene
+s.frame_start, s.frame_end = 1, 100
+s.render.fps = 30
+def obj(name, data, location):
+    o = bpy.data.objects.new(name, data)
+    s.collection.objects.link(o)
+    o.location = location
+    return o
+cam_a = obj("CamA", bpy.data.cameras.new("CamA"), (0, 0, 1.6))
+cam_b = obj("CamB", bpy.data.cameras.new("CamB"), (2000, 0, 1.6))
+for frame, cam in ((1, cam_a), (50, cam_b)):
+    s.timeline_markers.new(cam.name, frame=frame).camera = cam
+tag.add_sound(obj("Far", None, (2000, 10, 1.6)), {str(REPO / "samples" / "engine_hum.wav")!r}, frame=50,
+              id="far")
+tag.add_sound(obj("Near", None, (343, 0, 1.6)), {str(REPO / "samples" / "engine_hum.wav")!r}, id="near")
+bpy.ops.wm.save_as_mainfile(filepath={str(tmp_path / "sets.blend")!r})
+""")
+    subprocess.run(["blender", "-b", "--factory-startup", "--python-exit-code", "1", "--python", str(build)],
+                   check=True, capture_output=True)
+    out = tmp_path / "bake"
+    assert main(["bake", str(tmp_path / "sets.blend"), "--out", str(out), "--pad", "0.5", "--substeps", "1"]) == 0
+    warnings = [w for w in json.loads((out / "scene.json").read_text())["warnings"] if w.startswith("padding")]
+    assert len(warnings) == 1
+    assert "1 source(s)" in warnings[0] and "up to 3.20 s, near" in warnings[0] and "--pad 3.2 " in warnings[0]
