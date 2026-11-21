@@ -149,3 +149,9 @@ Phases 0 to 3 of the [roadmap](docs/roadmap.md) are implemented (baseline, place
 environment and mixing); Phase 4 items (culling, the far field, screen-relative panning) are added
 as shots need them. The unit tests run on every push; the end-to-end tests need Blender. Work is
 tracked in this repository's [issues](https://github.com/Agents-Robots/soundstage/issues).
+
+## Licence
+
+GPL-3.0-or-later ([LICENSE](LICENSE)). The Blender side runs inside Blender, which is GPL; the
+engine is under the same licence. The reverb presets in `soundstage/engine/data/efx_presets.json` are
+converted from OpenAL Soft's `efx-presets.h` (LGPL), whose terms allow their use under the GPL.
