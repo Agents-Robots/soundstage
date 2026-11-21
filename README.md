@@ -17,6 +17,11 @@ distant ones arrive late, as they would in air, and a source behind a building i
 file starts exactly on the first frame, so it drops straight onto the video editor's timeline
 (made for DaVinci Resolve) next to the rendered frames.
 
+- **Based on scientific research.** Every effect is a published acoustic model, and each is
+  checked by measurement in the rendered sound ([The science](#the-science)).
+- **Scales to thousands of sound sources.** A street of 10 000 cars with 20 000 sources renders
+  in about three minutes ([How long it takes](#how-long-it-takes)).
+
 ## Why
 
 In a video editor, spatial sound is drawn by hand: a volume curve and a pan curve per object, a
