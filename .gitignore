@@ -17,6 +17,7 @@ AGENTS.local.md
 *.mp4
 *.npz
 !samples/README.md
+!site/audio/*.mp3
 
 # Blender
 *.blend
