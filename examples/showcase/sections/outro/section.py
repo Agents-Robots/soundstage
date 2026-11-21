@@ -20,7 +20,7 @@ STEPS = (
     ("bake", "soundstage bake scene.blend --out bake/"),
     ("render", "soundstage render bake/scene.json -o mix.wav"),
 )
-STATEMENT = "Every sound in this video was rendered by soundstage from the Blender scenes shown."
+STATEMENT = "Every sound in this video was rendered by SoundStage from the Blender scenes shown."
 WHERE = REPO_URL.removeprefix("https://")
 INSTALL = f"pip install git+{REPO_URL}"
 ALSO = ("Stems per group", "loudness normalization", "true-peak limiter", "solo and mute",

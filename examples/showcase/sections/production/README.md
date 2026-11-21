@@ -1,6 +1,6 @@
 # `production`: In production
 
-Two scenes from Blender animations that were not made for this showcase, with the sound soundstage
+Two scenes from Blender animations that were not made for this showcase, with the sound SoundStage
 rendered for them: the race across the swamp, six racers at 612 km/h, whole as the animation cuts
 it (it starts calm and builds to its end); and a drone flight around a party terrace in a city of
 over two thousand flying cars, with the terrace's music and the neon signs on the towers.
@@ -17,7 +17,7 @@ over two thousand flying cars, with the terrace's music and the neon signs on th
 | Element | Text |
 |---|---|
 | Title | In production |
-| Claim | Scenes from two Blender animations, with the sound soundstage rendered for them. |
+| Claim | Scenes from two Blender animations, with the sound SoundStage rendered for them. |
 | Code chip | `soundstage render bake/scene.json -o mix.wav` |
 | Listen for | six racers crossing a swamp at 612 km/h; music and neon signs around a tower in a city of flying cars. |
 
@@ -38,14 +38,14 @@ falls to a third" (race) and "27 s of sound, rendered in under a minute on 16 co
 
 | Pass | Source | Gain |
 |---|---|---|
-| `race` | the stems soundstage rendered in the animation's own mix of the scene (`out/audio/mix/film_full_stem_{engines,bed}.wav`, from 164.571 s of its time line): the racers (engines, whine, sub) and the air and water, at the levels the mix gives each shot. Left out: the score, the radio voices, the cheering recordings and the whooshes | +4 dB, then soundstage's true-peak limiter at −1 dBTP |
+| `race` | the stems SoundStage rendered in the animation's own mix of the scene (`out/audio/mix/film_full_stem_{engines,bed}.wav`, from 164.571 s of its time line): the racers (engines, whine, sub) and the air and water, at the levels the mix gives each shot. Left out: the score, the radio voices, the cheering recordings and the whooshes | +4 dB, then SoundStage's true-peak limiter at −1 dBTP |
 | `metropolis` | the animation's own render of frames 361–1170 from its bake (`--set master_gain_db=-5 --limit -1`, as its mix), music included | +2.5 dB |
 
 The animation's mix steps the engines and the air back by 4 dB while the radio speaks; without the
 voices those steps would be dips with no cause. Its gain curves (`film_full_curves.npz`) undo them:
 where a stem's curve dips under the scene's median, the stem is lifted by the dip, at most 4 dB. The
 two flybys then stand 10 dB over the rest of the scene; the animation holds them with its master
-limiter, the excerpt with soundstage's (`mix.true_peak_limiter`, at most 2.9 dB for 1.1 s).
+limiter, the excerpt with SoundStage's (`mix.true_peak_limiter`, at most 2.9 dB for 1.1 s).
 
 `steps.py` assembles the section: the race runs at 29.97 fps, so its 1233 frames are shown at 30 fps
 and its sound is resampled by 1000/1001 (41.143 s to 41.102 s, 1.7 cents higher); the metropolis
@@ -76,9 +76,9 @@ render holds other cameras at some frames, so the check compares the two.
 
 ## Requirements
 
-- **R1** Only soundstage renders are heard: no score, no voices, no sound added in an animation's
+- **R1** Only SoundStage renders are heard: no score, no voices, no sound added in an animation's
   own mix (accents, whooshes, crowd recordings). The city's music is a source in its scene, rendered
-  by soundstage.
+  by SoundStage.
 - **R2** Picture and sound of a scene start on the same animation frame; the race's 29.97 fps is
   matched by resampling the sound, not by dropping frames.
 - **R3** The callouts' numbers are measured: the whine's pitch before and after the pass, and the

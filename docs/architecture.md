@@ -1,6 +1,6 @@
 # Architecture
 
-How `soundstage` is built and why. Exact formats and formulas are in [spec/](spec/); the
+How SoundStage is built and why. Exact formats and formulas are in [spec/](spec/); the
 decisions behind the structure are in [adr/](adr/README.md).
 
 ## Pipeline

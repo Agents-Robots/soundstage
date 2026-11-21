@@ -19,9 +19,9 @@ left-aligned at 7 % from the left edge and ends at 70 %:
 
 | Element | Content |
 |---|---|
-| Wordmark | `soundstage`, with the line "Offline spatial sound for Blender animations" |
+| Wordmark | `SoundStage`, with the line "Offline spatial sound for Blender animations" |
 | Three steps | "tag · bake · render", each with one line of code in monospace: `tag.add_sound(car, "engine.wav")`, `soundstage bake scene.blend --out bake/`, `soundstage render bake/scene.json -o mix.wav` |
-| Statement | "Every sound in this video was rendered by soundstage from the Blender scenes shown." |
+| Statement | "Every sound in this video was rendered by SoundStage from the Blender scenes shown." |
 | Get it | "Get it" in amber, the repository's address (`github.com/Agents-Robots/soundstage`), and below it the install line `pip install git+https://github.com/Agents-Robots/soundstage` |
 | Also | "Stems per group · loudness normalization · true-peak limiter · solo and mute · reverb presets and impulse responses" |
 | Credits | "Recorded sounds:" and the authors from `sounds/sources.toml` and `sounds/animations.toml`; "all other sounds synthesized" |

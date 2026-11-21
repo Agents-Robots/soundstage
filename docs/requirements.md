@@ -1,6 +1,6 @@
 # Requirements
 
-What `soundstage` must do and why. Each requirement has a stable ID and the phase that delivers
+What SoundStage must do and why. Each requirement has a stable ID and the phase that delivers
 it ([roadmap](roadmap.md)). IDs are never renumbered; a dropped requirement stays listed as
 *dropped* with the reason.
 

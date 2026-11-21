@@ -40,7 +40,7 @@ class Chapter:
 
 
 CHAPTERS = (
-    Chapter("intro", "soundstage", "Spatial sound for Blender animations: feature showcase\nUse headphones",
+    Chapter("intro", "SoundStage", "Spatial sound for Blender animations: feature showcase\nUse headphones",
             title_seconds=4.0),
     Chapter("sources", "1  Sound sources", "Loops, one-shots, pitch and non-spatial beds", (
         Pass("loop", "A loop with a start and an end, faded in and out", 6.0),
@@ -115,7 +115,7 @@ CHAPTERS = (
     Chapter("together", "15  All together", "Doppler, occlusion, reverb and a bed in one shot", (
         Pass("all", "default settings, reverb: alley", 16.5, {"reverb": "alley"}),
     )),
-    Chapter("outro", "soundstage", "Tag objects in Blender, bake, render: offline spatial sound", title_seconds=4.0),
+    Chapter("outro", "SoundStage", "Tag objects in Blender, bake, render: offline spatial sound", title_seconds=4.0),
 )
 
 

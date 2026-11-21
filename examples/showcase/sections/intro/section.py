@@ -4,11 +4,11 @@ from kit.story import Pass, Section
 
 SECTION = Section(
     key="intro",
-    title="soundstage",
+    title="SoundStage",
     title_frames=0,
     passes=(
         Pass("silent", 195, "Blender renders the picture."),
-        Pass("sound", 345, "soundstage renders the sound."),
+        Pass("sound", 345, "SoundStage renders the sound."),
     ),
     reverb="city_streets",
     gain_db=-2.0,

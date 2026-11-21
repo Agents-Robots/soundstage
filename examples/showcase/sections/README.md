@@ -20,7 +20,7 @@ surroundings add, and how this holds up across cuts and many sources.
 
 | Key | Title | Real-world case | Features | Length |
 |---|---|---|---|---|
-| [`intro`](intro/README.md) | soundstage | A street shot, first silent, then with sound | (all, at defaults) | 18 s |
+| [`intro`](intro/README.md) | SoundStage | A street shot, first silent, then with sound | (all, at defaults) | 18 s |
 | [`sources`](sources/README.md) | One line per sound | A car, its horn, a church bell and birds, added one tag at a time | loops, one-shots, pitch, beds, groups, offsets | 42 s |
 | [`distance`](distance/README.md) | Distance | An open-air stage heard from 686 m down to 43 m | distance model, air absorption | 40.5 s |
 | [`delay`](delay/README.md) | Speed of sound | A carpenter, fireworks and lightning across a lake | propagation delay, `sync_to_picture` | 35 s |
@@ -194,7 +194,7 @@ scene setting renders it for itself (`Check.probe(..., extra=...)`).
   out what the passes show. One static gain per section (`gain_db` in `section.py`). The one
   exception: a section of sharp impacts that stand about 15 dB over everything else (tennis hits,
   claps and bounces) names a ceiling (`limit_dbtp`), and each of its passes goes through
-  soundstage's true-peak limiter there, so that the section can be lifted toward the others'
+  SoundStage's true-peak limiter there, so that the section can be lifted toward the others'
   level. The report gives the limiter's largest reduction per pass.
 - **S2 Level.** The section's reference pass (the last pass at default settings) has an integrated
   loudness of −18 LUFS ± 2; the section's true peak is at most −1 dBTP. Where both cannot hold

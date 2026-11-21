@@ -32,7 +32,7 @@ finite.
 
 - `tests/test_gain_pan.py`: −6.02 dB per doubling; linear and exponential laws; `max_distance`.
 - `tests/test_render.py`: rendered level drops 6.02 ± 0.1 dB at twice `ref_distance`.
-- [E01](../experiments/E01-blender-speaker-baseline.md): over the flyby, soundstage follows the
+- [E01](../experiments/E01-blender-speaker-baseline.md): over the flyby, SoundStage follows the
   inverse law within ±0.02 dB of the retarded distance; Blender's speakers within ±0.48 dB of the
   current distance.
 

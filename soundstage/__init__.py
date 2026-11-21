@@ -1,4 +1,4 @@
-"""soundstage: offline spatial sound for script-generated Blender animations.
+"""SoundStage: offline spatial sound for Blender animations.
 
 Two halves share this package and must not import each other's dependencies:
 

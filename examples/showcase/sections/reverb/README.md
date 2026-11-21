@@ -69,7 +69,7 @@ camera; `church` and `walk` share one.
 | `reverb.walk.step_1` … `step_4` | `footstep_1.wav` … `footstep_4.wav` | once, each on its frames (steps 1, 5, 9 … use the first sample, and so on), emitted at the foot that lands, `ref_distance=3` |
 
 Every emitter is farther than `ref_distance` from the camera (hands 3.5 m, floor 4 m), so the
-distance law is never clamped. The section gain is +11.5 dB, with soundstage's true-peak limiter at
+distance law is never clamped. The section gain is +11.5 dB, with SoundStage's true-peak limiter at
 −1 dBTP on each pass (`limit_dbtp`, the exception to S1): it takes up to 4.7 dB off the bounces and
 claps, for 1.3 to 2.5 s of each pass, and leaves the tails as they are.
 

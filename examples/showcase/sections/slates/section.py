@@ -17,7 +17,7 @@ SECTION = Section(
 CARDS = {
     # pass: lines (text, cap height, colour, bold); the first line's baseline at ``top``
     "not_recorded": ([("This sound was not recorded.", 0.06, "text", True)], 0.53),
-    "title": ([("soundstage", 0.11, "text", True), ("Spatial sound, computed from your Blender scenes", 0.036,
+    "title": ([("SoundStage", 0.11, "text", True), ("Spatial sound, computed from your Blender scenes", 0.036,
                                                      "muted", False)], 0.50),
     "thousands": ([("Ten thousand cars.", 0.06, "text", True), ("Twenty thousand sources.", 0.06, "accent", True)],
                   0.47),

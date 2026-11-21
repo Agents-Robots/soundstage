@@ -90,7 +90,7 @@ No source has `sync_to_picture`, and no per-source setting differs from its defa
 `loop_phase=0` on the loops (the kit's loops are seamless). The levels were set so that the pass
 reaches −18 LUFS ± 2 with one static gain and the true peak stays below −1 dBTP: the crossing bells
 at 4 m would otherwise cover the passing train, and the steps at 2.5 m and the train at 6.5 m set
-the peaks. The bangs are 6 dB louder than their samples, and soundstage's true-peak limiter at
+the peaks. The bangs are 6 dB louder than their samples, and SoundStage's true-peak limiter at
 −1 dBTP (`limit_dbtp`, the exception to S1) takes up to 5.6 dB off them. Moving the fireworks
 closer alone made them no louder: within `ref_distance` a source plays at its sample's level
 (`inverse_clamped`). A bang is short, so the fireworks still measure −23.9 LUFS over their 12 s,

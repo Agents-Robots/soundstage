@@ -1,6 +1,6 @@
 # Feature showcase
 
-A video of about five minutes that shows one feature of soundstage at a time, with simple shapes and
+A video of about five minutes that shows one feature of SoundStage at a time, with simple shapes and
 synthetic sounds (sine, white and pink noise, clicks, bursts). Each chapter is a title card followed
 by passes: the same action again with one thing changed (feature off, on, and sometimes
 exaggerated), with a label naming the pass. Objects light up while they sound. Listen on

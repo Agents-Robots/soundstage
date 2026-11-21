@@ -29,23 +29,23 @@ How games, film tools and research handle thousands of sources (traffic, aircraf
 after [E16](experiments/E16-culling.md) showed that culling alone does not make render time
 independent of the number of sources.
 
-| Approach | Where | How it works | For soundstage |
+| Approach | Where | How it works | For SoundStage |
 |---|---|---|---|
 | **Voice limits, virtual voices** | Wwise, FMOD, Unreal (Sound Concurrency) | A fixed number of voices is mixed; the rest are virtual: tracked, not mixed, resumed at the right position. Which ones go virtual follows an audibility estimate (FMOD: distance, volume, priority, occlusion) or a volume threshold. Per-sound, per-bus and global limits; Unreal resolves a full group by stopping the farthest, quietest, lowest-priority or oldest sound | Real-time engines trade error for a fixed CPU budget: an audible sound can be dropped. Culling (`cull_db`) is the offline counterpart with a bounded error |
 | **HDR audio** | Wwise | A dynamic window follows the loudest sound; voices below the window are virtualised | Close to the per-group relative budget of culling |
 | **One voice, many positions** | Wwise multi-position (`SetMultiplePositions`, MultiSources / MultiDirections) | One signal played from many positions (a river, a row of torches) at the cost of one voice; the positions cannot have their own gains or sounds | Sources sharing a sample could share one dry signal and one voice |
-| **Density-driven beds** | The Witcher 3 (NPCs counted in four quadrants around the listener, sent to Wwise as parameters), CRIWARE's crowd example (low/medium/high density loops crossfaded by one parameter), Ghost of Tsushima's ambience system; RTS practice: one composite sound per unit at a distance | Individual emitters only near the listener; everything farther is a designed bed whose layers and level follow the count or density per direction | The common game answer for crowds and traffic. In soundstage terms: per direction sector, a bed driven by the power of the distant sources it replaces |
+| **Density-driven beds** | The Witcher 3 (NPCs counted in four quadrants around the listener, sent to Wwise as parameters), CRIWARE's crowd example (low/medium/high density loops crossfaded by one parameter), Ghost of Tsushima's ambience system; RTS practice: one composite sound per unit at a distance | Individual emitters only near the listener; everything farther is a designed bed whose layers and level follow the count or density per direction | The common game answer for crowds and traffic. In SoundStage terms: per direction sector, a bed driven by the power of the distant sources it replaces |
 | **Clustering** | Research: Tsingos, Gallo, Drettakis 2004 (hundreds of moving sources: culling by masking, dynamic clustering, pre-mix per cluster); Moeck et al. 2007 (thousands of sources on a PC: hierarchical clustering, progressive pre-mix; listeners wanted more clusters on visible sources). Product: Dolby Atmos spatial coding (Breebaart et al. 2019) groups up to 128 objects into 12–16 elements for delivery | Group sources by position and loudness, mix each group's signals, render the group as one source at its centroid | [#31](https://github.com/Agents-Robots/soundstage/issues/31). Atmos shows the error is acceptable in professional delivery |
 | **Stochastic sampling** | Wand, Straßer 2004 | A hierarchy of sample sources; louder sources are picked more often. A stadium of about 16 000 fans was rendered from 2000 sampled sources with acceptable quality | Efficient mainly for static sources |
-| **Particle renderer** | Sound Particles (used in film and game post-production) | Thousands to millions of "particles" (sources) with random sounds, motion and gain/delay/EQ/pitch variation, distance, speed of sound, Doppler and air, rendered to a virtual microphone (mono to Atmos); FBX import from animation | The closest product to soundstage; its documentation does not say how it scales |
+| **Particle renderer** | Sound Particles (used in film and game post-production) | Thousands to millions of "particles" (sources) with random sounds, motion and gain/delay/EQ/pitch variation, distance, speed of sound, Doppler and air, rendered to a virtual microphone (mono to Atmos); FBX import from animation | The closest product to SoundStage; its documentation does not say how it scales |
 | **Recorded aggregates** | Film: the Uruk-hai chant in *The Two Towers* was recorded with a cricket crowd of about 25 000 in Wellington; Total War uses group vocal recordings for battle scale | The crowd is recorded as a crowd, and individual hero sounds are placed on top | A recorded bed instead of simulated soldiers |
-| **Traffic auralization** | Acoustics research: traffic flow built from synthesised single pass-bys (Fu et al.), superposition of pass-bys (TAURA); environmental noise models treat roads as line sources | Individual vehicles near the listener, superposition or line sources for the flow | Same as soundstage near the camera; a line source or bed for far traffic |
+| **Traffic auralization** | Acoustics research: traffic flow built from synthesised single pass-bys (Fu et al.), superposition of pass-bys (TAURA); environmental noise models treat roads as line sources | Individual vehicles near the listener, superposition or line sources for the flow | Same as SoundStage near the camera; a line source or bed for far traffic |
 
 Conclusion: no professional system renders thousands of sources individually at full detail. All
 of them keep a few near, loud sources individual and represent the rest by aggregates: clusters,
 beds driven by density, shared voices. Real-time engines also never hold whole-shot arrays per
 source; they process one buffer at a time, which is why their memory does not grow with the shot
-length ([#32](https://github.com/Agents-Robots/soundstage/issues/32)). soundstage follows the same pattern
+length ([#32](https://github.com/Agents-Robots/soundstage/issues/32)). SoundStage follows the same pattern
 with its far field ([level of detail](models/level-of-detail.md), ADR 0013): the loudest sources per group
 in full, the rest per source but without per-source filters or state, filtered in shared buses.
 
@@ -55,7 +55,7 @@ Whether the camera's field of view should change where sources are heard.
 
 | Approach | Where | How the direction is chosen |
 |---|---|---|
-| **Ears at the camera** | Games (Unity, Unreal, Wwise, FMOD: the listener is placed at the camera), Blender's speakers ([E01](experiments/E01-blender-speaker-baseline.md)), soundstage | Direction relative to the camera's orientation; the field of view plays no part |
+| **Ears at the camera** | Games (Unity, Unreal, Wwise, FMOD: the listener is placed at the camera), Blender's speakers ([E01](experiments/E01-blender-speaker-baseline.md)), SoundStage | Direction relative to the camera's orientation; the field of view plays no part |
 | **Split listener** | Third-person games: CRIWARE Focus Point (distance from the character, direction from the camera), Unreal's listener attenuation override (attenuation at the player, panning at the camera), Wwise's distance probe | Direction still from the camera, without the lens |
 | **View cone emphasis** | Unreal attenuation focus (`FocusAzimuth` 30°, `NonFocusAzimuth` 60° by default) | Sounds outside a cone around the view direction are attenuated and lose priority; the cone is a setting, not the lens |
 | **Screen as the frame of reference** | Film and TV mixing: on-screen dialogue in the centre, effects panned by hand to their place in the frame, off-screen sounds to the side or the surrounds. Dolby Atmos places objects in room coordinates whose front wall is the screen | Panning follows the picture, so a zoom or a cut changes where a sound is panned |
@@ -65,7 +65,7 @@ Whether the camera's field of view should change where sources are heard.
 Perception: viewers fuse a sound with its picture across offsets of about 10–20° (untrained
 listeners about 15–19°, trained ones about 9–10°), more when the source is visible.
 
-For soundstage ([E17](experiments/E17-lens-and-pan.md)): with the default 50 mm lens a source at
+For SoundStage ([E17](experiments/E17-lens-and-pan.md)): with the default 50 mm lens a source at
 the frame edge is heard at 9° on ±30° loudspeakers, where an HD viewer at 3 picture heights sees
 the edge at 16.5°; with a 200 mm lens at 2.3°. Ears at the camera are right for distance, delay,
 Doppler and occlusion (a zoom does not move the camera). The professional answer for the direction

@@ -14,7 +14,7 @@ the trailer (`cuts.py`) takes them between its clips.
 | Pass | Frames | Text |
 |---|---|---|
 | `not_recorded` | 1–66 (2.2 s) | "This sound was not recorded." |
-| `title` | 67–141 (2.5 s) | "soundstage", the accent rule, "Spatial sound, computed from your Blender scenes" |
+| `title` | 67–141 (2.5 s) | "SoundStage", the accent rule, "Spatial sound, computed from your Blender scenes" |
 | `thousands` | 142–207 (2.2 s) | "Ten thousand cars." and, in amber, "Twenty thousand sources." |
 
 Each card fades in from black over 6 frames and out to black over its last 6, centred, bold Inter.

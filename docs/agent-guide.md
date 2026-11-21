@@ -1,7 +1,7 @@
 # Agent guide: add sound to an existing animation
 
 Step-by-step instructions for a coding agent that is asked to give an existing Blender animation
-its sound with soundstage. Follow the steps in order. Everything runs headless; the .blend file is
+its sound with SoundStage. Follow the steps in order. Everything runs headless; the .blend file is
 never modified.
 
 What you produce:

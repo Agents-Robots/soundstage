@@ -1,6 +1,6 @@
 # Research
 
-Scientific background, model decisions and measurements behind soundstage. The specs in
+Scientific background, model decisions and measurements behind SoundStage. The specs in
 [docs/spec/](../docs/spec/) say *what* the engine computes; this folder says *why*, what else was
 considered, and what was measured.
 

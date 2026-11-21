@@ -448,7 +448,7 @@ def wordmark_card(cam, name: str, tagline: str, note: str, window) -> Layer:
     hud = base.hud_of(cam)
     layer = Layer(f"{name}.wordmark")
     objs = [rect(hud, f"{name}.wordmark.card", -0.05, -0.05, 1.05, 1.05, layer.mat("bg", 0.82), z=0.0),
-            text(hud, f"{name}.wordmark.word", "soundstage", 0.09, 0.5, 0.49, layer.mat("text"), bold=True,
+            text(hud, f"{name}.wordmark.word", "SoundStage", 0.09, 0.5, 0.49, layer.mat("text"), bold=True,
                  align="CENTER", max_width=0.9)[0],
             rect(hud, f"{name}.wordmark.rule", 0.47, 0.545 - 0.0028, 0.53, 0.545 + 0.0028, layer.mat("accent"), z=0.002),
             text(hud, f"{name}.wordmark.tagline", tagline, 0.032, 0.5, 0.62, layer.mat("text"), align="CENTER",

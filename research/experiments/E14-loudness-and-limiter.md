@@ -18,7 +18,7 @@ and limits it at −1 dBTP.
 
 ## Results
 
-Integrated loudness (LUFS), loudness range (LU), true peak (dBTP), soundstage / ffmpeg:
+Integrated loudness (LUFS), loudness range (LU), true peak (dBTP), SoundStage / ffmpeg:
 
 | signal | expected | I | LRA | TP |
 |---|---|---|---|---|

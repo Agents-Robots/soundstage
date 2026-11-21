@@ -132,7 +132,7 @@ def card(cam) -> None:
         objs.append(overlay.text(hud, f"outro.{name}", body, cap, x, baseline, layer.mat(colour),
                                  max_width=RIGHT - x, **kw)[0])
 
-    text("word", "soundstage", 0.085, 0.15, "text", bold=True)
+    text("word", "SoundStage", 0.085, 0.15, "text", bold=True)
     objs.append(overlay.rect(hud, "outro.rule", LEFT, 0.19 - 0.0028, LEFT + 0.06, 0.19 + 0.0028, layer.mat("accent"),
                              z=0.002))
     text("tagline", TAGLINE, 0.032, 0.25, "text")

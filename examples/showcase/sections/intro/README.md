@@ -1,7 +1,7 @@
-# `intro`: soundstage
+# `intro`: SoundStage
 
 The opening: one street shot twice, first as Blender renders it (silent), then with the sound
-soundstage renders for it. No explanation; the difference is the message. The full cut starts at
+SoundStage renders for it. No explanation; the difference is the message. The full cut starts at
 `sound` (sections/README.md, "Cuts").
 
 | | |
@@ -18,7 +18,7 @@ wordmark page comes at the end, over the running shot:
 
 | Element | Text |
 |---|---|
-| Wordmark | `soundstage`, centred, cap height 9 % |
+| Wordmark | `SoundStage`, centred, cap height 9 % |
 | Tagline | Sound for Blender animations, computed from the scene. |
 | Note | Headphones recommended. |
 
@@ -38,7 +38,7 @@ camera at 6 m and leaves behind it. Its position along the street is `x = −90 
 | Pass | Frames | Label | Setting | What is heard |
 |---|---|---|---|---|
 | `silent` | 1–195 (6.5 s) | Blender renders the picture. | no sources | nothing: digital silence |
-| `sound` | 196–540 (11.5 s) | soundstage renders the sound. | defaults, `reverb=city_streets` | the same action from its start: the town, the car, the siren approaching, dropping in pitch as it passes, moving behind the camera and into the distance |
+| `sound` | 196–540 (11.5 s) | SoundStage renders the sound. | defaults, `reverb=city_streets` | the same action from its start: the town, the car, the siren approaching, dropping in pitch as it passes, moving behind the camera and into the distance |
 
 The action restarts at frame 196. From frame 421 (7.5 s into `sound`, the ambulance 60 m past the
 camera) the wordmark card fades in over the running shot within 12 frames; the label goes with

@@ -76,7 +76,7 @@ the side is fully in one channel. The `sine` law reaches far-channel levels of �
 - `tests/test_gain_pan.py`: both laws constant power, `power` at 76° gives −18.0 ± 0.5 dB; the
   `hybrid` limit leaves the frame unchanged, reaches `ild_limit_db` at ±90° and is monotonic.
 - [E01](../experiments/E01-blender-speaker-baseline.md): Blender's measured gains follow
-  `g² = (1 ∓ sin θ)/2` within 0.03 (linear gain); balance at 76°: Blender 18.1 dB, soundstage `sine`
+  `g² = (1 ∓ sin θ)/2` within 0.03 (linear gain); balance at 76°: Blender 18.1 dB, SoundStage `sine`
   31.2 dB.
 
 ## References

@@ -45,7 +45,7 @@ def run(c: Check) -> None:
     summary = json.loads((c.dir / "production.report.json").read_text())
     rows = {r["pass"]: r for r in summary["passes"]}
     origin = rows["race"]["anim_mix"]
-    c.expect("race: only the stems soundstage rendered", ", ".join(origin["stems"]), ", ".join(RACE_STEMS),
+    c.expect("race: only the stems SoundStage rendered", ", ".join(origin["stems"]), ", ".join(RACE_STEMS),
              tuple(origin["stems"]) == RACE_STEMS)
     lifted = max(origin["lifted_db_max"].values())
     c.expect("race: the step back under the radio voices undone", f"lifted by up to {lifted:.1f} dB",
