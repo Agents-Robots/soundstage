@@ -48,6 +48,7 @@ Not yet: binaural and ambisonic output, animated parameters, random variation of
 Requires Linux, Python 3.12+ and Blender 5.x on `PATH`; ffmpeg for previews.
 
 ```bash
+git clone https://github.com/Agents-Robots/soundstage && cd soundstage
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/python tools/make_test_samples.py                     # placeholder sounds
 blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend
