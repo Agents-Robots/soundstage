@@ -17,10 +17,26 @@ through instances. An agent reads it to decide which objects get which sounds
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+def _import_package() -> None:
+    """Import ``soundstage`` from its own folder. Putting the folder above it on ``sys.path`` would
+    expose the venv's site-packages after ``pip install``, whose numpy (built for the venv's Python)
+    then shadows Blender's own (#49)."""
+    if "soundstage" in sys.modules:
+        return
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("soundstage", root / "__init__.py",
+                                                  submodule_search_locations=[str(root)])
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["soundstage"] = module
+    spec.loader.exec_module(module)
+
+
+_import_package()
 
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402

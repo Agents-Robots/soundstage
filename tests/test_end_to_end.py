@@ -37,6 +37,23 @@ def test_scan_finds_the_moving_ship(flyby):
     assert scan["tagged"] == []  # tags come from the script at bake time, not from the file
 
 
+def test_scan_and_bake_from_an_installed_package_use_blenders_numpy(flyby, tmp_path):
+    """#49: installed with pip, the package sits in site-packages beside the venv's numpy, which
+    Blender's Python cannot load; a stand-in numpy that fails on import plays that part."""
+    site = tmp_path / "site-packages"
+    shutil.copytree(REPO / "soundstage", site / "soundstage", ignore=shutil.ignore_patterns("__pycache__"))
+    (site / "numpy").mkdir()
+    (site / "numpy" / "__init__.py").write_text("raise ImportError('the venv numpy')\n")
+    run = ["--run", str(REPO / "examples" / "flyby_sounds.py")]
+    for script, args in (("scan.py", ["--out", str(tmp_path / "scan.json")]),
+                         ("bake.py", ["--out", str(tmp_path / "bake"), "--substeps", "1", *run])):
+        r = subprocess.run(["blender", "-b", str(flyby / "flyby.blend"), "--factory-startup", "-y", "--python-exit-code",
+                            "1", "--python", str(site / "soundstage" / "blender" / script), "--", *args],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout[-3000:]
+    assert (tmp_path / "bake" / "scene.npz").exists()
+
+
 def test_bake_and_render(flyby):
     bake_dir = flyby / "bake"
     assert main(["bake", str(flyby / "flyby.blend"), "--run", str(REPO / "examples" / "flyby_sounds.py"),
