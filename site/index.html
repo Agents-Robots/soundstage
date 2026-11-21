@@ -26,6 +26,7 @@
       <a href="#hear">What you hear</a>
       <a href="#use">How to use it</a>
       <a href="#get">What you get</a>
+      <a href="#science">The science</a>
       <a href="#start">Get started</a>
       <a class="nav-repo" href="https://github.com/Agents-Robots/soundstage">GitHub</a>
     </nav>
@@ -50,9 +51,29 @@
     </p>
   </div>
   <figure class="wrap wide shot">
-    <img src="img/hero-city.webp" width="2048" height="858" alt="A drone's view between the towers of a city at dusk, with lit windows, flying cars and a party terrace.">
-    <figcaption>A drone shot through a city with 2200 sound sources: every flying car, sign and terrace
-      is heard where the camera sees it. Blender rendered the picture, SoundStage the sound.</figcaption>
+    <div class="stage">
+      <img src="img/hero-city.webp" width="2048" height="858" alt="The view from a roof deck down a canyon of towers at dusk, with a bridge across it, two statues, neon signs and streams of flying cars. Light dots mark the cars; speaker symbols mark a neon sign, a hologram sign, crowds, music and a fan.">
+      <svg class="defs" aria-hidden="true"><symbol id="spk" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.500-3.500H4z"/><path d="M15.300 9.100a3.600 3.600 0 0 1 0 5.800M17.700 6.600a7 7 0 0 1 0 10.800" fill="none" stroke="currentColor" stroke-width="1.900" stroke-linecap="round"/></symbol></svg>
+      <ul class="sources" aria-label="Sound sources in the picture">
+      <!-- sources:begin (written by tools/make_site_images.py) -->
+      <li style="left:19.62%;top:32.54%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Neon sign<i> &middot; 268&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:37.64%;top:7.51%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Flying car<i> &middot; 100&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:35.17%;top:42.28%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Terrace crowd<i> &middot; 444&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:17.22%;top:53.03%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Rooftop party<i> &middot; 277&nbsp;m</i></span></li>
+      <li style="left:58.53%;top:50.84%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>1574 flying cars</span></li>
+      <li class="l" style="left:44.35%;top:76.47%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Party: crowd and music<i> &middot; 571&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:80.26%;top:49.64%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Sign<i> &middot; 531&nbsp;m</i></span></li>
+      <li class="l" style="left:90.35%;top:63.09%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Hologram sign<i> &middot; 349&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:71.83%;top:79.65%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Music<i> &middot; 592&nbsp;m</i></span></li>
+      <li class="wide-only" style="left:34.19%;top:93.30%"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><use href="#spk"/></svg><span>Fan<i> &middot; 6&nbsp;m</i></span></li>
+      <!-- sources:end -->
+      </ul>
+    </div>
+    <figcaption>One frame of a drone shot through a city with 2200 sound sources; 1669 of them are in
+      this picture. Each light dot is a flying car that is heard directly, 940 in all; the cars behind
+      the towers are quieter and duller. Speaker symbols and rings mark signs, lights, crowds and
+      music<span class="wide-only">, with their distance from the camera</span>. Blender rendered the picture, SoundStage the
+      sound.</figcaption>
   </figure>
 </section>
 
@@ -85,7 +106,9 @@
     <p class="kicker">What you hear</p>
     <h2>Ten things the scene decides for you.</h2>
     <p class="intro">The stills are from the feature video: simple scenes, one effect each, with the
-      setting that produces it at the lower left.</p>
+      setting that produces it at the lower left. Each effect is a model from the acoustics
+      literature, named under its card; <a href="#science">the science</a> shows how the rendered
+      sound is checked against it.</p>
     <div class="grid">
       <article class="card">
         <img loading="lazy" src="img/distance.webp" width="1280" height="720" alt="An open-air stage with a crowd, seen from 43 metres; a level meter at the right.">
@@ -93,6 +116,7 @@
         <p>Loudness falls as a source moves away, by 6&nbsp;dB for each doubling of the distance, and
           far sounds lose their treble in the air. A concert 700&nbsp;m away is a dull murmur; walk
           up to it and it opens.</p>
+        <p class="model"><b>Model</b> The inverse distance law of a point source in the open, as in OpenAL&nbsp;1.1; absorption in the air after ISO&nbsp;9613-1.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/screen.webp" width="1280" height="720" alt="A tennis court through a 55 mm lens, with markers below the picture showing where each hit is heard between left and right.">
@@ -100,6 +124,7 @@
         <p>A sound is placed between left and right where the viewer sees its source on the screen.
           Zoom in and the players move apart in the picture, and their hits move apart with
           them.</p>
+        <p class="model"><b>Model</b> A constant-power pan law (Pulkki 1997), taken at the source's place on a screen seen 33&deg; wide, as in film mixing and MPEG-H screen-related remapping.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/doppler.webp" width="1280" height="720" alt="An ambulance passing close to the camera on a country road; a gauge shows the shift of its siren in semitones.">
@@ -107,12 +132,14 @@
         <p>An ambulance, a race car, a propeller plane: the pitch rises on the approach and drops
           on the way out. It comes from the real motion of source and camera, so it is right for a
           moving camera too.</p>
+        <p class="model"><b>Model</b> One time-varying delay per source, driven by the geometry (Smith, Serafin, Abel and Berners 2002). Pitch and arrival time come from the same delay.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/delay.webp" width="1280" height="720" alt="Fireworks over a lake at night, above a time line that shows the bang still on its way to the camera.">
         <h3>The speed of sound</h3>
         <p>Sound travels at 343&nbsp;m/s. Fireworks a kilometre away are seen first and heard three
           seconds later. Where the story needs a hit on its frame, one setting pins it there.</p>
+        <p class="model"><b>Model</b> The retarded time: for every sample, the moment its sound left the source, solved from the paths of source and camera.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/occlusion.webp" width="1280" height="720" alt="A motorbike riding behind a row of houses, seen in a gap between two of them; an inset shows the line from the camera to the bike.">
@@ -120,6 +147,7 @@
         <p>A motorbike behind a house gets quieter and duller, and its low notes bend around the
           corner first. The buildings and vehicles of the scene do the blocking; there is nothing
           to set up.</p>
+        <p class="model"><b>Model</b> The open share of the first Fresnel zone between source and camera, per frequency band (Tsingos and Gascuel 1997).</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/reverb.webp" width="1280" height="720" alt="A person bouncing a basketball in a chapel; the label gives the room's reverberation time, 4.6 seconds.">
@@ -127,12 +155,14 @@
         <p>113 named environments, from a living room to a chapel to city streets, or your own
           impulse response. Distant sources feed the room less than near ones, so a busy scene
           stays clear.</p>
+        <p class="model"><b>Model</b> The EFX environment presets known from OpenAL, rendered by convolution with impulse responses of decaying noise (Moorer 1979; V&auml;lim&auml;ki et al. 2017).</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/directivity.webp" width="1280" height="720" alt="A business jet turning on an apron; an inset shows the cones of its intake whine and exhaust roar.">
         <h3>Directivity</h3>
         <p>A jet is whine from the front and roar from behind. A cone per sound makes a source
           sound different from each side as it turns.</p>
+        <p class="model"><b>Model</b> An inner and an outer cone with a level outside, as in OpenAL&nbsp;1.1 and Blender's speakers.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/around.webp" width="1280" height="720" alt="A village square with the scooter out of the picture; a radar inset shows it to the right of the camera.">
@@ -140,12 +170,14 @@
         <p>A small time difference between the ears, the shadow of the head, and a cue for sounds
           behind the camera: a scooter can be followed all the way around, and out of the
           picture.</p>
+        <p class="model"><b>Model</b> Woodworth's time difference for a spherical head and the head-shadow filter of Brown and Duda (1998).</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/cuts.webp" width="1280" height="720" alt="The view from a car on a race track; an inset shows five cameras around the circuit.">
         <h3>Camera cuts</h3>
         <p>When the picture cuts to another camera, the sound cuts with it: the new level and side
           at once, with no click and no pitch glide.</p>
+        <p class="model"><b>Model</b> At a cut the delay jumps. The engine switches to the new delay with a short crossfade instead of sweeping the pitch across the jump.</p>
       </article>
       <article class="card">
         <img loading="lazy" src="img/city.webp" width="1280" height="720" alt="A boulevard between towers at night, full of cars; the read-out says 10 000 cars, 20 000 sources.">
@@ -153,6 +185,7 @@
         <p>Ten thousand cars, each with an engine and tyres. The sound of this 30-second shot
           rendered in 3&nbsp;min 12&nbsp;s on one 16-core CPU: the nearest cars in full detail, the
           rest as one far field.</p>
+        <p class="model"><b>Model</b> The loudest sources of each group run the full chain, the rest share a far field; sources below an error budget are skipped.</p>
       </article>
     </div>
   </div>
@@ -309,9 +342,134 @@ soundstage scan shots/harbour.blend --out audio/scan.json</code></pre>
     <p class="fine">Up to 1000 sources, every source runs the full chain; the 10&nbsp;000 are flying
       cars with the nearest in full detail and the rest as a far field, which is the default.
       Measured, with the scenes and scripts to repeat it, in the
-      <a href="https://github.com/Agents-Robots/soundstage#how-long-it-takes">README</a>. Every model
-      in the engine has a page with its formulas, its limits and the measurements behind its
-      defaults: <a href="https://github.com/Agents-Robots/soundstage/tree/main/research">research</a>.</p>
+      <a href="https://github.com/Agents-Robots/soundstage#how-long-it-takes">README</a>.</p>
+  </div>
+</section>
+
+<section id="science">
+  <div class="wrap">
+    <p class="kicker">The science</p>
+    <h2>Built on published acoustics, checked on the rendered sound.</h2>
+    <p class="intro">You need none of this to use SoundStage. It is the reason the result can be
+      trusted: every effect is a model from the acoustics and audio literature, and each one is
+      measured in the audio the engine renders, against an answer known from geometry, a standard or
+      a preset.</p>
+
+    <div class="lead-chart">
+      <figure class="chart">
+        <img loading="lazy" src="img/sci-spectrogram.webp" width="1440" height="900" alt="Spectrogram, frequency from 0 to 1400 hertz over nine seconds. About fifteen bright horizontal lines, the harmonics of a propeller, run level, bend downwards between 4 and 7 seconds and run level again at a lower frequency. Three dashed curves lie on three of them.">
+      </figure>
+      <div>
+        <h3>Frequency over time: a plane flies past</h3>
+        <p>Each bright line is one harmonic of a propeller, in the sound rendered for a plane that
+          passes the camera at 216&nbsp;km/h, 80&nbsp;m away. On the approach every harmonic is heard
+          20&nbsp;% higher than the plane emits it, on the way out 14&nbsp;% lower, and the bend in
+          between is the moment it passes.</p>
+        <p>The dashed curves are not measured. They are computed from the plane's baked path and
+          the speed of sound alone, and the rendered harmonics lie on them.</p>
+        <p class="fine">Doppler as a time-varying delay: J. O. Smith, S. Serafin, J. Abel, D. Berners,
+          &ldquo;Doppler Simulation and the Leslie&rdquo;, DAFx 2002.</p>
+      </div>
+    </div>
+
+    <div class="grid charts">
+      <article class="card">
+        <img loading="lazy" src="img/sci-doppler.webp" width="1440" height="900" alt="Line chart: the frequency of a 1 kilohertz tone over seven seconds around the moment of passing, for a race car at 252 km/h (from 1256 down to 831 hertz), a propeller plane at 216 km/h (1203 to 860), a moving train at 108 km/h (1087 to 913) and an ambulance at 72 km/h (1062 to 945). A dashed line from the geometry lies on each curve.">
+        <h3>Pitch follows the motion</h3>
+        <p>A 1&nbsp;kHz test tone rides on four vehicles. Its frequency in the render (coloured)
+          stays within 0.11&nbsp;% of the frequency computed from the positions (dashed): a fast,
+          close pass snaps, a distant one glides.</p>
+        <p class="model"><b>Source</b> Smith, Serafin, Abel and Berners 2002</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/sci-air.webp" width="1440" height="900" alt="Line chart: loss in the air in decibels over frequency from 250 hertz to 16 kilohertz, for 43, 86, 172, 343 and 686 metres. The loss grows with frequency and distance; at 686 metres it is 21 decibels at 4 kilohertz. Each curve of the engine's filter lies on a dashed curve from ISO 9613-1.">
+        <h3>Air takes the treble</h3>
+        <p>ISO&nbsp;9613-1 gives the loss per metre of air for every frequency, temperature and
+          humidity. The engine's filter (blue) follows the standard (dashed) within 1.3&nbsp;dB, down
+          to a loss of 50&nbsp;dB, at every distance of the concert scene.</p>
+        <p class="model"><b>Source</b> ISO 9613-1:1993, at 20&nbsp;&deg;C and 50&nbsp;% humidity</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/sci-occlusion.webp" width="1440" height="900" alt="Two spectrograms of a motorbike over nine seconds, up to 8 kilohertz. With occlusion off the sound is even. With occlusion on, four dark spans mark the moments the bike is behind a house: the high frequencies almost vanish there, the low ones remain.">
+        <h3>A house in the way</h3>
+        <p>The same motorbike, with occlusion off and on. Behind each house the treble goes first
+          and the low notes bend around the corner: 12&nbsp;dB less at 250&nbsp;Hz, 21&nbsp;dB less
+          at 4&nbsp;kHz, as the open share of the sound path predicts.</p>
+        <p class="model"><b>Source</b> Tsingos and Gascuel 1997; Kapralos, Jenkin and Milios 2007</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/sci-reverb.webp" width="1440" height="900" alt="Line chart: the decay of the reverberation after a click in three rooms, in decibels over five seconds. Living room: 0.47 seconds measured, 0.50 set. Gymnasium: 3.13 measured, 3.14 set. Chapel: 4.64 measured, 4.62 set. Each curve is a straight line on the dashed line of its preset.">
+        <h3>Rooms decay as set</h3>
+        <p>A click in three rooms, and the energy of the reverb that is still to come. Each room
+          falls by 60&nbsp;dB in the time its preset names: a living room in half a second, a chapel
+          in 4.6&nbsp;seconds.</p>
+        <p class="model"><b>Source</b> Moorer 1979; V&auml;lim&auml;ki et al. 2017; EFX presets of OpenAL Soft</p>
+      </article>
+    </div>
+
+    <div class="stats science-stats">
+      <div><b>22</b><span>model pages: formulas, choices, alternatives and limits</span></div>
+      <div><b>20</b><span>experiments, each with a script that reproduces its numbers</span></div>
+      <div><b>475</b><span>checks on the rendered sound of the feature video</span></div>
+      <div><b>227</b><span>automated tests, 32 of them through Blender</span></div>
+    </div>
+
+    <h3 class="sub">Measured against the known answer</h3>
+    <p class="intro">An agent cannot listen, and ears disagree. So each scene of the feature video
+      carries a test sound whose right answer is known beforehand, and the rendered file is measured
+      against it.</p>
+    <div class="table">
+      <table class="answers">
+        <thead><tr><th scope="col">What is measured in the render</th><th scope="col">Known answer</th><th scope="col">Measured</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">A hammer blow 171.5&nbsp;m away arrives after its frame<small>distance / 343&nbsp;m/s</small></th><td>500.00&nbsp;ms</td><td>500.09&nbsp;ms</td></tr>
+          <tr><th scope="row">Level at 686&nbsp;m against 43&nbsp;m, four doublings<small>inverse distance law</small></th><td>&minus;24.08&nbsp;dB</td><td>&minus;24.15&nbsp;dB</td></tr>
+          <tr><th scope="row">Loss in the air at 686&nbsp;m, octave around 8&nbsp;kHz<small>ISO 9613-1</small></th><td>&minus;48.8&nbsp;dB</td><td>&minus;48.6&nbsp;dB</td></tr>
+          <tr><th scope="row">A 1&nbsp;kHz tone on an ambulance at 72&nbsp;km/h, approaching<small>geometry</small></th><td>1061.6&nbsp;Hz</td><td>1061.6&nbsp;Hz</td></tr>
+          <tr><th scope="row">The same tone, leaving<small>geometry</small></th><td>945.3&nbsp;Hz</td><td>945.2&nbsp;Hz</td></tr>
+          <tr><th scope="row">A motorbike behind a house, at 1&nbsp;kHz<small>open share of the Fresnel zone</small></th><td>&minus;13.6&nbsp;dB</td><td>&minus;13.6&nbsp;dB</td></tr>
+          <tr><th scope="row">Reverb decay of the chapel<small>the preset's decay time</small></th><td>4.62&nbsp;s</td><td>4.64&nbsp;s</td></tr>
+          <tr><th scope="row">Reverb against direct sound, walking from 3.5&nbsp;m to 16&nbsp;m<small>the send's distance law</small></th><td>&minus;12.80&nbsp;dB</td><td>&minus;12.80&nbsp;dB</td></tr>
+          <tr><th scope="row">Lead of the near ear, source at the side<small>Woodworth's formula</small></th><td>0.321&nbsp;ms</td><td>0.318&nbsp;ms</td></tr>
+          <tr><th scope="row">A source behind the camera, at 6&nbsp;kHz<small>rear cue</small></th><td>&minus;4.72&nbsp;dB</td><td>&minus;4.71&nbsp;dB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fine">From the checks of the feature video
+      (<a href="https://github.com/Agents-Robots/soundstage/tree/main/examples/showcase">examples/showcase</a>);
+      the charts above are drawn from the same renders by
+      <a href="https://github.com/Agents-Robots/soundstage/blob/main/tools/make_site_figures.py">one script</a>.
+      The loudness meter reads within 0.06&nbsp;LU of the EBU test values and of ffmpeg's EBU&nbsp;R&nbsp;128 meter.</p>
+
+    <h3 class="sub">Where the models come from</h3>
+    <dl class="refs">
+      <div><dt>Motion and delay</dt>
+        <dd>J. O. Smith, S. Serafin, J. Abel, D. Berners, &ldquo;Doppler Simulation and the Leslie&rdquo;, DAFx 2002</dd>
+        <dd>O. Niemitalo, &ldquo;Polynomial Interpolators for High-Quality Resampling of Oversampled Audio&rdquo;, 2001</dd>
+        <dd>J. O. Smith, &ldquo;Digital Audio Resampling&rdquo;, after Smith and Gossett, ICASSP 1984</dd></div>
+      <div><dt>Distance and air</dt>
+        <dd>ISO 9613-1:1993, &ldquo;Attenuation of sound during propagation outdoors, part 1: Calculation of the absorption of sound by the atmosphere&rdquo;</dd>
+        <dd>OpenAL 1.1 Specification and Reference, 2005</dd></div>
+      <div><dt>Direction and the head</dt>
+        <dd>V. Pulkki, &ldquo;Virtual Sound Source Positioning Using Vector Base Amplitude Panning&rdquo;, J. Audio Eng. Soc. 45(6), 1997</dd>
+        <dd>C. P. Brown, R. O. Duda, &ldquo;A Structural Model for Binaural Sound Synthesis&rdquo;, IEEE Trans. Speech and Audio Processing 6(5), 1998</dd>
+        <dd>R. S. Woodworth, <i>Experimental Psychology</i>, 1938</dd></div>
+      <div><dt>Occlusion</dt>
+        <dd>N. Tsingos, J.-D. Gascuel, &ldquo;Soundtracks for Computer Animation: Sound Rendering in Dynamic Environments with Occlusions&rdquo;, Graphics Interface 1997</dd>
+        <dd>B. Kapralos, M. Jenkin, E. Milios, &ldquo;Diffraction Modeling for Interactive Virtual Acoustical Environments&rdquo;, GRAPP 2007</dd></div>
+      <div><dt>Reverb</dt>
+        <dd>J. A. Moorer, &ldquo;About This Reverberation Business&rdquo;, Computer Music Journal 3(2), 1979</dd>
+        <dd>V. V&auml;lim&auml;ki, B. Holm-Rasmussen, B. Alary, H.-M. Lehtonen, &ldquo;Late Reverberation Synthesis Using Filtered Velvet Noise&rdquo;, Applied Sciences 7(5), 2017</dd>
+        <dd>R. Albrecht, T. Lokki, &ldquo;Adjusting the perceived distance of virtual speech sources by modifying binaural room impulse responses&rdquo;, ICAD 2013</dd></div>
+      <div><dt>Filters, loops and loudness</dt>
+        <dd>V. Zavalishin, &ldquo;The Art of VA Filter Design&rdquo;, 2020</dd>
+        <dd>M. Fink, M. Holters, U. Z&ouml;lzer, &ldquo;Signal-Matched Power-Complementary Cross-Fading and Dry-Wet Mixing&rdquo;, DAFx 2016</dd>
+        <dd>ITU-R BS.1770-4, 2015; EBU R&nbsp;128 with Tech 3341 and 3342</dd></div>
+    </dl>
+    <p class="fine">Every model has a page with its formulas, the alternatives that were considered
+      and its limits: <a href="https://github.com/Agents-Robots/soundstage/tree/main/research">research</a>.
+      All sources, with open copies where they exist:
+      <a href="https://github.com/Agents-Robots/soundstage/blob/main/research/papers/README.md">papers and standards</a>.</p>
   </div>
 </section>
 

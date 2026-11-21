@@ -96,6 +96,20 @@ figure { margin: 0; }
 figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 0.7rem; max-width: 76ch; }
 .hero .shot { margin-top: 52px; }
 
+/* sound sources over the title picture: each list item is the place of a source, its speaker
+   symbol centred on it (positions from tools/make_site_images.py) */
+.stage { position: relative; }
+.defs { position: absolute; width: 0; height: 0; }
+.sources { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; font-size: 0.8rem; line-height: 1; }
+.sources li {
+  position: absolute; display: flex; align-items: center; gap: 7px; white-space: nowrap;
+  padding: 2px 11px 2px 2px; border-radius: 999px; transform: translate(-13px, -50%);
+  background: rgba(11, 14, 19, 0.8); border: 1px solid rgba(245, 165, 36, 0.55); color: var(--text);
+}
+.sources li.l { flex-direction: row-reverse; padding: 2px 2px 2px 11px; transform: translate(calc(-100% + 13px), -50%); }
+.sources .spk { width: 22px; height: 22px; padding: 2px; border-radius: 50%; background: var(--accent); color: #12161d; fill: currentColor; flex: none; }
+.sources i { font-style: normal; color: var(--soft); }
+
 /* why */
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 44px; color: var(--soft); }
@@ -113,6 +127,8 @@ figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 0.7rem; max-wi
 .card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .card h3 { margin: 18px 22px 8px; }
 .card p { margin: 0 22px 22px; color: var(--soft); font-size: 0.98rem; }
+.card p.model { margin-top: -8px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
+.model b { color: var(--soft); font-weight: 650; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; margin-right: 6px; }
 
 /* how to use it */
 
@@ -170,6 +186,31 @@ section > .wrap > .code { margin-bottom: 1.4rem; }
 .stats b { display: block; font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; color: var(--accent); line-height: 1.2; }
 .stats span { color: var(--muted); font-size: 0.9rem; line-height: 1.45; display: block; margin-top: 4px; }
 
+/* the science: charts from tools/make_site_figures.py, drawn on the card colour */
+
+.lead-chart { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 36px; align-items: center; margin-bottom: 28px; }
+.lead-chart h3 { margin-bottom: 0.8rem; }
+.lead-chart p { color: var(--soft); margin: 0 0 0.9rem; }
+.lead-chart p.fine { color: var(--muted); }
+.chart { margin: 0; }
+.chart img { width: 100%; border-radius: var(--radius); border: 1px solid var(--line); }
+.charts .card img { aspect-ratio: 8 / 5; object-fit: contain; border-bottom: 1px solid var(--line); }
+.science-stats { margin-top: 28px; }
+
+.table { overflow-x: auto; margin-bottom: 1rem; }
+.answers { width: 100%; border-collapse: collapse; font-size: 0.96rem; }
+.answers th, .answers td { text-align: left; padding: 11px 16px 11px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.answers thead th { border-top: 0; color: var(--muted); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; }
+.answers tbody th { font-weight: 400; color: var(--soft); }
+.answers small { display: block; color: var(--muted); font-size: 0.84rem; }
+.answers td { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+.answers td:last-child { padding-right: 0; }
+
+.refs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 44px; margin: 1rem 0 1.4rem; }
+.refs > div { border-top: 1px solid var(--line); padding: 14px 0 8px; }
+.refs dt { color: var(--text); font-weight: 650; margin-bottom: 0.3rem; }
+.refs dd { margin: 0 0 0.45rem; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+
 /* production */
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -191,7 +232,7 @@ footer { border-top: 1px solid var(--line); background: var(--band); padding: 34
 /* narrow screens */
 
 @media (max-width: 900px) {
-  .way, .split { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .way, .split, .lead-chart { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .flow { grid-template-columns: 1fr 1fr; gap: 12px; }
   .flow li + li::before { content: none; }
   .stats { grid-template-columns: 1fr 1fr; }
@@ -204,11 +245,19 @@ footer { border-top: 1px solid var(--line); background: var(--band); padding: 34
   section { padding: 54px 0; }
   .hero { padding: 44px 0 40px; }
   .hero .shot { margin-top: 36px; }
+  .sources { font-size: 0.66rem; }
+  .sources li { gap: 4px; padding: 1px 7px 1px 1px; transform: translate(-9px, -50%); }
+  .sources li.l { padding: 1px 1px 1px 7px; transform: translate(calc(-100% + 9px), -50%); }
+  .sources .spk { width: 16px; height: 16px; padding: 1px; }
+  .sources i, .sources .wide-only, figcaption .wide-only { display: none; }
   .top nav a:not(.nav-repo) { display: none; }
-  .cols, .grid, .pair { grid-template-columns: minmax(0, 1fr); }
+  .cols, .grid, .pair, .refs { grid-template-columns: minmax(0, 1fr); }
+  .answers { font-size: 0.9rem; }
+  .answers th, .answers td { padding-right: 12px; }
   .grid { gap: 20px; }
   .card h3 { margin: 16px 18px 6px; }
   .card p { margin: 0 18px 18px; }
+  .card p.model { margin-top: -6px; }
   .code { font-size: 0.78rem; padding: 14px 14px; }
   .stats b { font-size: 1.55rem; }
 }

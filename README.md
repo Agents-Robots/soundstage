@@ -4,7 +4,10 @@ Spatial sound for Blender animations, computed from the scene and rendered offli
 
 **Website: [agents-robots.github.io/soundstage](https://agents-robots.github.io/soundstage/)**
 
-![A drone's view between the towers of a city at dusk](site/img/hero-city.webp)
+![The view from a roof deck down a canyon of towers at dusk; speaker symbols mark a neon sign, crowds, music, signs, a fan and the flying cars, with their distances](site/img/hero-city-labelled.webp)
+
+*One frame of a drone shot with 2200 sound sources. Each light dot is a flying car that is heard
+directly; the speaker symbols mark some of the other sources and their distance from the camera.*
 
 You put sounds on objects in a Blender scene: an engine hum on a ship, a door slam at frame 240,
 a beacon beeping every two seconds. SoundStage follows the camera through the animation and
@@ -103,6 +106,31 @@ frames. The final check is by ear.
 
 Not yet: binaural and ambisonic output, animated parameters, random variation of one-shots
 ([roadmap](docs/roadmap.md)).
+
+## The science
+
+Every effect is a model from the acoustics and audio literature, and each one is measured in the
+rendered audio against an answer known from geometry, a standard or a preset.
+
+![Spectrogram of a propeller plane passing: about fifteen harmonics bend downwards as it passes, with three dashed curves computed from its path lying on them](site/img/sci-spectrogram.webp)
+
+*Frequency over time of a propeller plane passing at 216 km/h, in the rendered sound. The dashed
+curves are computed from the plane's baked path and the speed of sound alone.*
+
+| Effect | Model | Measured in the render, against the known answer |
+|---|---|---|
+| Doppler and delay | One time-varying delay per source, driven by the geometry (Smith, Serafin, Abel, Berners 2002) | A 1 kHz tone on four vehicles stays within 0.11 % of the geometry; a blow 171.5 m away arrives after 500.09 ms (500.00) |
+| Distance and air | Inverse distance law (OpenAL 1.1); ISO 9613-1 | −24.15 dB over four doublings (−24.08); −48.6 dB around 8 kHz at 686 m (−48.8) |
+| Direction and the head | Constant-power panning (Pulkki 1997); Woodworth's time difference; head shadow of Brown and Duda (1998) | The near ear leads by 0.318 ms (0.321) |
+| Occlusion | Open share of the first Fresnel zone per band (Tsingos and Gascuel 1997) | −13.6 dB at 1 kHz behind a house (−13.6) |
+| Reverb | EFX presets as impulse responses of decaying noise (Moorer 1979; Välimäki et al. 2017) | A chapel decays in 4.64 s (4.62) |
+| Loudness | ITU-R BS.1770-4, EBU R 128 | Integrated loudness within 0.06 LU of the EBU test values and of ffmpeg's meter ([E14](research/experiments/E14-loudness-and-limiter.md)) |
+
+The numbers are checks of the feature video ([examples/showcase](examples/showcase/)); the
+[website](https://agents-robots.github.io/soundstage/#science) shows more charts. Each of the 22
+models has a page with its formulas, alternatives and limits, 20 experiments reproduce the
+measurements behind the defaults, and the sources are listed with open copies where they exist:
+[research](research/README.md), [papers and standards](research/papers/README.md).
 
 ## Try it
 
