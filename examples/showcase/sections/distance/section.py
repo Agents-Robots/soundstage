@@ -15,9 +15,9 @@ SECTION = Section(
         listen="the level at each camera position, and the hi-hats that only arrive close up.",
     ),
     passes=(
-        Pass("none", 375, "No distance model", 'distance_model="none"  air_absorption=0', "WITHOUT"),
+        Pass("none", 375, "No distance model", 'distance_model="none"  air_absorption=0'),
         Pass("inverse", 375, "Inverse distance law: −6 dB per doubling", 'distance_model="inverse_clamped"  air_absorption=0'),
-        Pass("air", 375, "Plus air absorption", 'distance_model="inverse_clamped"  air_absorption=1', "WITH"),
+        Pass("air", 375, "Distance law and air absorption", 'distance_model="inverse_clamped"  air_absorption=1'),
     ),
     gain_db=4.0,
 )

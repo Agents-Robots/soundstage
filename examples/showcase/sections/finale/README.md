@@ -26,7 +26,9 @@ The trailer cut drops this title page and starts on the first shot.
 The town runs on one clock; the shots only move the camera. Times are seconds from the start of
 the pass (frame 91), positions in the town's coordinates (`kit/blender/town.py`: the main street
 along X at y = 0, the square north of it for |x| ≤ 30, the church south of it). The sky and the sun
-dim over the first 55 s, and the glow of the sunset fades into the night blue.
+dim over the first 55 s, and the glow of the sunset fades into the night blue; a cool moonlight
+rises as the sun sets, and 70 % of the windows are lit (the kit's town has 45 %), so that the night
+stays readable.
 
 **What happens in the town**
 
@@ -41,7 +43,7 @@ dim over the first 55 s, and the glow of the sunset fades into the night blue.
 | 29 to 44 s | the bell of the first level crossing rings | 300 m east of the square |
 | 39 to 49 s | the bell of the second level crossing rings | 550 m east |
 | 50.5 to 57.5 s | a scooter crosses the square at 25 km/h, 5 m behind the square camera, straight behind it at 54 s | from the main street to the north-west |
-| 60.5 to 68.5 s | seven firework bursts, 500 to 700 m away, 165 to 240 m up | over the hill north of the town |
+| 60.4 to 70.0 s | thirteen firework bursts, 270 to 380 m away, 107 to 138 m up, the last five as a closing salvo from 68.2 s | north of the town, above its roofs |
 
 **Shots**
 
@@ -53,7 +55,7 @@ dim over the first 55 s, and the glow of the sunset fades into the night blue.
 | `crossing` | 31 to 41 s | 1021–1320 | beside the first crossing's road, 8 m from the track, 24 mm, looking west along the track | the crossing bell; the horn, high (111 m away); the train passing; the pitch of horn and wheels falling | "Doppler" |
 | `onboard` | 41 to 49 s | 1321–1560 | in the locomotive's cab, 1.6 m behind its front, looking ahead, 20 mm | the steady roll of the train; the second crossing's bell rising in level and dropping three semitones as the camera passes it (45.5 s) | "the camera moves: the bell drops" |
 | `square` | 49 to 60 s | 1561–1890 | on the square at (5.6, 32.2), 20 m from the busker, who stands 3 m left of the middle; zoom from 24 to 70 mm between 51 and 57 s | the accordion moving to the left as the busker moves to the left of the frame; the scooter passing behind, duller | "behind you" · "sound follows the lens" |
-| `fireworks` | 60 to 75 s | 1891–2340 | on the square at (0, 12), tilted up 14° over the roofs, 24 mm | each burst 1.5 to 2 s after its flash, soft and dull from the distance; the town's echo | "600 m: 1.7 s late" |
+| `fireworks` | 60 to 75 s | 1891–2340 | on the square at (0, 12), tilted up 14° over the roofs, 24 mm | each burst 0.8 to 1.1 s after its flash, the closing salvo bang on bang; the town's echo | "340 m: 1.0 s late"; at the end the card of what the evening took |
 
 The busker stops at 59 s, as the first rocket rises, and lowers the accordion. The picture fades
 to black over the last 1.5 s. Inside the cab, the locomotive's front wall, windscreen and lamps
@@ -81,14 +83,18 @@ No lower third: the frame stays clean. A callout is a small chip in the upper ri
 | `finale.town.train_horn` | `train_horn.wav` | once at 33.5 s, on the roof at the front of the train, `ref_distance=60`, group `railway` |
 | `finale.town.train_roll_1` … `_3` | `train_roll.wav` | loops under the locomotive and the two coaches, 24 to 54 s with 2 s fades, `ref_distance=8`, `gain_db=-3`, group `railway` |
 | `finale.town.scooter`, `.scooter_tyres` | `car_engine.wav` (`pitch=1.6`), `tyre_noise.wav` (`gain_db=-8`) | loops, 50.5 to 57.5 s with 0.5 s fades, `ref_distance=5`, group `vehicles` |
-| `finale.town.burst_1` … `burst_7` | `firework_bang_1.wav` … `_3.wav` in turn | once on the flash frame, at the burst, `ref_distance=600`, group `fireworks` |
+| `finale.town.burst_1` … `burst_13` | `firework_bang_1.wav` … `_3.wav` in turn | once on the flash frame, at the burst, `ref_distance=600`, `gain_db=6`, group `fireworks` |
 
 No source has `sync_to_picture`, and no per-source setting differs from its default except
 `ref_distance`, `gain_db`, `pitch`, `offset`, the fades and the groups, and `loop_crossfade=0`,
 `loop_phase=0` on the loops (the kit's loops are seamless). The levels were set so that the pass
 reaches −18 LUFS ± 2 with one static gain and the true peak stays below −1 dBTP: the crossing bells
 at 4 m would otherwise cover the passing train, and the steps at 2.5 m and the train at 6.5 m set
-the peaks.
+the peaks. The bangs are 6 dB louder than their samples, and soundstage's true-peak limiter at
+−1 dBTP (`limit_dbtp`, the exception to S1) takes up to 5.6 dB off them. Moving the fireworks
+closer alone made them no louder: within `ref_distance` a source plays at its sample's level
+(`inverse_clamped`). A bang is short, so the fireworks still measure −23.9 LUFS over their 12 s,
+against −16.0 for the train crossing; their peaks are the evening's.
 
 ## Requirements
 
@@ -106,12 +112,14 @@ the peaks.
 - **R5** A bell strike or burst is received before the next cut or rings across it: no one-shot
   arrives within 0.3 s before a cut.
 - **R6** The bursts stand above the roofs in the line of sight of the last camera, clear of the
-  Fresnel zone (about 19° up, the roofs at 8 to 13°); the longest path is 700 m (2.0 s), inside the
+  Fresnel zone (20 to 25° up, the roofs at 8 to 13°); the longest path is 380 m (1.1 s), inside the
   default bake padding of 3 s.
 - **R7** Callouts name what is heard in plain words; they do not refer to other sections (C6).
 - **R8** Stems per group (`ambience`, `music`, `bells`, `vehicles`, `people`, `railway`,
   `fireworks`, `reverb`) are written with the mix: they are the material for a re-edit.
 - **R9** Level: integrated loudness −18 LUFS ± 2 with one static gain, true peak at most −1 dBTP.
+- **R10** The numbers on screen are measured: the sources in the bake, the tag calls and their lines
+  in `build.py`, and the render time under the card's claim.
 
 ## Known answers
 
@@ -135,9 +143,10 @@ values are computed from the baked positions and visibility. Measured values fro
 | A sine on the train | 1 kHz sine under the locomotive | 1000.0 Hz ± 0.5 in the cab | 999.99 to 1000.02 Hz |
 | Zoom in `square` | pink noise on the accordion (direct sound), 200 to 400 Hz | left over right from the screen pan law and the head shadow (`kit/hearing.py`): 1.84 dB at 24 mm, 5.52 dB at 70 mm, ± 0.7 dB | 1.86, 5.58 dB |
 | Scooter behind the camera | pink noise, against a render with the rear cue off | at 54.01 s (rho 0.98), third octaves: −2.07 dB at 1 kHz, −8.08 dB at 12 kHz (the rear low-pass at the engine's oversampled rate), ± 0.7 dB | −2.07, −8.08 dB |
-| Firework bursts | click on the flash frames | onsets at distance / c: 1.46 s (500 m) to 2.04 s (700 m), ± 1 ms; baked visibility at least 0.99 | within 0.13 ms; 1.000 |
+| Firework bursts | click on the flash frames | onsets at distance / c: 0.79 s (270 m) to 1.11 s (380 m), ± 1 ms; baked visibility at least 0.99 | all within 1 ms; 1.000 |
 | Stems | | the eight groups of R8 | all eight |
-| Loudness and peak | | −18 LUFS ± 2, at most −1 dBTP; first and last 0.2 s of the pass below −60 dBFS | −19.5 LUFS, −1.1 dBTP; silent |
+| Loudness and peak | | −18 LUFS ± 2, at most −1 dBTP; first and last 0.2 s of the pass below −60 dBFS | −19.4 LUFS, −1.0 dBTP; silent |
+| What the scene took (R10) | | 31 sources in the bake; render time under 15 s | 31; 13 calls in 21 lines; 5.2 s |
 
 ## Limits
 
@@ -152,4 +161,14 @@ gradually over the last 5 s of the walk.
 The whole section, as the last check of the showcase: whether a viewer who has seen nothing else
 understands from picture and sound alone that the sound belongs to the scene. In particular the
 balance: the overview opens quietly (about −27 LUFS: the town from 400 m), the crossing is
-the loudest shot, and the fireworks are heard from 500 to 700 m.
+the loudest shot by loudness, and the fireworks, 270 to 380 m away, hit the peak ceiling with
+each bang.
+
+## What the scene took (R10)
+
+Beside the drone's view (0.8 to 8.6 s) a panel lists the scene's `tag` calls as `build.py` has
+them (each with its first two arguments; `section.tag_calls` reads them from the script's syntax
+tree, probes left out): 13 calls. Over the fireworks' last echoes (71 to 74.5 s) a card gives the
+numbers: 31 sources, 21 lines of Python to tag them, 75 s of sound rendered in under 15 s. The check
+asserts the source count against the bake and the render time against the claim (5.2 s on an AMD
+Ryzen 9 3950X, 24 threads).

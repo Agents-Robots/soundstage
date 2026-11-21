@@ -40,14 +40,15 @@ def run(c: Check) -> None:
     def at(k: str, t: float) -> float:
         return c.frame(k, t)
 
-    # siren_off: one pitch throughout. Each ear's delay still follows the time difference between the
-    # ears, which swings by 0.3 ms as the ambulance passes: up to 0.5 Hz up in one ear and down in the
-    # other, so the mono sum is measured, over 0.25 s
-    x = c.probe("siren_off").audio
-    a, b = audible_span("siren_off")
+    # siren rendered with Doppler off (for this check only, not shown): one pitch throughout. Each ear's
+    # delay still follows the time difference between the ears, which swings by 0.3 ms as the ambulance
+    # passes: up to 0.5 Hz up in one ear and down in the other, so the mono sum is measured, over 0.25 s
+    x = c.probe("siren", extra={"doppler_factor": 0.0}).audio
+    a, b = audible_span("siren")
     _, f = measure.frequency_track(x[int(a * rate):int(b * rate)], rate, 0.25, 0.05)
     err = float(np.nanmax(np.abs(f - 1000)))
-    c.expect("siren_off: probe at 1000 Hz throughout", f"max error {err:.2f} Hz", "within 0.5 Hz", err <= 0.5)
+    c.expect("siren, doppler_factor=0: probe at 1000 Hz throughout", f"max error {err:.2f} Hz", "within 0.5 Hz",
+             err <= 0.5)
 
     for k in ("siren", "race", "plane", "train"):
         x = c.probe(k, "sine").audio

@@ -36,7 +36,7 @@ S = SECTION
 FPS = base.story.FPS
 SETS = {"road": 0.0, "track": 3000.0, "airfield": 6000.0, "rail": 9000.0}
 """X of each set's origin: the point of closest approach (the bell for the railway)."""
-PASS_SET = {"siren_off": "road", "siren": "road", "race": "track", "plane": "airfield", "train": "rail"}
+PASS_SET = {"siren": "road", "race": "track", "plane": "airfield", "train": "rail"}
 CAMERA_YAW = 50.0
 """Roadside cameras look this far towards the approaching vehicle (compass degrees from facing the
 road): the far end of the road is in the frame, and the vehicle leaves it just before passing."""
@@ -208,7 +208,7 @@ def ambulance(amb) -> None:
     w = S.windows
     p = PASSBYS["siren"]
     bar = Vector((0.9, 0, 2.05))  # the light bar from the ambulance's origin, heading +X
-    for k in ("siren_off", "siren"):
+    for k in ("siren",):
         path = run(k, p.source_z)
         models.drive(amb, [(f, v - bar) for f, v in path], heading_deg=-90)
         e, em = rig(f"doppler.{k}.rig", path, {"siren": (0, 0, 0), "engine": (0, 0, -1.95), "tyres": (-2.8, 0, -2.45)})
@@ -219,7 +219,7 @@ def ambulance(amb) -> None:
         loop(em["tyres"], "tyre_noise.wav", S.source_id(k, "amb_tyres"), k, ref_distance=4.0, gain_db=-6.0,
              group="vehicles")
         check_speed(e, k, p.speed)
-    models.blink(amb, [(w["siren_off"].first, w["siren_off"].last), (w["siren"].first, w["siren"].last)])
+    models.blink(amb, [(w["siren"].first, w["siren"].last)])
 
 
 def race(car) -> None:
@@ -281,11 +281,9 @@ def train(cross) -> tuple[object, object]:
 
 
 def heard_semitones(key: str) -> list[tuple[int, float]]:
-    """The pitch gauge: semitones of the rate heard on each frame of the pass (0 without Doppler),
-    from the first frame on which the sound has arrived (held at that value before it)."""
+    """The pitch gauge: semitones of the rate heard on each frame of the pass, from the first frame on
+    which the sound has arrived (held at that value before it)."""
     w, p = S.window(key), PASSBYS[key]
-    if key == "siren_off":
-        return [(w.first, 0.0)]
     t0 = 0.0 if key == "train" else p.heard(0.0)
     end = p.heard(p.end_s(pass_seconds(key)))
     out = []
@@ -310,7 +308,7 @@ def build(out: Path) -> Path:
     _, cam_cab = train(cross)
 
     w = S.windows
-    cams = {"siren_off": cam_road, "siren": cam_road, "race": cam_track, "plane": cam_air, "train": cam_cab}
+    cams = {"siren": cam_road, "race": cam_track, "plane": cam_air, "train": cam_cab}
     shots = [(1, cam_road)] + [(w[k].first, cams[k]) for k in ("race", "plane", "train")]
 
     # --- overlays ----------------------------------------------------------------------------------
@@ -323,7 +321,7 @@ def build(out: Path) -> Path:
         cam, win = cams[p.key], w[p.key]
         overlay.lower_third(cam, f"doppler.{p.key}", p, j, len(S.passes), win)
         needle = heard_semitones(p.key)
-        ends = () if p.key == "siren_off" else (needle[0][1], needle[-1][1])
+        ends = (needle[0][1], needle[-1][1])
         overlay.gauge(cam, f"doppler.{p.key}", list(GAUGE_MARKS), needle, (win.first, win.last), unit="semitones",
                       signed=True, highlights=ends)
     last = w["train"].last

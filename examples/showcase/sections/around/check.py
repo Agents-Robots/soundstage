@@ -1,5 +1,6 @@
 """Known answers of ``around`` (README.md), asserted on the pink-noise probe on the scooter: channel
-power and balance, the lag between the channels, head shadow, and the rear cue, per pass.
+power and balance, the lag between the channels, head shadow, and the rear cue: on the lap as shown,
+and on the lap rendered for the checks with level difference only and without the rear cue.
 
 Levels and spectra are measured against the part of the probe sample that was emitted for each
 window (its loop starts on the pass's first frame), so that the noise's own fluctuation cancels and
@@ -18,7 +19,18 @@ sys.path[:0] = [str(HERE.parents[3]), str(HERE.parents[1]), str(HERE)]
 import numpy as np  # noqa: E402
 import soundfile as sf  # noqa: E402
 from kit.checks import C, Check  # noqa: E402
-from section import ILD_LIMIT_DB, LAP_S, RADIUS, REAR_DEFAULTS, REAR_OFF, itd_ms, rear_db, rear_factor  # noqa: E402
+from section import (  # noqa: E402
+    AMPLITUDE,
+    HYBRID,
+    ILD_LIMIT_DB,
+    LAP_S,
+    RADIUS,
+    REAR_DEFAULTS,
+    REAR_OFF,
+    itd_ms,
+    rear_db,
+    rear_factor,
+)
 
 from soundstage.engine.propagation import interpolator_for  # noqa: E402
 
@@ -75,12 +87,14 @@ def band_response(x: np.ndarray, rate: int, fc: float, rho: float, gain_db: floa
 def run(c: Check) -> None:
     rate = c.rate
     sample, _ = sf.read(c.dir.parents[0] / "sounds" / "noise_pink.wav")
-    probe = {k: c.probe(k, "noise").audio for k in ("amplitude", "hybrid", "rear")}
+    # the lap as shown (`rear`: the full ear model), and rendered for these checks only with level
+    # difference only (`amplitude`) and with the ear model but no rear cue (`hybrid`)
+    probe = {"amplitude": c.probe("lap", "noise", extra=AMPLITUDE).audio,
+             "hybrid": c.probe("lap", "noise", extra=HYBRID).audio, "rear": c.probe("lap", "noise").audio}
 
-    for k in probe:
-        rates = [s["rate"] for s in c.pass_report(k)["sources"] if s["id"] == f"around.{k}.engine"][0]
-        c.expect(f"{k}: playback rate (R1)", f"{rates[0]:.4f} to {rates[1]:.4f}", "1.000 ± 0.001",
-                 abs(rates[0] - 1) <= 1e-3 and abs(rates[1] - 1) <= 1e-3)
+    rates = [s["rate"] for s in c.pass_report("lap")["sources"] if s["id"] == "around.lap.engine"][0]
+    c.expect("lap: playback rate (R1)", f"{rates[0]:.4f} to {rates[1]:.4f}", "1.000 ± 0.001",
+             abs(rates[0] - 1) <= 1e-3 and abs(rates[1] - 1) <= 1e-3)
 
     # amplitude: constant power around the lap, nothing in the far ear, no lag
     # constant power: windows 4 s (one loop of the noise, 120 degrees) apart carry the same noise, so
@@ -149,8 +163,8 @@ def run(c: Check) -> None:
                  + (", less the 20 kHz rear low-pass" if k == "hybrid" else ""), f"max {worst:.3f} dB",
                  "within 0.2 dB", worst <= 0.2)
 
-    # the rear cue: rear minus hybrid, the same input in both passes; expected over each third octave,
-    # weighted by the spectrum there (the cue's slope is steep at 12 kHz), less the hybrid pass's own
+    # the rear cue: rear minus hybrid, the same input in both renders; expected over each third octave,
+    # weighted by the spectrum there (the cue's slope is steep at 12 kHz), less the hybrid render's own
     # 20 kHz low-pass
     t = at_angle(180)
     rho = rear_factor(t - DELAY_S)

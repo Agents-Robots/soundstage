@@ -12,7 +12,7 @@ SECTION = Section(
         title="Speed of sound",
         claim="Sound travels at 343 m/s: three seconds per kilometre. Every source is delayed by its distance.",
         code="sync_to_picture = False",
-        listen="the gap between seeing and hearing; then the same events put on their frames.",
+        listen="the gap between seeing and hearing: the farther away, the later.",
     ),
     passes=(
         Pass("physical", 480, "Sound travels at 343 m/s", "sync_to_picture=False"),

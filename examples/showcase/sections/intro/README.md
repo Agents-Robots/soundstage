@@ -1,7 +1,8 @@
 # `intro`: soundstage
 
 The opening: one street shot twice, first as Blender renders it (silent), then with the sound
-soundstage renders for it. No explanation; the difference is the message.
+soundstage renders for it. No explanation; the difference is the message. The full cut starts at
+`sound` (sections/README.md, "Cuts").
 
 | | |
 |---|---|

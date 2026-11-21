@@ -17,9 +17,7 @@ SECTION = Section(
         listen="the drop in pitch at the moment of passing.",
     ),
     passes=(
-        Pass("siren_off", 270, "Ambulance, 72 km/h: no Doppler", "doppler_factor=0", "WITHOUT",
-             settings={"doppler_factor": 0.0}),
-        Pass("siren", 270, "Ambulance, 72 km/h", "doppler_factor=1", "WITH"),
+        Pass("siren", 270, "Ambulance, 72 km/h", "doppler_factor=1"),
         Pass("race", 210, "Race car, 252 km/h", 'doppler_factor=1  quality="high"', settings={"quality": "high"}),
         Pass("plane", 300, "Propeller plane, 216 km/h, 80 m away", 'doppler_factor=1  quality="high"',
              settings={"quality": "high"}),
@@ -97,7 +95,6 @@ class PassBy:
 
 
 PASSBYS = {
-    "siren_off": PassBy(20.0, 8.0, -90.0, 90.0, 2.65, 1.6),
     "siren": PassBy(20.0, 8.0, -90.0, 90.0, 2.65, 1.6),
     "race": PassBy(70.0, 15.0, -245.0, 245.0, 0.5, 1.6),
     "plane": PassBy(60.0, 80.0, -300.0, 300.0, 76.6, 1.6),

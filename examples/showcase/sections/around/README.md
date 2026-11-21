@@ -6,7 +6,7 @@ constant distance, so that direction is the only thing that changes.
 
 | | |
 |---|---|
-| Length | 39 s (1170 frames) |
+| Length | 15 s (450 frames) |
 | Set | a roundabout in the town (kit), day |
 | Features | panner (`amplitude`, `hybrid`), interaural time difference, head shadow, rear cue |
 | Reverb | none |
@@ -39,16 +39,18 @@ from above, once in 12 s (6.3 m/s, 23 km/h):
 | 10.8 s | 37° left | enters the frame |
 | 12 s | straight ahead | yes |
 
-The lap closes, so the picture runs on without a jump from one pass to the next. The engine and
+The lap closes: the scooter ends where it started. The engine and
 the probe ride 1 m above the ground, 0.6 m below the camera.
 
 ## Passes
 
-| Pass | Frames | Chip | Label | Setting | What is heard |
-|---|---|---|---|---|---|
-| `amplitude` | 91–450 (12 s) | WITHOUT | Level difference only | `panner=amplitude`, `rear_gain_db=0`, `rear_cutoff_hz=20000` | the scooter moves between the ears, inside the head; behind sounds like in front |
-| `hybrid` | 451–810 (12 s) | | Plus time difference and head shadow | `panner=hybrid`, `rear_gain_db=0`, `rear_cutoff_hz=20000` | wider and outside the head at the sides |
-| `rear` | 811–1170 (12 s) | WITH | Plus the rear cue | defaults | as before, and duller and slightly quieter while it is behind |
+| Pass | Frames | Label | Setting | What is heard |
+|---|---|---|---|---|
+| `lap` | 91–450 (12 s) | Time difference, head shadow, rear cue | defaults | the scooter leaving the picture to the right, outside the head at the side, duller and slightly quieter while it is behind, coming back on the left |
+
+Only the effect is shown (sections/README.md). The checks also render the lap with level difference
+only (`panner=amplitude`) and with time difference and head shadow but no rear cue (`hybrid`,
+`rear_gain_db=0`), as references; neither is shown.
 
 ## Sounds
 
@@ -76,14 +78,14 @@ step. The known answers count that low-pass in.
 - An inset map at the upper right, seen from above: the camera with its view cone, the circle, the
   scooter as a dot in the accent colour. This is the picture for the 80 % of the lap in which the
   scooter is outside the frame.
-- `hybrid` and `rear`: under the map, the arrival-time difference of the sound heard on that frame
-  in milliseconds ("Δt 0.32 ms" at the sides).
-- `rear`: the rear half of the circle is shaded on the map.
+- Under the map, the arrival-time difference of the sound heard on that frame in milliseconds
+  ("Δt 0.32 ms" at the sides).
+- The rear half of the circle is shaded on the map.
 
 ## Requirements
 
 - **R1** The distance is constant: no Doppler shift and no level change from distance.
-- **R2** The three passes are the same lap; only the settings differ.
+- **R2** The references the checks render are the same lap; only the settings differ.
 - **R3** The scooter has content above 6 kHz (engine at `pitch=1.6`, tyre noise), or the rear cue
   has nothing to act on.
 - **R4** No occluders: the island's plants and the houses around are set not to occlude (every
@@ -97,11 +99,13 @@ Probe: pink noise on the scooter, tagged like the engine (`around.probe.<pass>.n
 `loop_phase=0`, `loop_crossfade=0`: the sample is seamless, and without the seam crossfade the
 noise heard at any time is a known part of the sample). Levels and spectra are compared on the
 same noise: against the part of the sample emitted for the window, between windows one noise loop
-(4 s, 120°) apart, or between passes at the same time.
+(4 s, 120°) apart, or between renders at the same time. `rear` below is the lap as shown,
+`amplitude` and `hybrid` the lap rendered with those settings (`panner=amplitude` or `hybrid`, rear
+cue off).
 
 | What | Expected |
 |---|---|
-| Playback rate, all passes | 1.000 ± 0.001 |
+| Playback rate | 1.000 ± 0.001 |
 | `amplitude`: summed power of both channels, windows 120° and 240° apart | equal within 0.1 dB |
 | `amplitude`, source on the right (3 s): left channel | at least 40 dB below the right |
 | `amplitude`: lag between the channels | 0 ± 0.5 samples, every 30° |
@@ -115,7 +119,7 @@ same noise: against the part of the sample emitted for the window, between windo
 The head shadow is measured at 60° rather than 90°: at 90° the far channel of `amplitude` is
 46 dB down and no longer a clean copy of the near one, so its spectrum says nothing. The rear-cue
 values follow from the one-pole low-pass at 6 kHz and the −2 dB step, run at 96 kHz, weighted over
-each third octave, less the `hybrid` pass's own 20 kHz low-pass.
+each third octave, less the `hybrid` render's own 20 kHz low-pass.
 
 ## Limits
 

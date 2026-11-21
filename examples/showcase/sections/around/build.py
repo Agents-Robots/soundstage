@@ -80,7 +80,7 @@ def roundabout(rnd: random.Random) -> None:
 def lap(scooter) -> None:
     """The scooter on its circle on every frame, clockwise seen from above (heading along the
     circle), its wheels turning; the lap starts straight ahead on the first pass's first frame."""
-    first = S.window("amplitude").first
+    first = S.window("lap").first
     wheels = [o for o in scooter.children if ".wheel" in o.name]
     for f in range(1, S.frame_end + 1):
         t = (f - first) / FPS
@@ -106,7 +106,7 @@ def sounds(scooter) -> None:
 def itd_shots(window) -> list[tuple[str, tuple[int, int]]]:
     """The arrival-time difference of the sound heard on each frame (emitted 12 m / c earlier), as
     runs of frames with the same text."""
-    first = S.window("amplitude").first
+    first = S.window("lap").first
     runs: list[tuple[str, list[int]]] = []
     for f in range(window.first, window.last + 1):
         body = f"Δt {abs(itd_ms((f - first) / FPS - RADIUS / C)):.2f} ms"
@@ -129,21 +129,21 @@ def build(out: Path) -> Path:
 
     # --- overlays ----------------------------------------------------------------------------------
     w = S.windows
-    all_passes = (w["amplitude"].first, w["rear"].last)
+    all_passes = (w["lap"].first, w["lap"].last)
     overlay.title_page(cam, S, S.title_window, len(S.passes))
     overlay.fade_black(cam, "around.in", (1, 9), None, (1, 9))
     overlay.section_tag(cam, "around.cam", S.title, [all_passes])
     for j, p in enumerate(S.passes):
         overlay.lower_third(cam, f"around.{p.key}", p, j, len(S.passes), w[p.key])
-    first = w["amplitude"].first
+    first = w["lap"].first
     track = []
     for f in range(all_passes[0], all_passes[1] + 1):
         x, y, _ = position((f - first) / FPS)
         track.append((f, x - CAMERA[0], y - CAMERA[1]))
     fov = 2 * math.degrees(math.atan(18.0 / LENS))
-    overlay.map_inset(cam, "around", track, RADIUS, all_passes, fov, shade=(w["rear"].first, w["rear"].last))
-    overlay.readout(cam, "around.itd", itd_shots(w["hybrid"]) + itd_shots(w["rear"]), cap=0.03, top=0.37)
-    last = w["rear"].last
+    overlay.map_inset(cam, "around", track, RADIUS, all_passes, fov, shade=all_passes)
+    overlay.readout(cam, "around.itd", itd_shots(w["lap"]), cap=0.03, top=0.37)
+    last = w["lap"].last
     overlay.fade_black(cam, "around.out", None, (last - 8, last), (last - 8, last))
     for o in bpy.data.objects:  # R4: nothing occludes
         if o.type == "MESH":

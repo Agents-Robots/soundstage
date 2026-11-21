@@ -356,45 +356,39 @@ def headphones(parent, name: str, layer: Layer, x_right: float, baseline: float,
     return x_right - w
 
 
-def title_page(cam, section, window, n_passes: int) -> Layer:
-    """The title page over the opening view (sections/README.md, "Title page"): fades from black is
-    separate (``fade_black``); this dissolves in its last 12 frames."""
+def title_page(cam, section, window, n_passes: int, card: float = 0.78) -> Layer:
+    """The title page over the opening view (sections/README.md, "Title page"): the title and one line
+    of what to listen for, both read in its 3 s; the claim and the code line are the README's. Fading
+    from black is separate (``fade_black``); this dissolves in its last 12 frames. ``card`` is the
+    opacity of the dark card under the text: higher over bright, busy pictures (``city``)."""
     tp = section.title_page
     hud = base.hud_of(cam)
     layer = Layer(f"{section.key}.title")
-    objs = [rect(hud, f"{section.key}.title.card", -0.05, -0.05, 1.05, 1.05, layer.mat("bg", 0.82), z=0.0)]
-    left, right = 0.10, 0.95
-    objs.append(text(hud, f"{section.key}.title.kicker", "SOUNDSTAGE", 0.022, left, 0.36, layer.mat("accent"),
+    objs = [rect(hud, f"{section.key}.title.card", -0.05, -0.05, 1.05, 1.05, layer.mat("bg", card), z=0.0)]
+    left, right = 0.10, 0.90
+    objs.append(text(hud, f"{section.key}.title.kicker", "SOUNDSTAGE", 0.022, left, 0.40, layer.mat("accent"),
                      bold=True, spacing=1.9)[0])
-    objs.append(text(hud, f"{section.key}.title.title", tp.title, 0.085, left, 0.50, layer.mat("text"), bold=True,
+    objs.append(text(hud, f"{section.key}.title.title", tp.title, 0.085, left, 0.54, layer.mat("text"), bold=True,
                      max_width=right - left)[0])
-    objs.append(rect(hud, f"{section.key}.title.rule", left, 0.54 - 0.0028, left + 0.06, 0.54 + 0.0028,
+    objs.append(rect(hud, f"{section.key}.title.rule", left, 0.58 - 0.0028, left + 0.06, 0.58 + 0.0028,
                      layer.mat("accent"), z=0.002))
-    for i, line in enumerate(wrap(tp.claim, 0.032, right - left)):
-        objs.append(text(hud, f"{section.key}.title.claim{i}", line, 0.032, left, 0.61 + 0.055 * i, layer.mat("text"))[0])
-    cap = 0.026
-    chip, w = text(hud, f"{section.key}.title.code", tp.code, cap, left + 0.012, 0.74, layer.mat("code"), kind="mono",
-                   max_width=right - left - 0.024, z=0.003)
-    objs.append(chip)
-    objs.append(rounded(hud, f"{section.key}.title.chip", left, 0.74 - cap - 0.017, left + w + 0.024, 0.74 + 0.017,
-                        0.008, layer.mat("panel", 0.95), z=0.0015))
+    cap = 0.034
+    label = "Listen for"
+    lw = text_width(label, cap, bold=True) + 0.016
+    lines = wrap(tp.listen, cap, right - left, first_indent=lw)
+    objs.append(text(hud, f"{section.key}.title.listen", label, cap, left, 0.66, layer.mat("accent"), bold=True)[0])
+    for i, line in enumerate(lines):
+        objs.append(text(hud, f"{section.key}.title.listen{i}", line, cap, left + (lw if i == 0 else 0), 0.66 + 0.06 * i,
+                         layer.mat("text"))[0])
     dots_left = dots(hud, f"{section.key}.title", layer, n_passes, -1, 0.90, right, objs)
     if tp.headphones:
-        dots_left = headphones(hud, f"{section.key}.title.phones", layer, dots_left - 0.02, 0.90, objs)
-    label = "Listen for"
-    lw = text_width(label, 0.024, bold=True) + 0.012
-    lines = wrap(tp.listen, 0.024, dots_left - 0.03 - left, first_indent=lw)
-    y0 = 0.90 - 0.045 * (len(lines) - 1)
-    objs.append(text(hud, f"{section.key}.title.listen", label, 0.024, left, y0, layer.mat("accent"), bold=True)[0])
-    for i, line in enumerate(lines):
-        objs.append(text(hud, f"{section.key}.title.listen{i}", line, 0.024, left + (lw if i == 0 else 0), y0 + 0.045 * i,
-                         layer.mat("text"))[0])
+        headphones(hud, f"{section.key}.title.phones", layer, dots_left - 0.02, 0.90, objs)
     show(objs, [(window.first, window.last)])
     layer.opacity([(window.last - 11, 1.0), (window.last + 1, 0.0)])
     return layer
 
 
-def section_tag(cam, name: str, title: str, windows) -> None:
+def section_tag(cam, name: str, title: str, windows) -> Layer:
     hud = base.hud_of(cam)
     layer = Layer(f"{name}.tag")
     cap = 0.02
@@ -403,23 +397,16 @@ def section_tag(cam, name: str, title: str, windows) -> None:
             rounded(hud, f"{name}.tag.chip", 0.05, 0.05, 0.05 + w + 0.018, 0.05 + 0.045, 0.008,
                     layer.mat("panel", 0.86), z=0.0015)]
     show(objs, windows)
+    return layer
 
 
 def lower_third(cam, name: str, p, index: int, n: int, window) -> Layer:
-    """State chip, label, setting and pass dots (sections/README.md, "Passes, labels and instruments")."""
+    """Label, setting and pass dots (sections/README.md, "Passes, labels and instruments")."""
     hud = base.hud_of(cam)
     layer = Layer(f"{name}.lower")
     objs = [rect(hud, f"{name}.lower.scrim", -0.05, 0.70, 1.05, 1.05, layer.scrim("bg", 0.9, 0.70, 1.0), z=0.0)]
     dots_left = dots(hud, f"{name}.lower", layer, n, index, 0.95, 0.95, objs)
     x = 0.05
-    if p.chip:
-        cap = 0.022
-        w = text_width(p.chip, cap, bold=True)
-        objs.append(text(hud, f"{name}.lower.chip_text", p.chip, cap, x + 0.01, 0.895, layer.mat("panel"), bold=True,
-                         z=0.003)[0])
-        objs.append(rounded(hud, f"{name}.lower.chip", x, 0.895 - cap - 0.014, x + w + 0.02, 0.895 + 0.016, 0.008,
-                            layer.mat("accent" if p.chip == "WITH" else "muted"), z=0.0015))
-        x += w + 0.02 + 0.015
     room = dots_left - 0.02 - x
     objs.append(text(hud, f"{name}.lower.label", p.label, 0.032, x, 0.90, layer.mat("text"), bold=True, max_width=room)[0])
     if p.setting:
@@ -472,7 +459,7 @@ def wordmark_card(cam, name: str, tagline: str, note: str, window) -> Layer:
     return layer
 
 
-def code_panel(cam, name: str, lines: list[tuple[str, str]], window, top: float = 0.13) -> None:
+def code_panel(cam, name: str, lines: list[tuple[str, str]], window, top: float = 0.13) -> Layer:
     """Monospace lines on a dark panel at the upper left; each line is (text, colour name)."""
     hud = base.hud_of(cam)
     layer = Layer(f"{name}.code")
@@ -490,6 +477,7 @@ def code_panel(cam, name: str, lines: list[tuple[str, str]], window, top: float 
     objs.append(rounded(hud, f"{name}.code.panel", 0.05, top, 0.05 + width + 2 * pad, bottom, 0.008,
                         layer.mat("panel", 0.86), z=0.0015))
     show(objs, [window])
+    return layer
 
 
 def level_bars(cam, name: str, bars: list[tuple[str, list[tuple[float, float]]]], window, top: float = 0.06,
@@ -554,6 +542,31 @@ def callout(cam, name: str, body: str, window: tuple[int, int], cap: float = 0.0
                  layer.mat("text"), bold=True, align="RIGHT", max_width=0.6, z=0.003)[0],
             rounded(hud, f"{name}.callout.chip", x0, top, right, bottom, 0.008, layer.mat("panel", 0.86), z=0.0015),
             rect(hud, f"{name}.callout.bar", x0, top + 0.012, x0 + 0.004, bottom - 0.012, layer.mat("accent"), z=0.002)]
+    show(objs, [window])
+    a, b = window
+    layer.opacity([(a, 0.0), (a + fade, 1.0), (b - fade, 1.0), (b, 0.0)])
+
+
+def stats_card(cam, name: str, rows: list[tuple[str, str]], window: tuple[int, int], top: float = 0.30,
+               fade: int = 9) -> None:
+    """Numbers with what they count, one row each, centred on a dark card: what a scene took
+    (``finale``). Fades over ``fade`` frames at both ends."""
+    hud = base.hud_of(cam)
+    layer = Layer(f"{name}.stats")
+    big, small, gap = 0.06, 0.03, 0.025
+    widths = [text_width(value, big, bold=True) + gap + text_width(label, small) for value, label in rows]
+    w = max(widths)
+    x0 = 0.5 - w / 2
+    pad = 0.03
+    step = big + 0.045
+    bottom = top + 2 * pad + step * len(rows) - 0.045 + 0.01
+    objs = [rounded(hud, f"{name}.stats.card", x0 - pad * HUD_H / HUD_W, top, 0.5 + w / 2 + pad * HUD_H / HUD_W, bottom,
+                    0.012, layer.mat("panel", 0.86), z=0.0015)]
+    for i, (value, label) in enumerate(rows):
+        y = top + pad + big + step * i
+        vw = text_width(value, big, bold=True)
+        objs.append(text(hud, f"{name}.stats.value{i}", value, big, x0, y, layer.mat("accent"), bold=True, z=0.003)[0])
+        objs.append(text(hud, f"{name}.stats.label{i}", label, small, x0 + vw + gap, y, layer.mat("text"), z=0.003)[0])
     show(objs, [window])
     a, b = window
     layer.opacity([(a, 0.0), (a + fade, 1.0), (b - fade, 1.0), (b, 0.0)])

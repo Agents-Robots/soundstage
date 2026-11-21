@@ -19,6 +19,7 @@ from kit.blender import base, models, overlay, town  # noqa: E402
 from mathutils import Vector  # noqa: E402
 from section import (  # noqa: E402
     AMB_SOUND_S,
+    BANG_GAIN_DB,
     BED_S,
     BELL_S,
     BURSTS,
@@ -27,6 +28,7 @@ from section import (  # noqa: E402
     BUSKER_YAW,
     CAB_EYE,
     CALLOUTS,
+    CODE_S,
     CORNER_LENS,
     CROSS_CAM,
     CROSS_LENS,
@@ -41,15 +43,22 @@ from section import (  # noqa: E402
     FIRE_YAW,
     HORN_S,
     ONBOARD_LENS,
+    PASS_S,
     PASSERBY_Y,
     RAIL_Y,
     RAIL_Z,
+    RENDER_CLAIM_S,
     RISE_S,
     SCOOTER_SOUND_S,
     SECTION,
     SHOTS,
+    SOURCES,
+    SPARK_M,
+    SPARKS,
+    SPREAD_M,
     SQUARE_CAM,
     SQUARE_LENS,
+    STATS_S,
     STEP_M,
     STEP_S,
     STEPS,
@@ -72,6 +81,7 @@ from section import (  # noqa: E402
     shot_window,
     square_lens,
     square_yaw,
+    tag_calls,
     train_front_x,
 )
 
@@ -103,9 +113,15 @@ def night() -> None:
     world = bpy.context.scene.world.node_tree
     strength = world.nodes["Background"].inputs["Strength"]
     sun = bpy.data.objects["sun"].data
-    for target, path, a, b in ((strength, "default_value", 0.6, 0.2), (sun, "energy", 0.35, 0.03)):
+    for target, path, a, b in ((strength, "default_value", 0.6, 0.3), (sun, "energy", 0.35, 0.03)):
         base.key(target, path, frame(0.0), a, "LINEAR")
         base.key(target, path, frame(55.0), b, "CONSTANT")
+    moon = bpy.data.objects.new("moon", bpy.data.lights.new("moon", "SUN"))  # rises as the sun sets
+    bpy.context.scene.collection.objects.link(moon)
+    moon.data.color, moon.data.angle = base.colour("#aebfff")[:3], math.radians(1.0)
+    moon.rotation_euler = (math.radians(50), 0, math.radians(150))
+    base.key(moon.data, "energy", frame(0.0), 0.0, "LINEAR")
+    base.key(moon.data, "energy", frame(55.0), 0.18, "CONSTANT")
     ramp = next(n for n in world.nodes if n.type == "VALTORGB").color_ramp
     for el in ramp.elements:
         if 0.51 < el.position < 0.61:
@@ -264,10 +280,11 @@ def fireworks() -> None:
         centre = Vector(burst_at(i))
         launch = Vector((centre.x, centre.y, hill_z(centre.x, centre.y)))
         f = frame(t)
-        models.firework(f"finale.burst{i + 1}", centre, colour, f, launch, spread_m=45.0, spark_m=2.4)
+        models.firework(f"finale.burst{i + 1}", centre, colour, f, launch, sparks=SPARKS, spread_m=SPREAD_M,
+                        spark_m=SPARK_M)
         e = base.empty(f"finale.burst{i + 1}.sound", centre)
         tag.add_sound(e, f"firework_bang_{i % 3 + 1}.wav", mode="once", frame=f, id=sid(f"burst_{i + 1}"),
-                      ref_distance=600.0, group="fireworks")
+                      ref_distance=600.0, gain_db=BANG_GAIN_DB, group="fireworks")
         probe(e, "click.wav", f"burst_{i + 1}", mode="once", frame=f, ref_distance=600.0)
     assert RISE_S * FPS == 36  # models.firework's rocket rises over 36 frames
 
@@ -309,7 +326,7 @@ def build(out: Path) -> Path:
     night()
     parked = [(-60, -town.PARKING, "car_blue"), (-47, town.PARKING, "car_grey"), (52, -town.PARKING, "car_green"),
               (66, town.PARKING, "car_red"), (-95, -town.PARKING, "car_grey"), (118, town.PARKING, "car_blue")]
-    places = town.build("dusk", parked, side_street=True)
+    places = town.build("dusk", parked, side_street=True, lit=0.7)
     hill()
     crossings = railway(random.Random(5))
 
@@ -333,6 +350,16 @@ def build(out: Path) -> Path:
                        (last - FADE_OUT_FRAMES, last))
     for i, (shot, body, a, b) in enumerate(CALLOUTS):
         overlay.callout(cams[shot], f"finale.call{i}", body, (round(frame(a)), round(frame(b))))
+    calls = tag_calls()
+    a, b = round(frame(CODE_S[0])), round(frame(CODE_S[1]))
+    code = overlay.code_panel(cams["overview"], "finale", [(f"# the sound of this evening: {len(calls)} calls", "accent")]
+                              + [(c, "code") for c, _ in calls], (a, b))
+    code.opacity([(a, 0.0), (a + 9, 1.0), (b - 9, 1.0), (b, 0.0)])
+    overlay.stats_card(cams["fireworks"], "finale", [
+        (f"{SOURCES}", "sources in one scene"),
+        (f"{sum(n for _, n in calls)}", "lines of Python to tag them"),
+        (f"{PASS_S:.0f} s", f"of sound, rendered in under {RENDER_CLAIM_S} s"),
+    ], (round(frame(STATS_S[0])), round(frame(STATS_S[1]))))
     shots = [(1, cams["overview"])] + [(round(frame(t)), cams[name]) for name, t in SHOTS[1:]]
     return base.finish(S, shots, out)
 

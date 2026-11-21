@@ -15,11 +15,12 @@ SECTION = Section(
         listen="the hits moving apart as the players reach the frame's edges.",
     ),
     passes=(
-        Pass("camera", 360, "Direction from the camera", 'pan_reference="camera"', "WITHOUT",
+        Pass("camera", 360, "Direction from the camera", 'pan_reference="camera"',
              settings={"pan_reference": "camera"}),
-        Pass("screen", 360, "Direction on the screen", 'pan_reference="screen"  screen_edge_deg=16.5', "WITH"),
+        Pass("screen", 360, "Direction on the screen", 'pan_reference="screen"  screen_edge_deg=16.5'),
     ),
-    gain_db=2.0,
+    gain_db=8.0,
+    limit_dbtp=-1.0,
     loudness_reported_only=True,
 )
 

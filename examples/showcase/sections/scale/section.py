@@ -17,8 +17,8 @@ SECTION = Section(
         listen="forty engines, not one; and a motorway that sounds like one.",
     ),
     passes=(
-        Pass("same", 210, "40 cars, the same loop from the same point", "loop_phase=0", "WITHOUT"),
-        Pass("random", 210, "40 cars, each at its own point of the loop", 'loop_phase="random"', "WITH"),
+        Pass("same", 210, "40 cars, the same loop from the same point", "loop_phase=0"),
+        Pass("random", 210, "40 cars, each at its own point of the loop", 'loop_phase="random"'),
         Pass("motorway", 600, "300 vehicles, 600 sources", 'instance_limit=0  quality="high"',
              settings={"quality": "high"}),
     ),

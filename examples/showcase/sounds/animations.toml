@@ -1,0 +1,18 @@
+# Recordings in the sound of the animation scenes that the showcase shows (sections/production). The
+# animations' own projects fetched and processed them; listed here for the end card's credits (outro R3).
+
+[[recording]]
+animation = "race"
+title = "F-16 startup idle"
+author = "ikbenraar"
+page = "https://freesound.org/s/322178/"
+licence = "CC0 1.0"
+note = "The racers' engine at idle, pitched and processed by the animation."
+
+[[recording]]
+animation = "race"
+title = "F-15 flyover"
+author = "klangfabrik"
+page = "https://freesound.org/s/324370/"
+licence = "CC0 1.0"
+note = "The racers' roar, pitched and processed by the animation."

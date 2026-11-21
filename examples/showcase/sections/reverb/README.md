@@ -18,7 +18,7 @@ the steps sink into the room.
 | Title | Reverb |
 | Claim | The same sound in four spaces. The reverberation stays as a source walks away, the direct sound does not. |
 | Code chip | `reverb = "chapel"` |
-| Listen for | the tail after each clap, and how the steps sink into the room. |
+| Listen for | the tail after each clap: short in a living room, long in a church. |
 
 ## Scene
 
@@ -69,7 +69,9 @@ camera; `church` and `walk` share one.
 | `reverb.walk.step_1` … `step_4` | `footstep_1.wav` … `footstep_4.wav` | once, each on its frames (steps 1, 5, 9 … use the first sample, and so on), emitted at the foot that lands, `ref_distance=3` |
 
 Every emitter is farther than `ref_distance` from the camera (hands 3.5 m, floor 4 m), so the
-distance law is never clamped. The section gain is +6 dB.
+distance law is never clamped. The section gain is +11.5 dB, with soundstage's true-peak limiter at
+−1 dBTP on each pass (`limit_dbtp`, the exception to S1): it takes up to 4.7 dB off the bounces and
+claps, for 1.3 to 2.5 s of each pass, and leaves the tails as they are.
 
 ## Picture aids
 
@@ -91,8 +93,8 @@ distance law is never clamped. The section gain is +6 dB.
 - **R5** The sets look their size: the living room 5 m long, the gym 40 m, the nave 30 m long and
   12 m high, so that the picture explains the tail.
 - **R6** Level: single impacts cannot reach −18 LUFS. The true-peak limit holds; the loudness is
-  reported, not asserted (sound rule S2): −22.1 to −23.4 LUFS in the rooms, −27.4 LUFS in `walk`,
-  true peak −1.8 dBTP.
+  reported, not asserted (sound rule S2): −20.9 to −22.0 LUFS in the rooms, −22.3 LUFS in `walk`,
+  true peak −1.0 dBTP (before the limiter: −22.1 to −27.4 LUFS at +6 dB).
 
 ## Known answers
 

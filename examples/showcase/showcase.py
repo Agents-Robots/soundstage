@@ -8,11 +8,16 @@
 
 Outputs go to ``out/showcase/<key>/`` (gitignored): the .blend, ``section.json``, ``bake/``,
 ``passes/``, ``<key>.wav`` and its report, ``check.json``, ``frames/`` and the preview.
+
+A section whose folder has a ``steps.py`` replaces the steps that module defines (functions named
+after the step, taking the section's output folder and the parsed arguments): ``production`` takes its
+sound and picture from finished animations instead of baking and rendering a scene.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -62,7 +67,8 @@ def check(key: str, a) -> None:
 
 def frames(key: str, a) -> None:
     run(["blender", "-b", OUT / key / f"{key}.blend", "-y", "--python", HERE / "kit" / "blender" / "frames.py", "--",
-         "--out", OUT / key / "frames", "--percent", a.percent, "--samples", a.samples, "--step", a.step])
+         "--out", OUT / key / "frames", "--percent", a.percent, "--samples", a.samples, "--step", a.step,
+         "--first", a.first, "--last", a.last])
 
 
 def preview(key: str, a) -> None:
@@ -78,6 +84,19 @@ def sounds(a) -> None:
 STEPS = {"build": build, "bake": bake, "audio": audio, "check": check, "frames": frames, "preview": preview}
 
 
+def section_step(key: str, step: str):
+    """The section's own step from its ``steps.py``, or None."""
+    path = HERE / "sections" / key / "steps.py"
+    if not path.exists():
+        return None
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(f"steps_{key}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sys.path.remove(str(path.parent))
+    return getattr(mod, step, None)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("step", choices=[*STEPS, "all", "sounds"])
@@ -85,6 +104,8 @@ def main() -> None:
     p.add_argument("--percent", type=int, default=50)
     p.add_argument("--samples", type=int, default=16)
     p.add_argument("--step", type=int, default=1, dest="frame_step")
+    p.add_argument("--first", type=int, default=0, help="frames: from this frame (0: the first)")
+    p.add_argument("--last", type=int, default=0, help="frames: to this frame (0: the last)")
     a = p.parse_args()
     a.step_ = a.step
     a.step = a.frame_step
@@ -95,7 +116,11 @@ def main() -> None:
         if not (HERE / "sections" / key / "section.py").exists():
             sys.exit(f"no section {key!r} in {HERE / 'sections'}")
         for step in (["build", "bake", "audio", "check"] if a.step_ == "all" else [a.step_]):
-            STEPS[step](key, a)
+            own = section_step(key, step)
+            if own:
+                own(OUT / key, a)
+            else:
+                STEPS[step](key, a)
 
 
 if __name__ == "__main__":

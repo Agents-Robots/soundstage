@@ -16,9 +16,9 @@ SECTION = Section(
         listen="each shot having its own sound, most of all on board.",
     ),
     passes=(
-        Pass("one_mic", 450, "Five cameras, one microphone", 'listener="cuts.cam_a"', "WITHOUT", settings=HIGH,
+        Pass("one_mic", 450, "Five cameras, one microphone", 'listener="cuts.cam_a"', settings=HIGH,
              bake="one_mic"),
-        Pass("per_camera", 450, "Five cameras, the sound cuts with the picture", "listener: the active camera", "WITH",
+        Pass("per_camera", 450, "Five cameras, the sound cuts with the picture", "listener: the active camera",
              settings=HIGH),
     ),
     gain_db=1.0,

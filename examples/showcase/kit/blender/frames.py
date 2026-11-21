@@ -1,7 +1,9 @@
 """Render frames of a section's .blend for checking and previews (run inside Blender).
 
     blender -b <key>.blend -y --python examples/showcase/kit/blender/frames.py -- \
-        --out DIR [--frames 1,60,331 | --step 1] [--percent 33] [--samples 16]
+        --out DIR [--frames 1,60,331 | --step 1] [--first N] [--last N] [--percent 33] [--samples 16]
+
+With ``--step`` the range's last frame is rendered too.
 
 Cycles on the CPU; the farm renders the final frames from the same .blend at 100 %.
 """
@@ -33,7 +35,10 @@ out.mkdir(parents=True, exist_ok=True)
 if a.frames:
     frames = [int(f) for f in a.frames.split(",")]
 else:
-    frames = list(range(a.first or scene.frame_start, (a.last or scene.frame_end) + 1, a.step))
+    last = a.last or scene.frame_end
+    frames = list(range(a.first or scene.frame_start, last + 1, a.step))
+    if frames[-1] != last:  # the last frame always, so that a stepped preview ends where the section does
+        frames.append(last)
 for f in frames:
     scene.frame_set(f)
     scene.render.filepath = str(out / f"{f:05d}.png")

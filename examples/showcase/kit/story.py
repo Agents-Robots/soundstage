@@ -15,8 +15,8 @@ SAMPLES_PER_FRAME = RATE // FPS
 RESOLUTION = (1920, 1080)
 TITLE_FRAMES = 90
 FADE_FRAMES = 8
-REPO_URL = ""
-"""Where the project is, for the end card (``outro``); empty while the repository is not public."""
+REPO_URL = "https://github.com/Agents-Robots/soundstage"
+"""Where the project is, for the end card (``outro``)."""
 
 
 @dataclass(frozen=True)
@@ -35,14 +35,13 @@ class Pass:
     """One run of the action with one setting.
 
     ``frames`` is the length in frames; ``settings`` are scene-setting overrides of its render;
-    ``chip`` is ``"WITHOUT"``, ``"WITH"`` or empty; ``setting`` is the text under the label.
+    ``setting`` is the text under the label.
     """
 
     key: str
     frames: int
     label: str
     setting: str = ""
-    chip: str = ""
     settings: dict = field(default_factory=dict)
     bake: str = ""
 
@@ -80,6 +79,10 @@ class Section:
     """Pass whose loudness is the section's level (S2); default: the last pass."""
     loudness_reported_only: bool = False
     """S2 for single loud impacts: the true-peak limit wins, the loudness is reported, not checked."""
+    limit_dbtp: float | None = None
+    """S1's exception for sharp impacts (hits, claps) that stand 15 dB over everything else: each pass
+    goes through soundstage's true-peak limiter at this ceiling, so that the section can be lifted to
+    the level of the others."""
     bakes: dict = field(default_factory=dict)
     """Bake variants by name: bake-time scene settings (``listener`` ...) of another bake of the same
     .blend into ``bake_<name>/``, and optionally ``frames`` ("A-B"). A pass renders from one by naming
@@ -132,6 +135,7 @@ class Section:
             "reverb": self.reverb,
             "reference": self.reference or self.passes[-1].key,
             "loudness_reported_only": self.loudness_reported_only,
+            "limit_dbtp": self.limit_dbtp,
             "bakes": self.bakes,
             "passes": [{**asdict(p), "window": [self.window(p.key).first, self.window(p.key).last]}
                        for p in self.passes],

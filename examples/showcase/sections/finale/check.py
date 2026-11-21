@@ -25,8 +25,11 @@ from section import (  # noqa: E402
     BUSKER,
     BUSKER_SOUND_Z,
     HORN_S,
+    PASS_S,
+    RENDER_CLAIM_S,
     SCOOTER_BEHIND_S,
     SHOTS,
+    SOURCES,
     SQUARE_CAM,
     ZOOM_S,
     corner_sight_s,
@@ -36,6 +39,7 @@ from section import (  # noqa: E402
     square_lens,
     square_yaw,
     street_opening,
+    tag_calls,
 )
 
 from soundstage.blender import schema  # noqa: E402
@@ -275,7 +279,7 @@ def run(c: Check) -> None:
         on = measure.onsets(x[at(heard - 0.02):at(heard + 0.05)], rate)
         late.append((1000 * (on[0] - 0.02) if on else float("nan"), d, heard - t))
     w = max(late, key=lambda v: abs(v[0]))
-    c.expect("bursts: onsets at the flash + distance / c, all seven", f"max {w[0]:+.2f} ms", "0 ± 1 ms",
+    c.expect(f"bursts: onsets at the flash + distance / c, all {len(BURSTS)}", f"max {w[0]:+.2f} ms", "0 ± 1 ms",
              all(abs(v[0]) <= 1.0 for v in late))
     c.expect("bursts: delays (reported)", ", ".join(f"{d:.0f} m {s:.2f} s" for _, d, s in late), "reported", True)
     worst = 1.0
@@ -302,6 +306,18 @@ def run(c: Check) -> None:
             if k not in ALLOWED and k in s and s[k] != field.default and (s[k] or field.default):
                 raw.setdefault(s["id"], []).append(f"{k}={s[k]}")
     c.expect("sources: no setting other than the README's differs from its default", raw or "none", "none", not raw)
+
+    # --- what the scene took: the numbers on the card (R10) ----------------------------------------------
+    ids = [x["id"] for x in json.loads((c.dir / "bake" / "scene.json").read_text())["sources"] if ".probe." not in x["id"]]
+    c.expect("sources in the bake, probes left out: the card's number (R10)", len(ids), f"{SOURCES}", len(ids) == SOURCES)
+    calls = tag_calls()
+    c.expect("tag calls and their lines in build.py: the panel and the card (R10)",
+             f"{len(calls)} calls, {sum(n for _, n in calls)} lines", "reported", True)
+    summary = json.loads((c.dir / "finale.report.json").read_text())
+    row, machine = summary["passes"][0], summary.get("machine") or {}
+    c.expect(f"render time of the {PASS_S:.0f} s: the card's claim (R10)",
+             f"{row['render_seconds']:.1f} s, {machine.get('cpu')}, {machine.get('threads')} threads",
+             f"under {RENDER_CLAIM_S} s", row["render_seconds"] < RENDER_CLAIM_S)
 
 
 if __name__ == "__main__":

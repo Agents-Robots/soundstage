@@ -2,7 +2,9 @@
 at default settings. Times are seconds from the start of the pass (frame 91); positions in the
 town's coordinates (kit/blender/town.py)."""
 
+import ast
 import math
+from pathlib import Path
 
 from kit.story import FPS, Pass, Section, TitlePage
 
@@ -18,6 +20,7 @@ SECTION = Section(
     passes=(Pass("town", 2250, ""),),
     reverb="city_streets",
     gain_db=3.9,
+    limit_dbtp=-1.0,
 )
 C = 343.0
 PASS_S = 75.0
@@ -186,16 +189,29 @@ def scooter_at(t: float) -> tuple[float, float, float]:
 
 BURSTS = (
     # time s, distance m, azimuth deg (right of +Y), height m, colour
-    (60.5, 520.0, -12.0, 170.0, "spark_red"),
-    (61.8, 600.0, 8.0, 200.0, "spark_gold"),
-    (63.0, 690.0, -22.0, 230.0, "spark_blue"),
-    (64.4, 560.0, 18.0, 185.0, "spark_gold"),
-    (65.6, 650.0, -4.0, 215.0, "spark_red"),
-    (67.0, 500.0, 24.0, 165.0, "spark_blue"),
-    (68.5, 700.0, 2.0, 240.0, "spark_gold"),
+    (60.4, 300.0, -14.0, 114.0, "spark_red"),
+    (61.5, 340.0, 10.0, 123.0, "spark_gold"),
+    (62.6, 280.0, -26.0, 115.0, "spark_blue"),
+    (63.6, 360.0, 20.0, 125.0, "spark_gold"),
+    (64.6, 310.0, -4.0, 133.0, "spark_red"),
+    (65.6, 270.0, 26.0, 107.0, "spark_blue"),
+    (66.5, 380.0, -18.0, 138.0, "spark_gold"),
+    (67.4, 320.0, 6.0, 132.0, "spark_red"),
+    # the closing salvo
+    (68.2, 290.0, -10.0, 110.0, "spark_blue"),
+    (68.8, 350.0, 16.0, 138.0, "spark_gold"),
+    (69.3, 300.0, -22.0, 128.0, "spark_red"),
+    (69.7, 330.0, 2.0, 120.0, "spark_gold"),
+    (70.0, 280.0, 22.0, 115.0, "spark_blue"),
 )
 """High enough that every burst clears the roofs north of the square seen from the fireworks camera,
-with the Fresnel zone (R6)."""
+with the Fresnel zone (R6): 20 to 25 degrees up. Close enough to be the loudest moment of the
+evening, far enough that each bang comes 0.8 to 1.1 s after its flash."""
+SPARKS, SPREAD_M, SPARK_M = 60, 36.0, 2.0
+BANG_GAIN_DB = 6.0
+"""The bangs are louder than their samples: the fireworks are the loudest moment of the evening, their
+peaks held by the limiter (``limit_dbtp``). Moving them closer alone does not do it: within
+``ref_distance`` (600 m) a source plays at its sample's level (``inverse_clamped``)."""
 RISE_S = 1.2
 
 
@@ -227,8 +243,32 @@ CALLOUTS = (
     ("onboard", "the camera moves: the bell drops", 44.2, 47.2),
     ("square", "behind you", 52.6, 55.0),
     ("square", "sound follows the lens", 55.4, 58.4),
-    ("fireworks", "600 m: 1.7 s late", 61.6, 64.6),
+    ("fireworks", f"{BURSTS[1][1]:.0f} m: {BURSTS[1][1] / C:.1f} s late", 61.6, 64.6),
 )
+
+# --- what the scene took (R10) -------------------------------------------------------------------------
+
+CODE_S = (0.8, 8.6)
+"""The tagging lines beside the drone's view (``overview``)."""
+STATS_S = (71.0, 74.5)
+"""The numbers over the fireworks' last echoes."""
+RENDER_CLAIM_S = 15
+SOURCES = 31
+
+
+def tag_calls() -> list[tuple[str, int]]:
+    """The ``tag`` calls of ``build.py`` that make the scene's sound, probes left out: each as its
+    call with its first two arguments (an ellipsis for the rest), and its number of lines."""
+    tree = ast.parse((Path(__file__).with_name("build.py")).read_text())
+    probes = {n for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == "probe" for n in ast.walk(f)}
+    out = []
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name)
+                and n.func.value.id == "tag" and n not in probes):
+            args = ", ".join(ast.unparse(a) for a in n.args[:2])
+            more = ", …" if len(n.args) > 2 or n.keywords else ""
+            out.append((f"tag.{n.func.attr}({args}{more})", n.end_lineno - n.lineno + 1))
+    return sorted(out, key=lambda c: c[0])
 
 
 def corner_sight_s() -> float:

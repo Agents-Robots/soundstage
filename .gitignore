@@ -9,6 +9,7 @@ __pycache__/
 out/
 tmp/
 AGENTS.local.md
+*.local.toml
 *.wav
 *.flac
 *.ogg

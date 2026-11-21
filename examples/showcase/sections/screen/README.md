@@ -56,9 +56,12 @@ the head shadow (`section.py` computes both). The players are well inside the 12
 | `screen.<pass>.hit_left` | `tennis_hit_1.wav` | once, 5 frames, at the left player's racket, `ref_distance=40`, `sync_to_picture=True` |
 | `screen.<pass>.hit_right` | `tennis_hit_2.wav` | once, 5 frames, at the right player's racket, same settings |
 
-Both samples are two hits of one recording (`../../sounds/README.md`). The section gain is +2 dB.
-S2 cannot hold both ways for single hits: at −1.6 dBTP the reference pass has −27.6 LUFS, and the
-peak limit wins (`loudness_reported_only` in `section.py`).
+Both samples are two hits of one recording (`../../sounds/README.md`). The section gain is +8 dB,
+with soundstage's true-peak limiter at −1 dBTP on each pass (`limit_dbtp`, the exception to S1):
+it takes up to 5.5 dB off the hits. S2 still cannot hold both ways: the hits are nearly all of the
+section's sound, so the limiter holds its loudness too (+4 dB more gain gave 0.2 LU), and the
+reference pass has −25.9 LUFS at −1.0 dBTP (`loudness_reported_only` in `section.py`). Before the
+limiter it had −27.6 LUFS at +2 dB.
 
 ## Picture aids
 

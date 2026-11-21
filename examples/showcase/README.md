@@ -21,6 +21,11 @@ The second version runs through `showcase.py`:
 .venv/bin/python examples/showcase/assemble.py trailer                # out/showcase/cuts/trailer.mp4 (cuts.py)
 ```
 
+`production` shows scenes from two animations whose projects live outside this repository: name their
+folders in `sections/production/sources.local.toml` (gitignored, see its README) before its audio
+and frames steps. `city` has 10 000 cars: its bake takes about 40 min, its sound about 3 min and 14 GB on a
+16-core CPU.
+
 | File | What it is |
 |---|---|
 | `storyboard.py` | Chapters, passes, labels, durations and per-pass render settings: the one description both scripts read |

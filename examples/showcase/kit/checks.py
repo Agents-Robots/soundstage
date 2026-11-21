@@ -101,7 +101,7 @@ class Check:
         self.man = audio.manifest(section_dir)
         self.key = self.man["key"]
         self.windows = {p["key"]: p["window"] for p in self.man["passes"]}
-        self.geo = Geometry(section_dir / "bake")
+        self.geo = Geometry(section_dir / "bake") if (section_dir / "bake").exists() else None  # not ``production``
         self.results: list[Result] = []
         self._scenes: dict = {}
         self.rate = self.man["sample_rate"]

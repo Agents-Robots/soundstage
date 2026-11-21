@@ -12,7 +12,7 @@ SECTION = Section(
         title="Reverb",
         claim="The same sound in four spaces. The reverberation stays as a source walks away, the direct sound does not.",
         code='reverb = "chapel"',
-        listen="the tail after each clap, and how the steps sink into the room.",
+        listen="the tail after each clap: short in a living room, long in a church.",
     ),
     passes=(
         Pass("outdoors", 150, "Outdoors", "no reverb"),
@@ -21,7 +21,8 @@ SECTION = Section(
         Pass("church", 240, "Church, 4.6 s", 'reverb="chapel"', settings={"reverb": "chapel"}),
         Pass("walk", 480, "Walking away: the room stays", 'reverb="chapel"', settings={"reverb": "chapel"}),
     ),
-    gain_db=6.0,
+    gain_db=11.5,
+    limit_dbtp=-1.0,
     loudness_reported_only=True,
 )
 ROOMS = ("outdoors", "livingroom", "gym", "church")

@@ -36,7 +36,9 @@ audition clip of A8.
   heard lies above 16 kHz, and its entry in `sources.toml` says so.
 - **A7 Recorded sounds** have an entry in `sources.toml`: URL, author, licence, SHA-256 of the
   download, and the processing (channel, cut points, loop points, gain), applied by `fetch.py`, so
-  the result is reproducible from the original.
+  the result is reproducible from the original. Recordings in the sound of the animation
+  scenes (`production`) were fetched by the animations' own projects; `animations.toml` lists them for the end
+  card's credits.
 - **A8 Approved by ear.** `audition.py` writes an audition clip (each sound played dry and
   loudness-matched, its name and source on screen). A sound is used in a section only after the user has approved it there;
   A1, A2 and "sounds like the thing on screen" cannot be measured.

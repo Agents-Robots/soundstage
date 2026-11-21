@@ -15,8 +15,8 @@ SECTION = Section(
         listen="the whine in front of the jet, the roar behind it.",
     ),
     passes=(
-        Pass("omni", 390, "Equally loud in all directions", "cone_inner_deg=360  cone_outer_deg=360", "WITHOUT"),
-        Pass("cones", 390, "A cone per sound", "whine 60° / 240° / −18 dB    roar 90° / 270° / −12 dB", "WITH"),
+        Pass("omni", 390, "Equally loud in all directions", "cone_inner_deg=360  cone_outer_deg=360"),
+        Pass("cones", 390, "A cone per sound", "whine 60° / 240° / −18 dB    roar 90° / 270° / −12 dB"),
     ),
     gain_db=-7.0,
 )

@@ -7,7 +7,7 @@ keyed.
 
 | | |
 |---|---|
-| Length | 46 s (1380 frames) |
+| Length | 37 s (1110 frames) |
 | Sets | a country road, a race track straight, an airfield, a railway line; day |
 | Features | Doppler from source motion and from listener motion, `doppler_factor` |
 | Reverb | none |
@@ -52,13 +52,15 @@ second, and passed 3 dB louder: a metallic ring at the moment of passing.)
 
 ## Passes
 
-| Pass | Frames | Chip | Label | Setting | What is heard |
-|---|---|---|---|---|---|
-| `siren_off` | 91–360 (9 s) | WITHOUT | Ambulance, 72 km/h: no Doppler | `doppler_factor=0` | the siren gets louder and quieter and moves across, at one pitch |
-| `siren` | 361–630 (9 s) | WITH | Ambulance, 72 km/h | default | the siren drops a whole tone as it passes |
-| `race` | 631–840 (7 s) | | Race car, 252 km/h | default, `quality=high` | the engine falls by a fifth within half a second |
-| `plane` | 841–1140 (10 s) | | Propeller plane, 216 km/h, 80 m away | default, `quality=high` | a slower glide, because the plane is further away |
-| `train` | 1141–1380 (8 s) | | From a moving train, 108 km/h | default | the standing bell drops by three semitones as the camera passes; the train's own noise does not change |
+| Pass | Frames | Label | Setting | What is heard |
+|---|---|---|---|---|
+| `siren` | 91–360 (9 s) | Ambulance, 72 km/h | `doppler_factor=1` | the siren a semitone high while it comes, dropping a whole tone as it passes |
+| `race` | 361–570 (7 s) | Race car, 252 km/h | default, `quality=high` | the engine falls by a fifth within half a second |
+| `plane` | 571–870 (10 s) | Propeller plane, 216 km/h, 80 m away | default, `quality=high` | a slower glide, because the plane is further away |
+| `train` | 871–1110 (8 s) | From a moving train, 108 km/h | default | the standing bell drops by three semitones as the camera passes; the train's own noise does not change |
+
+Only the effect is shown, never the scene without it (sections/README.md, "Passes, labels and
+instruments"); the check renders `siren` with `doppler_factor=0` as well, for itself.
 
 ## Sounds
 
@@ -85,7 +87,7 @@ to 10 dB under the ambulance. The section gain is −2 dB (S2: the ambulance pas
   the values first and last heard in the pass (ambulance +1.04 and −0.98; race car +3.94 and
   −3.21; plane +3.21 and −2.66; train +1.45 and −1.58). The needle is keyed on every frame from the
   pass-by's geometry and the speed of sound, shifted by the travel time, and held at the first value
-  until the sound arrives. In `siren_off` it stays at 0.
+  until the sound arrives.
 - The speed in km/h is part of the label.
 - The ambulance's light bar turns.
 
@@ -93,8 +95,8 @@ to 10 dB under the ambulance. The section gain is −2 dB (S2: the ambulance pas
 
 - **R1** Linear keys and constant speed in every pass-by, checked at build time from the object's
   position per frame (within 0.5 % of the stated speed).
-- **R2** `siren_off` and `siren` are the same frames of the same motion; only `doppler_factor`
-  differs.
+- **R2** The two states of `siren` are renders of the same frames of the same motion; only
+  `doppler_factor` differs, and each part of the pass is its state's render.
 - **R3** The sources carry no shift of their own: the samples are steady (sound requirement A2).
 - **R4** `race` and `plane` play faster than 1.09 times and are rendered with `quality=high`.
 - **R5** Every source sounds from the first to the last frame of its travel and has faded before
@@ -115,7 +117,7 @@ met within the same tolerance widened by their distance from it.
 
 | What | Expected |
 |---|---|
-| `siren_off`: probe frequency (mono sum, 0.25 s windows) | 1000.0 Hz ± 0.5 Hz throughout |
+| `siren` with `doppler_factor=0`: probe frequency (mono sum, 0.25 s windows) | 1000.0 Hz ± 0.5 Hz throughout |
 | `siren`: first and last 0.25 s | 1061.6 Hz and 945.3 Hz, ± 0.3 % |
 | `siren`: passes 1000 Hz | 4.5 s + 8 m / 343 m/s = 4.523 s after the pass starts, ± 20 ms |
 | `race`: first and last 0.25 s | 1255.7 Hz and 831.2 Hz, ± 0.5 % |
@@ -136,5 +138,4 @@ The plane has no ground reflection.
 
 ## Needs ears
 
-Whether the recorded engines stay believable when played 25 % faster and 17 % slower, and whether
-`siren_off` sounds wrong to someone who is not told why.
+Whether the recorded engines stay believable when played 25 % faster and 17 % slower.

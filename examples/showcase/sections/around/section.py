@@ -1,5 +1,5 @@
-"""Storyboard of ``around`` (README.md): a scooter circling the camera at 12 m, once per pass, heard
-with level difference only, then with time difference and head shadow, then with the rear cue."""
+"""Storyboard of ``around`` (README.md): a scooter circling the camera at 12 m, one lap heard with the
+full ear model (time difference, head shadow, rear cue)."""
 
 import cmath
 import math
@@ -7,6 +7,10 @@ import math
 from kit.story import FPS, Pass, Section, TitlePage
 
 REAR_OFF = {"rear_gain_db": 0.0, "rear_cutoff_hz": 20000.0}
+AMPLITUDE = {"panner": "amplitude", **REAR_OFF}
+HYBRID = {"panner": "hybrid", **REAR_OFF}
+"""Level difference only, and time difference and head shadow without the rear cue: the lap rendered
+with these by the checks, as references; not shown."""
 SECTION = Section(
     key="around",
     title="Around the listener",
@@ -18,11 +22,7 @@ SECTION = Section(
         headphones=True,
     ),
     passes=(
-        Pass("amplitude", 360, "Level difference only", 'panner="amplitude"  rear_gain_db=0', "WITHOUT",
-             settings={"panner": "amplitude", **REAR_OFF}),
-        Pass("hybrid", 360, "Plus time difference and head shadow", 'panner="hybrid"  rear_gain_db=0',
-             settings={"panner": "hybrid", **REAR_OFF}),
-        Pass("rear", 360, "Plus the rear cue", 'panner="hybrid"  rear_gain_db=-2  rear_cutoff_hz=6000', "WITH"),
+        Pass("lap", 360, "Time difference, head shadow, rear cue", 'panner="hybrid"  rear_gain_db=-2  rear_cutoff_hz=6000'),
     ),
     gain_db=-4.5,
 )

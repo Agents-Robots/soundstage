@@ -41,18 +41,20 @@ SIDE_END = 130.0
 
 
 def build(time_of_day: str, parked: list[tuple[float, float, str]] = (), seed: int = 7,
-          side_street: bool = False) -> dict:
+          side_street: bool = False, lit: float = 0.45) -> dict:
     """Build the town and return its named places (objects and positions).
 
-    ``parked``: (x, y, paint) of parked cars, facing the direction of their lane's traffic.
+    ``parked``: (x, y, paint) of parked cars, facing the direction of their lane's traffic; ``lit``:
+    the share of lit windows at dusk.
     """
     rnd = random.Random(seed)
     dusk = time_of_day == "dusk"
     coll = base.collection("town")
     _ground(coll)
-    _rows(rnd, dusk, coll, side_street)
+    lit = lit if dusk else 0.0
+    _rows(rnd, lit, coll, side_street)
     if side_street:
-        _side_street(rnd, dusk, coll)
+        _side_street(rnd, lit, coll)
     church = models.church("church", coll=coll)
     church.location = CHURCH_FRONT
     church.rotation_euler = (0, 0, math.pi)  # front towards +Y, the square
@@ -103,7 +105,7 @@ def _ground(coll) -> None:
         bpy.data.objects[name]["sfx_occluder"] = False
 
 
-def _rows(rnd: random.Random, dusk: bool, coll, side_street: bool = False) -> None:
+def _rows(rnd: random.Random, lit: float, coll, side_street: bool = False) -> None:
     walls = ["wall_1", "wall_2", "wall_3", "wall_4", "wall_5"]
     n = 0
 
@@ -114,7 +116,7 @@ def _rows(rnd: random.Random, dusk: bool, coll, side_street: bool = False) -> No
             w = min(rnd.uniform(9, 15), x_to - x)
             h = rnd.choice([7.5, 9.0, 10.5, 12.0])
             d = rnd.uniform(9, 12)
-            hs = models.house(f"house.{n}", w, d, h, rnd.choice(walls), lit=0.45 if dusk else 0.0, seed=n,
+            hs = models.house(f"house.{n}", w, d, h, rnd.choice(walls), lit=lit, seed=n,
                               roof=rnd.choice(["roof", "roof_dark"]), coll=coll)
             place(hs, x + w / 2)
             n += 1
@@ -150,7 +152,7 @@ def _rows(rnd: random.Random, dusk: bool, coll, side_street: bool = False) -> No
         row(sy0 + 2, sy1, east)
 
 
-def _side_street(rnd: random.Random, dusk: bool, coll) -> None:
+def _side_street(rnd: random.Random, lit: float, coll) -> None:
     """The side street's paving and its two rows of houses, from behind the square's east row (whose
     houses are at most 12 m deep) to SIDE_END."""
     x0 = SQUARE[1]
@@ -163,7 +165,7 @@ def _side_street(rnd: random.Random, dusk: bool, coll) -> None:
         while x < SIDE_END - 6:
             w = min(rnd.uniform(8, 13), SIDE_END - x)
             h = rnd.choice([7.5, 9.0, 10.5])
-            hs = models.house(f"side.{side}.{n}", w, rnd.uniform(9, 11), h, rnd.choice(walls), lit=0.45 if dusk else 0.0,
+            hs = models.house(f"side.{side}.{n}", w, rnd.uniform(9, 11), h, rnd.choice(walls), lit=lit,
                               seed=100 + 10 * n + side, roof=rnd.choice(["roof", "roof_dark"]), coll=coll)
             hs.location = (x + w / 2, SIDE_Y + side * SIDE_HALF, 0)
             if side < 0:

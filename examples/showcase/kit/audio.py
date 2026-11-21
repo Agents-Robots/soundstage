@@ -3,17 +3,19 @@
 A scene setting applies to a whole render, so each pass is rendered alone: its frames, its sound
 entries (``--solo <key>.<pass>.*``), its settings from the manifest, the section's gain
 (sections/README.md, "Sound"). The title page is silent by construction. No normalization and no
-limiter (S1). Writes, under the section's output folder:
+limiter (S1), except where a section names a ceiling for its impacts (``Section.limit_dbtp``). Writes, under the section's output folder:
 
 - ``passes/<key>.<pass>.wav`` with its stems, report and debug plot;
 - ``<key>.wav``: the whole section, frames 1 to the last, 1600 samples per frame;
 - ``<key>.report.json``: per pass and for the section: peak, true peak, loudness, warnings, render
-  time and the process's peak memory.
+  time and the process's peak memory; the CPU that rendered.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import platform
 import resource
 import time
 from pathlib import Path
@@ -61,6 +63,17 @@ def render_frames(scene: Scene, first: int, last: int, solo: list[str], stems: b
     return render.render(scene, frames=(first, last), solo=solo, stems=stems)
 
 
+def machine() -> dict:
+    """The CPU that rendered (render times are claimed per machine)."""
+    cpu = platform.processor()
+    try:
+        cpu = next(line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+                   if line.startswith("model name"))
+    except (OSError, StopIteration):
+        pass
+    return {"cpu": cpu, "threads": os.cpu_count()}
+
+
 def render_section(section_dir: Path) -> dict:
     man = manifest(section_dir)
     key, fps = man["key"], man["fps"]
@@ -77,6 +90,9 @@ def render_section(section_dir: Path) -> dict:
         result = render_frames(scene, first, last, [f"{key}.{p['key']}.*"], stems=True)
         seconds = time.perf_counter() - t0
         n = (last - first + 1) * spf
+        limiter = None
+        if man.get("limit_dbtp") is not None:
+            limiter = mix.finish(result.audio, result.stems, result.rate, limit=man["limit_dbtp"])
         if len(result.audio) != n:
             raise SystemExit(f"{key}.{p['key']}: {len(result.audio)} samples for {last - first + 1} frames")
         wav = out / f"{key}.{p['key']}.wav"
@@ -94,7 +110,7 @@ def render_section(section_dir: Path) -> dict:
         total[(first - 1) * spf:last * spf] = result.audio
         rows.append({"pass": p["key"], "frames": [first, last], "settings": p["settings"], "master": rep["master"],
                      "audible": sum(1 for s in rep["sources"] if s.get("audible_frames", 1)),
-                     "sources": len(rep["sources"]), "render_seconds": round(seconds, 2),
+                     "sources": len(rep["sources"]), "render_seconds": round(seconds, 2), "limiter": limiter,
                      # the process's peak so far: the largest pass rendered up to here
                      "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
                      "warnings": rep["warnings"]})
@@ -106,7 +122,8 @@ def render_section(section_dir: Path) -> dict:
     summary = {"output": str(wav.resolve()), "sample_rate": man["sample_rate"], "fps": float(fps),
                "frames": man["frames"], "gain_db": man["gain_db"], "master": report.metrics(total, man["sample_rate"]),
                "reference": {"pass": man["reference"], **reference["master"]},
-               "ends_dbfs": [None if e == 0 else round(20 * np.log10(e), 1) for e in ends], "passes": rows,
+               "ends_dbfs": [None if e == 0 else round(float(20 * np.log10(e)), 1) for e in ends], "passes": rows,
+               "machine": machine(),
                "bake_warnings": sorted({w for s in scenes.cache.values() for w in s.warnings})}
     report.write_report(wav.with_suffix(".report.json"), summary)
     return summary

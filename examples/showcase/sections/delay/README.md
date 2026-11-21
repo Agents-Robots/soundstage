@@ -18,7 +18,7 @@ edit needs a sound on its frame, one setting puts it there.
 | Title | Speed of sound |
 | Claim | Sound travels at 343 m/s: three seconds per kilometre. Every source is delayed by its distance. |
 | Code chip | `sync_to_picture = False` |
-| Listen for | the gap between seeing and hearing; then the same events put on their frames. |
+| Listen for | the gap between seeing and hearing: the farther away, the later. |
 
 ## Scene
 
