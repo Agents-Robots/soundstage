@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoundStage: spatial sound for Blender animations</title>
+<meta name="description" content="SoundStage renders the sound of a Blender animation from the scene itself: distance, direction, Doppler, the speed of sound, occlusion and reverb, as one stereo file aligned to the first frame.">
+<link rel="canonical" href="https://agents-robots.github.io/soundstage/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SoundStage: spatial sound for Blender animations">
+<meta property="og:description" content="Put a sound on an object in Blender. SoundStage renders it where the camera sees it: distance, direction, Doppler, the speed of sound, occlusion and reverb.">
+<meta property="og:url" content="https://agents-robots.github.io/soundstage/">
+<meta property="og:image" content="https://agents-robots.github.io/soundstage/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#12161d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2312161d'/%3E%3Ccircle cx='10' cy='16' r='3.2' fill='%23f5a524'/%3E%3Cpath d='M16 9a9.5 9.5 0 0 1 0 14M21 5.5a15 15 0 0 1 0 21' fill='none' stroke='%23f3f0ea' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="word" href="#">SoundStage</a>
+    <nav aria-label="Sections">
+      <a href="#hear">What you hear</a>
+      <a href="#use">How to use it</a>
+      <a href="#get">What you get</a>
+      <a href="#start">Get started</a>
+      <a class="nav-repo" href="https://github.com/Agents-Robots/soundstage">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero">
+  <div class="wrap">
+    <p class="kicker">Offline spatial sound for Blender</p>
+    <h1>Spatial sound, computed from your Blender scene.</h1>
+    <p class="lead">Put a sound on an object. SoundStage follows the camera through the animation and
+      renders every sound where the picture shows it: louder when it is close, on the left when it is
+      on the left, dropping in pitch as it passes, late when it is far away, muffled behind a
+      building.</p>
+    <p class="lead">One stereo file comes out. It starts exactly on the first frame, so it drops
+      straight onto the editor's timeline next to the rendered frames.</p>
+    <p class="actions">
+      <a class="btn primary" href="#start">Get started</a>
+      <a class="btn" href="https://github.com/Agents-Robots/soundstage">Source on GitHub</a>
+    </p>
+  </div>
+  <figure class="wrap wide shot">
+    <img src="img/hero-city.webp" width="2048" height="858" alt="A drone's view between the towers of a city at dusk, with lit windows, flying cars and a party terrace.">
+    <figcaption>A drone shot through a city with 2200 sound sources: every flying car, sign and terrace
+      is heard where the camera sees it. Blender rendered the picture, SoundStage the sound.</figcaption>
+  </figure>
+</section>
+
+<section class="band" id="why">
+  <div class="wrap">
+    <p class="kicker">Why</p>
+    <h2>The scene already knows how it sounds.</h2>
+    <div class="cols">
+      <p>In a video editor, spatial sound is drawn by hand: a volume curve and a pan curve for every
+        object, a pitch bend for every pass-by, and all of it again after each camera cut. When the
+        animation changes, the curves are wrong.</p>
+      <p>The Blender scene holds everything those curves describe: where each object is on each
+        frame, where the camera is, which lens it has, what stands in between. SoundStage reads it
+        from there. Move the camera or retime a shot, run it again, and the sound fits the picture
+        again.</p>
+    </div>
+    <ul class="points">
+      <li><strong>It follows the picture.</strong> Level, direction, pitch and timing come from the
+        animation, frame by frame, not from curves beside it.</li>
+      <li><strong>It survives changes.</strong> A new camera path or a recut costs one more run, with
+        no automation to redraw.</li>
+      <li><strong>It is the same every time.</strong> The same scene and the same sounds give the same
+        file, bit for bit.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="hear">
+  <div class="wrap">
+    <p class="kicker">What you hear</p>
+    <h2>Ten things the scene decides for you.</h2>
+    <p class="intro">The stills are from the feature video: simple scenes, one effect each, with the
+      setting that produces it at the lower left.</p>
+    <div class="grid">
+      <article class="card">
+        <img loading="lazy" src="img/distance.webp" width="1280" height="720" alt="An open-air stage with a crowd, seen from 43 metres; a level meter at the right.">
+        <h3>Distance</h3>
+        <p>Loudness falls as a source moves away, by 6&nbsp;dB for each doubling of the distance, and
+          far sounds lose their treble in the air. A concert 700&nbsp;m away is a dull murmur; walk
+          up to it and it opens.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/screen.webp" width="1280" height="720" alt="A tennis court through a 55 mm lens, with markers below the picture showing where each hit is heard between left and right.">
+        <h3>Direction, through the lens</h3>
+        <p>A sound is placed between left and right where the viewer sees its source on the screen.
+          Zoom in and the players move apart in the picture, and their hits move apart with
+          them.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/doppler.webp" width="1280" height="720" alt="An ambulance passing close to the camera on a country road; a gauge shows the shift of its siren in semitones.">
+        <h3>Doppler</h3>
+        <p>An ambulance, a race car, a propeller plane: the pitch rises on the approach and drops
+          on the way out. It comes from the real motion of source and camera, so it is right for a
+          moving camera too.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/delay.webp" width="1280" height="720" alt="Fireworks over a lake at night, above a time line that shows the bang still on its way to the camera.">
+        <h3>The speed of sound</h3>
+        <p>Sound travels at 343&nbsp;m/s. Fireworks a kilometre away are seen first and heard three
+          seconds later. Where the story needs a hit on its frame, one setting pins it there.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/occlusion.webp" width="1280" height="720" alt="A motorbike riding behind a row of houses, seen in a gap between two of them; an inset shows the line from the camera to the bike.">
+        <h3>Occlusion</h3>
+        <p>A motorbike behind a house gets quieter and duller, and its low notes bend around the
+          corner first. The buildings and vehicles of the scene do the blocking; there is nothing
+          to set up.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/reverb.webp" width="1280" height="720" alt="A person bouncing a basketball in a chapel; the label gives the room's reverberation time, 4.6 seconds.">
+        <h3>Reverb</h3>
+        <p>113 named environments, from a living room to a chapel to city streets, or your own
+          impulse response. Distant sources feed the room less than near ones, so a busy scene
+          stays clear.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/directivity.webp" width="1280" height="720" alt="A business jet turning on an apron; an inset shows the cones of its intake whine and exhaust roar.">
+        <h3>Directivity</h3>
+        <p>A jet is whine from the front and roar from behind. A cone per sound makes a source
+          sound different from each side as it turns.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/around.webp" width="1280" height="720" alt="A village square with the scooter out of the picture; a radar inset shows it to the right of the camera.">
+        <h3>Around the listener</h3>
+        <p>A small time difference between the ears, the shadow of the head, and a cue for sounds
+          behind the camera: a scooter can be followed all the way around, and out of the
+          picture.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/cuts.webp" width="1280" height="720" alt="The view from a car on a race track; an inset shows five cameras around the circuit.">
+        <h3>Camera cuts</h3>
+        <p>When the picture cuts to another camera, the sound cuts with it: the new level and side
+          at once, with no click and no pitch glide.</p>
+      </article>
+      <article class="card">
+        <img loading="lazy" src="img/city.webp" width="1280" height="720" alt="A boulevard between towers at night, full of cars; the read-out says 10 000 cars, 20 000 sources.">
+        <h3>Thousands of sources</h3>
+        <p>Ten thousand cars, each with an engine and tyres. The sound of this 30-second shot
+          rendered in 3&nbsp;min 12&nbsp;s on one 16-core CPU: the nearest cars in full detail, the
+          rest as one far field.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="use">
+  <div class="wrap">
+    <p class="kicker">How to use it</p>
+    <h2>Three ways in, one result.</h2>
+    <p class="intro">SoundStage is a command-line tool, not an add-on. You say in Blender which object
+      makes which sound; two commands turn the scene into a WAV. The .blend file is only read.</p>
+
+    <ol class="flow" aria-label="From scene to sound">
+      <li><span>Blender scene</span>objects, camera, sounds</li>
+      <li><span>bake</span>headless Blender writes the paths of camera and sources, and what hides them</li>
+      <li><span>render</span>the engine computes every source for every sample</li>
+      <li><span>stereo WAV</span>frame&nbsp;1 is sample&nbsp;0</li>
+    </ol>
+
+    <div class="way first">
+      <div class="way-text">
+        <p class="num">1</p>
+        <h3>By hand, in Blender</h3>
+        <p>No scripts. Blender's own Speaker objects are the sources, and the scene's camera is the
+          microphone.</p>
+        <ol class="steps">
+          <li><strong>Add &rarr; Speaker</strong>, and parent it to the thing that makes the sound.</li>
+          <li>Open a sound file on it. Volume, pitch, distance and cone are the speaker's own
+            settings.</li>
+          <li>Animate as usual. If timeline markers switch between cameras, the sound cuts with the
+            picture.</li>
+          <li>Bake and render, then put the WAV on the editor's timeline at the first frame.</li>
+        </ol>
+        <p class="fine">A speaker plays its file once at each sound strip. For a loop, such as an
+          engine, add one custom property to the speaker.
+          <a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/usage.md#2b-or-place-speaker-objects-by-hand">Speakers in detail</a></p>
+      </div>
+      <div class="way-side">
+      <figure class="diagram">
+        <svg viewBox="0 0 440 236" role="img" aria-labelledby="dg-t dg-d">
+          <title id="dg-t">A scene seen from above</title>
+          <desc id="dg-d">The camera at the bottom with its field of view. A car with a speaker drives along a road; the line from the camera to the car gives distance, direction and speed. Another speaker stands behind a building, which blocks its line to the camera.</desc>
+          <path d="M220 200 L92 16 H348 Z" fill="#f5a524" fill-opacity=".07"/>
+          <path d="M220 200 L92 16 M220 200 L348 16" stroke="#f5a524" stroke-opacity=".45" fill="none"/>
+          <path d="M10 78 H430" stroke="#3d4046" stroke-width="24"/>
+          <path d="M10 78 H430" stroke="#8b929c" stroke-width="1.2" stroke-dasharray="10 9"/>
+          <path d="M220 200 L137 78" stroke="#f5a524" stroke-width="1.5"/>
+          <path d="M220 200 L300 40" stroke="#f5a524" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <rect x="250" y="106" width="70" height="40" rx="2" fill="#5c6066"/>
+          <rect x="116" y="68" width="42" height="20" rx="5" fill="#3a5f9c"/>
+          <path d="M164 78 h26 m-6 -5 l6 5 l-6 5" stroke="#f3f0ea" stroke-width="1.5" fill="none"/>
+          <circle cx="137" cy="78" r="5.5" fill="#f5a524"/>
+          <circle cx="300" cy="40" r="5.5" fill="#f5a524"/>
+          <path d="M210 202 h20 v16 h-20 z M214 202 l6 -9 l6 9 z" fill="#f3f0ea"/>
+          <text x="14" y="112">speaker on the car</text>
+          <text x="14" y="158">distance,</text>
+          <text x="14" y="176">direction, speed</text>
+          <text x="352" y="45">a speaker</text>
+          <text x="262" y="168">hidden: quieter, duller</text>
+          <text x="240" y="216">camera: the microphone</text>
+        </svg>
+      </figure>
+      <pre class="code" tabindex="0"><code><span class="c"># read the scene: camera, speakers, what hides them</span>
+soundstage bake shot.blend --out audio/bake
+
+<span class="c"># render the mix, here in the reverb of a street</span>
+soundstage render audio/bake/scene.json \
+    -o audio/shot.wav --set reverb=city_streets</code></pre>
+      </div>
+    </div>
+
+    <div class="way">
+      <div class="way-text">
+        <p class="num">2</p>
+        <h3>In the script that builds the scene</h3>
+        <p>If Python scripts generate your scenes, tag the sounds in the same scripts: one line per
+          sound. The tags are saved with the scene, so rebuilding the scene rebuilds its sound.</p>
+        <p>For an existing .blend, the same lines go into a separate file that is applied at bake
+          time, and the .blend stays untouched.</p>
+        <p class="fine"><a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/scene-builder-guide.md">Scene-builder guide</a>
+          &middot; <a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/spec/tagging.md">all tag keys</a></p>
+      </div>
+      <pre class="code" tabindex="0"><code><span class="k">from</span> soundstage.blender <span class="k">import</span> tag
+
+<span class="c"># an engine loop at the rear of the ship</span>
+tag.add_sound(ship, <span class="s">"engine_hum.wav"</span>, ref_distance=20,
+              offset=(0, -12, 0), group=<span class="s">"engines"</span>)
+
+<span class="c"># a beacon that beeps every two seconds</span>
+tag.add_sound(beacon, <span class="s">"beep.wav"</span>, mode=<span class="s">"once"</span>,
+              frame=list(range(1, 601, 60)))
+
+<span class="c"># a crate that hits the ground on frame 180</span>
+tag.add_sound(crate, <span class="s">"impact.wav"</span>, mode=<span class="s">"once"</span>, frame=180,
+              sync_to_picture=<span class="k">True</span>)</code></pre>
+    </div>
+
+    <div class="way">
+      <div class="way-text">
+        <p class="num">3</p>
+        <h3>With a coding agent</h3>
+        <p>The repository has a step-by-step guide written for coding agents such as Claude Code.
+          The agent scans the shot for its cameras and for what moves, writes the tagging file,
+          bakes and renders.</p>
+        <p>An agent cannot listen, so every render comes with numbers and a picture: loudness and
+          true peak, and each source's distance, level, direction and pitch over the frames. Your
+          ears make the final call.</p>
+        <p class="fine"><a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/agent-guide.md">Agent guide</a></p>
+      </div>
+      <pre class="code prompt" tabindex="0"><code><span class="c"># what you ask</span>
+Add sound to shots/harbour.blend with SoundStage.
+Follow docs/agent-guide.md. My samples are in
+audio/samples.
+
+<span class="c"># what the agent runs first</span>
+soundstage scan shots/harbour.blend --out audio/scan.json</code></pre>
+    </div>
+  </div>
+</section>
+
+<section id="get">
+  <div class="wrap">
+    <p class="kicker">What you get</p>
+    <h2>A file for the timeline, and the means to check it.</h2>
+    <div class="split">
+      <ul class="list">
+        <li><strong>The mix.</strong> A 48&nbsp;kHz stereo WAV whose first sample is the first frame.
+          Made for DaVinci Resolve; any editor that imports a WAV will do.</li>
+        <li><strong>Stems.</strong> One file per group of sources (engines, ambience, voices of the
+          city) and one for the reverb, to balance in Fairlight or another mixer.</li>
+        <li><strong>A loudness report.</strong> Integrated loudness, loudness range and true peak;
+          normalization to a target and a true-peak limiter if you want them.</li>
+        <li><strong>A plot of every source.</strong> Distance, level, direction, delay and pitch
+          over the frames, to see at a glance why something sounds the way it does.</li>
+        <li><strong>A preview.</strong> An MP4 of the mix on the rendered frames, for a quick sync
+          check before the edit.</li>
+      </ul>
+      <figure class="plot">
+        <img loading="lazy" src="img/plot.webp" width="960" height="880" alt="Five stacked line charts over 240 frames: distance, level, pan, delay and playback rate of four sources. The ship's distance falls to 25 m and rises again, its pan swings from left to right and its playback rate drops as it passes.">
+        <figcaption>The plot of the example scene: a ship passes from left to right half way through
+          the shot, and its pitch drops from 1.09 to 0.92 of the original.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub">How long it takes</h3>
+    <p class="intro">For a 60-second shot on a 16-core desktop CPU. No GPU, no display and no audio
+      device are needed, so it also runs on a render node.</p>
+    <div class="stats">
+      <div><b>16&nbsp;s</b><span>10 sources<br>bake 11&nbsp;s, render 5&nbsp;s</span></div>
+      <div><b>68&nbsp;s</b><span>100 sources<br>bake 45&nbsp;s, render 23&nbsp;s</span></div>
+      <div><b>10&nbsp;min</b><span>1000 sources<br>bake 6.5&nbsp;min, render 3.4&nbsp;min</span></div>
+      <div><b>28&nbsp;min</b><span>10&nbsp;000 sources<br>bake 25&nbsp;min, render 2.9&nbsp;min</span></div>
+    </div>
+    <p class="fine">Up to 1000 sources, every source runs the full chain; the 10&nbsp;000 are flying
+      cars with the nearest in full detail and the rest as a far field, which is the default.
+      Measured, with the scenes and scripts to repeat it, in the
+      <a href="https://github.com/Agents-Robots/soundstage#how-long-it-takes">README</a>. Every model
+      in the engine has a page with its formulas, its limits and the measurements behind its
+      defaults: <a href="https://github.com/Agents-Robots/soundstage/tree/main/research">research</a>.</p>
+  </div>
+</section>
+
+<section class="band" id="production">
+  <div class="wrap">
+    <p class="kicker">In production</p>
+    <h2>Two animations it was built for.</h2>
+    <div class="pair">
+      <figure class="shot">
+        <img loading="lazy" src="img/race.webp" width="1600" height="669" alt="Two glowing engines of a racer seen from behind, flying low over a hillside at night.">
+        <figcaption>A race across a swamp: six racers at 612&nbsp;km/h, half the speed of sound, over
+          eleven shots. Each whine arrives 3 times higher than it leaves.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img loading="lazy" src="img/terrace.webp" width="1600" height="670" alt="A terrace with a party on a tower, among other towers with lit windows.">
+        <figcaption>Music on the terraces of a city of flying cars: the drone hears each party as it
+          comes near, and loses it behind the next tower.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <p class="kicker">Get started</p>
+    <h2>Start with the example.</h2>
+    <p class="intro">Needs Linux, Python 3.12 or newer and Blender 5 on the <code>PATH</code>; ffmpeg
+      for previews.</p>
+    <pre class="code" tabindex="0"><code>git clone https://github.com/Agents-Robots/soundstage &amp;&amp; cd soundstage
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -e '.[dev]'
+.venv/bin/python tools/make_test_samples.py        <span class="c"># placeholder sounds</span>
+
+<span class="c"># build the example scene, bake it, render it</span>
+blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blend
+.venv/bin/soundstage bake out/flyby.blend --run examples/flyby_sounds.py --out out/flyby
+.venv/bin/soundstage render out/flyby/scene.json -o out/flyby/mix.wav \
+    --report --plot --set reverb=city</code></pre>
+    <p><code>out/flyby/mix.wav</code> is eight seconds of a ship passing from left to right, a beacon
+      beeping on the left and a crate hitting the ground on the right, in the reverb of a city.</p>
+    <div class="cols links">
+      <p><strong>Then, your own shot.</strong><br>
+        <a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/usage.md">Usage</a>: samples, speakers and tags, baking, rendering, importing into Resolve.<br>
+        <a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/spec/cli.md">Command line</a>: every command and option.</p>
+      <p><strong>Good to know.</strong><br>
+        The output is stereo. Binaural and ambisonic output, animated parameters and random
+        variation of one-shots are on the
+        <a href="https://github.com/Agents-Robots/soundstage/blob/main/docs/roadmap.md">roadmap</a>, not in the tool.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <p><span class="word">SoundStage</span> is free software under the
+      <a href="https://github.com/Agents-Robots/soundstage/blob/main/LICENSE">GPL, version 3 or later</a>.</p>
+    <p><a href="https://github.com/Agents-Robots/soundstage">Source</a>
+      <a href="https://github.com/Agents-Robots/soundstage/issues">Issues</a>
+      <a href="https://github.com/Agents-Robots/soundstage/blob/main/CONTRIBUTING.md">Contributing</a></p>
+  </div>
+</footer>
+</body>
+</html>
