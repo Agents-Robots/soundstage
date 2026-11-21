@@ -25,7 +25,7 @@ bands with their air absorption, match the full chain's?
    on a 16-core node.
 4. The reverb return per octave band with the far field (`detail_voices` 64) against every car in
    the full chain (null), 1000 cars, EFX law (constant send: the far cars send the most). "Before":
-   the far field of c81a028, whose send was one mono signal without air absorption; "after": one
+   the far field of 278d361, whose send was one mono signal without air absorption; "after": one
    send bus per distance band, filtered by the band's air absorption.
 
 ## Results: the law
@@ -86,7 +86,7 @@ Reverb return per octave band, far field (`detail_voices` 64) minus every car in
 | | 63 Hz | 125 Hz | 250 Hz | 500 Hz | 1 kHz | 2 kHz | 4 kHz | 8 kHz | 16 kHz | time (s) |
 |---|---|---|---|---|---|---|---|---|---|---|
 | level of the full chain's return (dB re loudest) | 0 | -4 | -9 | -24 | -45 | -36 | -38 | -58 | -75 | |
-| before (c81a028) | -0.0 | +0.3 | +0.4 | +1.0 | +11.1 | +8.3 | +10.4 | +24.8 | +41.0 | 61 |
+| before (278d361) | -0.0 | +0.3 | +0.4 | +1.0 | +11.1 | +8.3 | +10.4 | +24.8 | +41.0 | 61 |
 | after | -0.1 | +0.2 | +0.0 | -0.2 | +5.2 | +1.2 | -0.0 | +0.0 | +10.2 | 66 |
 
 Without air absorption on the far cars' sends the reverb return was 8–25 dB too bright from 2 to
@@ -110,11 +110,11 @@ send buses together.
 ## Reproduce
 
 The renders take about 25 minutes on a 16-core node and need the E18 scenes
-(`e18_traffic.py run bake`). "Before" needs a checkout of c81a028:
+(`e18_traffic.py run bake`). "Before" needs a checkout of 278d361:
 
 ```bash
-git worktree add /tmp/c81a028 c81a028
-.venv/bin/python research/experiments/scripts/e19_reverb_send.py run --tag before --checkout /tmp/c81a028
+git worktree add /tmp/278d361 278d361
+.venv/bin/python research/experiments/scripts/e19_reverb_send.py run --tag before --checkout /tmp/278d361
 .venv/bin/python research/experiments/scripts/e19_reverb_send.py run
 .venv/bin/python research/experiments/scripts/e19_reverb_send.py analyse
 ```

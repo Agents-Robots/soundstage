@@ -12,7 +12,7 @@
    100 m and 1 km (from the baked distances), render time and memory.
 4. The far field's send: the reverb return per octave band at detail_voices 64 against null (every
    car in the full chain), law efx (constant: the far cars send the most), 1000 cars. ``--checkout``
-   renders with another checkout: the far field before its send had air absorption (c81a028).
+   renders with another checkout: the far field before its send had air absorption (278d361).
 
     python e19_reverb_send.py run [--checkout DIR --tag before] [--again PATTERN ...]
     python e19_reverb_send.py analyse

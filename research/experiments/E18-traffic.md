@@ -61,7 +61,7 @@ one job per node.
 
 ## Results: render time and memory
 
-Runs at 6f62301: near voices hold only their dry signal (#32, [E20](E20-render-memory.md)), the
+Runs at 4aad955: near voices hold only their dry signal (#32, [E20](E20-render-memory.md)), the
 full chain absorbs at the received frequency (#40). The runs before are kept in
 `out/e18/results_7e92f98.jsonl` and `results_c81a028.jsonl` on the machines that ran them.
 
@@ -78,7 +78,7 @@ Render time (s) and peak memory (GB), 60 s shot, scenes baked with every path:
 | 10 000 | | 152 / 9.2 | 165 / 9.9 | 172 / 11.5 | 199 / 14.1 |
 
 - With every car through the full chain, time and memory grow with the number of cars: about
-  0.22 s and 25 MB per car (2000 cars: 446 s, 52 GB). At 7e92f98 a car needed 40 MB: its loop
+  0.22 s and 25 MB per car (2000 cars: 446 s, 52 GB). At 6bb16ec a car needed 40 MB: its loop
   renderer kept the resampled sample, its cycle and the prefiltered cycle in float64, and the air
   stage its parameters beside the coefficients; it now keeps the prefiltered cycle in float32 and
   the coefficients only ([E20](E20-render-memory.md)). The render times stayed within 2 %.
@@ -86,10 +86,10 @@ Render time (s) and peak memory (GB), 60 s shot, scenes baked with every path:
   least-squares fit over `detail_voices` 16–128 against the most near voices alive at once gives
   0.17–0.21 s per near voice, on a base that grows from 26 s at 500 cars to 148 s at 10 000: about
   15 ms per far car, 1/15 of the full chain. 10 000 cars at the default 64 render in 172 s with
-  11.5 GB (7e92f98: 174 s, 16.7 GB).
+  11.5 GB (6bb16ec: 174 s, 16.7 GB).
 - Memory follows the near voices alive at once, not the number of cars. They peak at about
   2 × `detail_voices` (hysteresis 1.5 and renderers overlapping at chunk boundaries). The same fit
-  gives 23–34 MB per near voice at the peak (7e92f98: 63–110 MB), on a base of 3–9 GB that grows
+  gives 23–34 MB per near voice at the peak (6bb16ec: 63–110 MB), on a base of 3–9 GB that grows
   with the number of cars (their positions).
 - The setup (positions, estimates, tiers) takes 12 s at 10 000 cars; the rest is audio.
 - Runs that shared a node with another job took 3–40 % longer (and as much more CPU time); the
@@ -97,7 +97,7 @@ Render time (s) and peak memory (GB), 60 s shot, scenes baked with every path:
 
 ## Results: difference to the full render
 
-Runs at 6f62301: the full chain absorbs at the received frequency (#40), near voices hold only
+Runs at 4aad955: the full chain absorbs at the received frequency (#40), near voices hold only
 their dry signal (#32).
 
 | cars | case | band level median / p95 (dB) | balance p95 (dB) | block level p95 (dB) |
@@ -155,7 +155,7 @@ far field filters its buses after the read, at the received frequency. The full 
 the emission side, before the delay line; until #40 it used the emitted frequency, so a car closing
 at 80 m/s (Doppler factor 1.3) lost only about 1/1.7 of its dB, and in traffic the approaching
 cars are the brighter ones. The far field, there the more physical tier, sounded 0.6–1.3 dB duller
-than the full chain at 3–6 kHz (2000 cars, 64; the runs at 7e92f98, kept in
+than the full chain at 3–6 kHz (2000 cars, 64; the runs at 6bb16ec, kept in
 `out/e18/results_7e92f98.jsonl`). The full chain now divides its filter corners by the playback
 rate. One source, far field minus full chain ([E05](E05-air-absorption.md), section 6):
 

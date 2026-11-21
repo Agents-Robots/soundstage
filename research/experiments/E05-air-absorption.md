@@ -105,8 +105,8 @@ quarter of the stage and about 2 % of a full-chain render).
 One source of noise at 80 m/s towards the listener (from 700 m), away from it (from 300 m), or
 standing at 450 m, 3 s measured, rendered by the full chain (air absorption on the emission side)
 and by the far field (after the read, at the received frequency). Far field minus full chain (dB),
-with the full chain's filter at the emitted frequency (before, 4bffce2) and with its corners
-divided by the playback rate (6f62301), and the difference the shift of the loss to the emitted
+with the full chain's filter at the emitted frequency (before, 1630113) and with its corners
+divided by the playback rate (4aad955), and the difference the shift of the loss to the emitted
 frequency `f / r` predicts with a loss in proportion to `f²` (`r` the Doppler factor):
 
 | source | before: 1 kHz | 3.2 kHz | 6.4 kHz | now: 1 kHz | 3.2 kHz | 6.4 kHz | predicted 6.4 kHz |
@@ -132,7 +132,7 @@ and the render's peak:
 | 1 | 11 % | −2.9 |
 | 2 | 25 % | −3.4 |
 
-With `h` interpolated like the other coefficients (the first version, dc20edf) the render at
+With `h` interpolated like the other coefficients (the first version, 41e7c80) the render at
 `doppler_factor` 2 diverged to a peak of 5·10¹⁸ (+375 dBFS) within 30 ms of the closest approach,
 and a real shot with the same geometry reached 3·10³⁸ and non-finite samples (issue #42); at 1.75
 it reached 10²². An interpolated `h` no longer solves the section's implicit equation for the
