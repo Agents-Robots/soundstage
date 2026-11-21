@@ -49,6 +49,7 @@ HISTORY = 128  # moving-occluder samples kept for their retarded positions (12.8
 MAX_RECAST = 16  # rays continued past reflecting occluders
 SPLIT_FILL = 0.5  # a mesh is split into its parts when its largest part fills less of its box
 BY_INSTANCER = True  # moving instances rigid with their instancer: by its matrix (False: depsgraph walk, tests)
+CARRIED_MIN_M = 2.0  # m: least size a carried object may sway relative to the listener, and must travel beyond
 
 
 def _key(inst) -> tuple:
@@ -216,7 +217,7 @@ class Occluders:
             mats = [s[key][0] if key in s else None for s in snaps]
             if all(x is not None and np.allclose(x, m, atol=1e-4) for x in mats):
                 static.append(key)
-            elif _carried(mats, cams, local):
+            elif _carried(mats, cams, local, CARRIED_MIN_M / scale):
                 carried.append(key)  # travels with the listener: its vehicle or cockpit, part of the listener
             else:
                 moving.append(key)
@@ -406,15 +407,16 @@ def _label(key: tuple) -> str:
     return key[2] if key[0] is None else f"{key[0]}/{key[2]}"
 
 
-def _carried(mats: list, cams: list, local: np.ndarray) -> bool:
-    """Whether an object keeps its place relative to the listener (within its own size) at every
-    snapshot while travelling further than that: the vehicle the camera rides on, a cockpit."""
+def _carried(mats: list, cams: list, local: np.ndarray, min_size_bu: float) -> bool:
+    """Whether an object keeps its place relative to the listener (within its own size, at least
+    ``min_size_bu``) at every snapshot while travelling further than that: the vehicle the camera
+    rides on, a cockpit. Positions and sizes in Blender units."""
     if any(m is None for m in mats) or any(c is None for c in cams):
         return False
     mid = (local.min(axis=0) + local.max(axis=0)) / 2
     world = np.array([m[:3, :3] @ mid + m[:3, 3] for m in mats])
     rel = np.array([np.linalg.solve(c, np.append(w, 1.0))[:3] for c, w in zip(cams, world)])
-    size = max(float(np.linalg.norm(local.max(axis=0) - local.min(axis=0)) * np.linalg.norm(mats[0][:3, 0])), 2.0)
+    size = max(float(np.linalg.norm(local.max(axis=0) - local.min(axis=0)) * np.linalg.norm(mats[0][:3, 0])), min_size_bu)
     return np.ptp(rel, axis=0).max() < size and np.ptp(world, axis=0).max() > size
 
 

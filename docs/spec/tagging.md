@@ -147,7 +147,7 @@ below `occluder_min_size` drop out. Except:
   holograms). Glass and every other surface occlude;
 - text objects (a box over lettering closes the gaps between the letters);
 - objects that travel with the listener (their position relative to the camera stays within their
-  own size at the shot's first, middle and last frame while they move further than that): the
+  own size (at least 2 m) at the shot's first, middle and last frame while they move further than that): the
   camera's vehicle, a cockpit;
 - for one source, any box that contains the listener or that source (the emitter's own body, the
   camera's cabin, a box of a merged mesh that is too coarse to tell), and any box that lies beyond

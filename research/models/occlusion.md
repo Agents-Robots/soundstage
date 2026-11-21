@@ -125,7 +125,7 @@ flowchart TD
   occlude either: a box over lettering closes the gaps between the letters (a hologram sign on the
   test city blocked its own sound source).
 - **The listener's vehicle**: an object whose position relative to the listener stays within its own
-  size at the first, middle and last frame while it travels further is part of the listener (the car
+  size (at least 2 m) at the first, middle and last frame while it travels further is part of the listener (the car
   the camera rides on, a cockpit); on the test city the camera car's roof had blocked the city below.
 - **Per path**: a box that contains the listener or the source does not occlude that source: an engine
   inside its car body, a camera inside a cockpit, and a box too coarse to say anything (the camera

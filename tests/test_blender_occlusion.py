@@ -297,17 +297,21 @@ emitter("BehindText", [(1, (0, 40, 0)), (60, (0, 40, 0))])
     assert vis["BehindGlass:0"][:, 2].max() == 0.0  # 4 kHz blocked; the wide 250 Hz zone passes around the 6 m wall
 
 
-def test_the_cameras_vehicle_does_not_occlude(tmp_path, sine):
-    manifest, vis = bake(tmp_path, """
+@pytest.mark.parametrize("unit_m", [1.0, 100.0])
+def test_the_cameras_vehicle_does_not_occlude(tmp_path, sine, unit_m):
+    # the same scene in metres and in Blender units of 100 m (scale_length): sizes compare in metres
+    manifest, vis = bake(tmp_path, f"""
 bpy.context.preferences.edit.keyframe_new_interpolation_type = "LINEAR"
-car = box("CameraCar", (0, 0, 0), (2, 5, 1))
+s.unit_settings.scale_length = {unit_m}
+u = 1 / {unit_m}
+car = box("CameraCar", (0, 0, 0), (2 * u, 5 * u, 1 * u))
 for f, y in ((1, 0.0), (60, 60.0)):
-    car.location = (0, y, 0)
+    car.location = (0, y * u, 0)
     car.keyframe_insert("location", frame=f)
 cam.parent = car
-cam.location = (0, 0, 1.5)  # on the roof, outside the car's box
+cam.location = (0, 0, 1.5 * u)  # on the roof, outside the car's box
 cam.rotation_euler = (0, 0, 0)  # looking down
-emitter("Below", [(1, (0, 30, -20)), (60, (0, 30, -20))])
+emitter("Below", [(1, (0, 30 * u, -20 * u)), (60, (0, 30 * u, -20 * u))])
 """, sine)
     assert manifest["occlusion"]["occluders"]["carried"] == 1
     assert vis["Below:0"].min() == 1.0
