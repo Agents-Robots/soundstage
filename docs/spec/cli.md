@@ -162,6 +162,20 @@ the deliverables are the WAVs.
 - EXR frames are shown as ffmpeg decodes them (linear, not view-transformed); render PNG or JPG
   previews for a faithful picture.
 
+## `soundstage blender-path`
+
+```
+soundstage blender-path      print the folder to put on Blender's sys.path to import soundstage
+```
+
+For scripts that run in Blender on their own (generator scripts, the Blender UI) and import
+`soundstage.blender.tag`; scripts given to `scan` or `bake` with `--run` need no path, since the
+package is already imported. In a checkout the folder is the checkout. For an installed package it
+is a folder in the user cache (`$XDG_CACHE_HOME`, default `~/.cache`, under
+`soundstage/blender-path/`) that holds only a link to the package, one per installation: the
+package's own folder, site-packages, also holds the venv's numpy, which Blender's Python cannot
+load. Use it as `sys.path.insert(0, "<printed folder>")`.
+
 ## Report (`<mix>.report.json`)
 
 Example from the flyby example rendered with `--report --set reverb=city` (three of its sources,

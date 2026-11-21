@@ -11,11 +11,13 @@ asset, like its material.
 
 ```python
 import sys
-sys.path.insert(0, "/path/to/soundstage")      # the soundstage checkout
+sys.path.insert(0, "/path/to/soundstage")      # printed by `soundstage blender-path`
 from soundstage.blender import tag              # bpy and stdlib only; nothing to install in Blender
 ```
 
-Keep the path in one place (a project config or an environment variable read by the build script).
+`soundstage blender-path` prints the checkout, or for a PyPI install a folder that holds only the
+package. Never put the venv's site-packages there: its numpy breaks Blender's. Keep the path in one
+place (a project config or an environment variable read by the build script).
 
 ## 2. Scale, names, cameras
 

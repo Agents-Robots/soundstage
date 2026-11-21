@@ -1,11 +1,13 @@
 """Command-line checks: argument validation, file names, warnings and summaries (no Blender)."""
 
 import json
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from soundstage.cli import main
+from soundstage.cli import blender_path, main
 
 from conftest import static_listener
 
@@ -63,3 +65,17 @@ def test_inspect_ignores_the_jump_at_a_camera_cut(make_scene, sine, capsys):
     row = json.loads(capsys.readouterr().out)["sources"][0]
     assert row["distance_m"] == [10.0, 210.0]
     assert row["max_radial_speed_m_s"] == 0.0 and row["rate"] == [1.0, 1.0]
+
+
+def test_blender_path_is_the_checkout_or_a_folder_with_only_the_package(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    assert blender_path(repo / "soundstage") == repo
+    site = tmp_path / "site-packages"
+    shutil.copytree(repo / "soundstage", site / "soundstage", ignore=shutil.ignore_patterns("__pycache__"))
+    (site / "numpy").mkdir()
+    folder = blender_path(site / "soundstage", cache=tmp_path / "cache")
+    assert [p.name for p in folder.iterdir()] == ["soundstage"]
+    assert (folder / "soundstage").resolve() == (site / "soundstage").resolve()
+    assert blender_path(site / "soundstage", cache=tmp_path / "cache") == folder
+    shutil.copytree(site, tmp_path / "other")
+    assert blender_path(tmp_path / "other" / "soundstage", cache=tmp_path / "cache") != folder

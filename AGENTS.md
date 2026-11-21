@@ -65,6 +65,7 @@ ticket, not in a document.
 .venv/bin/soundstage render <dir>/scene.json -o <mix.wav> --report --plot
 .venv/bin/soundstage presets [TEXT]                # reverb environments for --set reverb=<name>
 .venv/bin/soundstage preview <mix.wav> --frames <frames dir>   # MP4 for a sync check (ffmpeg)
+.venv/bin/soundstage blender-path                  # folder for sys.path in scripts run in Blender on their own
 ```
 
 Asked to add sound to an animation? Follow [docs/agent-guide.md](docs/agent-guide.md). Writing scripts

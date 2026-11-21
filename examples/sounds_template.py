@@ -15,7 +15,7 @@ from pathlib import Path
 
 import bpy
 
-SOUNDSTAGE = "/path/to/soundstage"  # repo checkout
+SOUNDSTAGE = "/path/to/soundstage"  # `soundstage blender-path`; only for running outside bake --run
 SAMPLES = Path(__file__).resolve().parent / "samples"  # folder with the WAV/FLAC/OGG files
 
 sys.path.insert(0, SOUNDSTAGE)

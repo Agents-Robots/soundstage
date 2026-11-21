@@ -177,8 +177,9 @@ iter_tagged(scene=None) -> Iterator[tuple[Object, int, dict]]
     # All (object, index, entry) triples of the scene's objects, sorted by object name.
 ```
 
-The helper imports only `bpy` and the standard library. Generator scripts add the repo to
-`sys.path` and import it:
+The helper imports only `bpy` and the standard library. Generator scripts add the folder printed by
+`soundstage blender-path` (the checkout, or for a PyPI install a folder holding only the package) to
+`sys.path` and import it; scripts run with `bake --run` import it directly:
 
 ```python
 import sys

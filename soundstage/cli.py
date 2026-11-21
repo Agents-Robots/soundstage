@@ -1,5 +1,5 @@
 """Command-line entry point ``soundstage`` with the subcommands scan, bake, inspect, render, presets,
-preview.
+preview, blender-path.
 
 - ``scan``: runs ``blender/scan.py`` headless and prints the cameras, moving objects and static
   objects near the camera path (sound-source candidates); ``--out`` keeps the full JSON.
@@ -9,6 +9,8 @@ preview.
 - ``render``: renders a scene file to a WAV, optionally with stems, a JSON report and a debug plot.
 - ``presets``: lists the reverb presets.
 - ``preview``: muxes a mix with the shot's frames or a video into an MP4 (ffmpeg), for a sync check.
+- ``blender-path``: prints the folder that scripts run in Blender put on ``sys.path`` to import
+  ``soundstage.blender``.
 
 Arguments, exit codes and report format: docs/spec/cli.md.
 """
@@ -16,6 +18,7 @@ Arguments, exit codes and report format: docs/spec/cli.md.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -311,6 +314,31 @@ def cmd_presets(a: argparse.Namespace) -> int:
     return 0
 
 
+def blender_path(package: Path = BLENDER_DIR.parent, cache: Path | None = None) -> Path:
+    """The folder to put on Blender's ``sys.path`` so that ``import soundstage`` finds ``package`` and
+    nothing else. In a checkout that is the checkout. An installed package sits in site-packages
+    beside the venv's numpy, which Blender's Python cannot load (#49); then it is a folder in the user
+    cache holding only a link to the package, one per installation."""
+    package = package.resolve()
+    if (package.parent / "pyproject.toml").exists():
+        return package.parent
+    if cache is None:
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "soundstage" / "blender-path"
+    folder = cache / hashlib.sha1(str(package).encode()).hexdigest()[:12]
+    link = folder / "soundstage"
+    if not (link.is_symlink() and link.resolve() == package):
+        folder.mkdir(parents=True, exist_ok=True)
+        if link.is_symlink():
+            link.unlink()
+        link.symlink_to(package, target_is_directory=True)
+    return folder
+
+
+def cmd_blender_path(a: argparse.Namespace) -> int:
+    print(blender_path())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="soundstage", description="Spatial sound for Blender animations.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -377,6 +405,9 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--width", type=int, default=1280, help="output width in pixels; 0 keeps the size (default 1280)")
     v.add_argument("--ffmpeg")
     v.set_defaults(func=cmd_preview)
+
+    bp = sub.add_parser("blender-path", help="print the folder Blender scripts put on sys.path to import soundstage")
+    bp.set_defaults(func=cmd_blender_path)
     return p
 
 

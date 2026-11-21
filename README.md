@@ -151,8 +151,9 @@ blender -b --factory-startup --python examples/flyby.py -- --save out/flyby.blen
 .venv/bin/soundstage preview out/flyby/mix.wav --frames <rendered frames dir>   # optional: MP4 with sound (ffmpeg)
 ```
 
-The tool alone, without the examples: `pip install git+https://github.com/Agents-Robots/soundstage`
-gives the `soundstage` command (scan, bake, render, preview).
+The tool alone, without the examples, is on PyPI: `pip install soundstage` (or
+`'soundstage[plot]'` for the debug plot) gives the `soundstage` command (scan, bake, render,
+preview).
 
 `out/flyby/mix.wav` is 8 seconds of a ship passing from left to right (its engine drops in pitch
 as it passes), a beacon beeping on the left and a crate hitting the ground on the right, in the

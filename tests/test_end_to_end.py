@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from soundstage.cli import main
+from soundstage.cli import blender_path, main
 
 from conftest import RATE, onset, rms_db
 
@@ -52,6 +52,16 @@ def test_scan_and_bake_from_an_installed_package_use_blenders_numpy(flyby, tmp_p
                            capture_output=True, text=True)
         assert r.returncode == 0, r.stdout[-3000:]
     assert (tmp_path / "bake" / "scene.npz").exists()
+
+    # A generator script run in Blender on its own puts the folder of `soundstage blender-path` on sys.path.
+    folder = blender_path(site / "soundstage", cache=tmp_path / "cache")
+    script = tmp_path / "generator.py"
+    script.write_text(f"import sys\nsys.path.insert(0, {str(folder)!r})\n"
+                      "from soundstage.blender import tag\nimport numpy\nimport bpy\n"
+                      "tag.add_sound(bpy.data.objects['Ship'], 'hum.wav')\n")
+    r = subprocess.run(["blender", "-b", str(flyby / "flyby.blend"), "--factory-startup", "-y", "--python-exit-code",
+                        "1", "--python", str(script)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-3000:]
 
 
 def test_bake_and_render(flyby):

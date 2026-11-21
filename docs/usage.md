@@ -7,6 +7,14 @@ adding sound to an existing animation step by step, see the [agent guide](agent-
 
 ## Setup (once)
 
+The tool alone, from PyPI:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install soundstage    # 'soundstage[plot]' for --plot
+```
+
+With the examples, the test sounds and the tests, from the repository:
+
 ```bash
 cd /path/to/soundstage
 python3 -m venv .venv
@@ -15,8 +23,10 @@ python3 -m venv .venv
 .venv/bin/pytest                               # unit tests
 ```
 
-Blender needs nothing installed: generator scripts import the tag helper by path, and the bake
-script runs with `--python`.
+Blender needs nothing installed: the bake script runs with `--python`, and scripts it runs with
+`--run` import the tag helper directly. Scripts run in Blender on their own import it by path:
+`soundstage blender-path` prints the folder (the checkout, or for a PyPI install a folder that
+holds only the package).
 
 ## Project layout for audio
 
@@ -60,7 +70,7 @@ Either way the calls are the same:
 
 ```python
 import sys
-sys.path.insert(0, "/path/to/soundstage")
+sys.path.insert(0, "/path/to/soundstage")      # `soundstage blender-path`; not needed with bake --run
 from soundstage.blender import tag
 
 tag.set_scene_settings(samples_root="//audio/samples/", doppler_factor=1.0)
